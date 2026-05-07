@@ -1,0 +1,121 @@
+import type {
+  ActualRow,
+  DimensionImpact,
+  DimensionKind,
+  Dimensions,
+  DriverAssumptions,
+  ForecastRow,
+  KpiSummary,
+  ScenarioAssumptions,
+  VarianceRow,
+} from "../domain/types.ts";
+
+export type ScenarioRecord = {
+  id: string;
+  name: string;
+  assumptions: ScenarioAssumptions;
+  updatedAt?: string;
+};
+
+export type MetricSummary = {
+  kpis: KpiSummary;
+  accounts: {
+    account: string;
+    value: number;
+  }[];
+  departments: {
+    department: string;
+    revenue: number;
+    cogs: number;
+    opex: number;
+    headcount: number;
+  }[];
+  months: string[];
+};
+
+export const emptyDrivers: DriverAssumptions = {
+  revenueGrowthRate: 0,
+  cogsPctOfRevenue: 0,
+  headcountGrowthRate: 0,
+  costPerHead: 0,
+};
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData)) {
+    headers.set("content-type", "application/json");
+  }
+  const response = await fetch(path, {
+    ...init,
+    credentials: "include",
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error(
+      (await response.json().catch(() => ({ error: response.statusText }))).error ??
+        response.statusText,
+    );
+  }
+  return response.json() as Promise<T>;
+}
+
+export const client = {
+  me: () => api<{ user: { email: string } }>("/api/auth/me"),
+  login: (email: string, password: string) =>
+    api<{ user: { email: string } }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  importCsv: (csv: string) =>
+    api<{
+      diagnostics: { rowsImported: number; rowsRead: number; shape: string; warnings: string[] };
+    }>("/api/imports/csv", {
+      method: "POST",
+      body: JSON.stringify({ csv }),
+    }),
+  actuals: () => api<{ rows: ActualRow[]; summary: MetricSummary }>("/api/cube/actuals"),
+  forecast: (scenario: string) =>
+    api<{ rows: ForecastRow[]; summary: MetricSummary }>(
+      `/api/cube/forecast?scenario=${encodeURIComponent(scenario)}`,
+    ),
+  variance: (left: string, right: string) =>
+    api<{ rows: VarianceRow[]; left: string; right: string }>(
+      `/api/cube/variance?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
+    ),
+  scenarios: () => api<{ scenarios: ScenarioRecord[] }>("/api/scenarios"),
+  dimensions: () => api<Dimensions>("/api/dimensions"),
+  createDimensionMember: (kind: DimensionKind, name: string, parentName?: string | null) =>
+    api<{ dimensions: Dimensions }>(`/api/dimensions/${kind}/members`, {
+      method: "POST",
+      body: JSON.stringify({ name, parentName: parentName ?? null }),
+    }),
+  updateDimensionMember: (
+    kind: DimensionKind,
+    name: string,
+    changes: { name?: string; parentName?: string | null; sortOrder?: number },
+  ) =>
+    api<{ dimensions: Dimensions }>(`/api/dimensions/${kind}/members/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      body: JSON.stringify(changes),
+    }),
+  dimensionImpact: (kind: DimensionKind, name: string) =>
+    api<{ impact: DimensionImpact }>(
+      `/api/dimensions/${kind}/members/${encodeURIComponent(name)}/impact`,
+    ),
+  deleteDimensionMember: (kind: DimensionKind, name: string, force = false) =>
+    api<{ ok: true; impact: DimensionImpact; dimensions: Dimensions }>(
+      `/api/dimensions/${kind}/members/${encodeURIComponent(name)}${force ? "?force=1" : ""}`,
+      { method: "DELETE" },
+    ),
+  saveScenario: (scenario: ScenarioAssumptions) =>
+    api<{ scenario: ScenarioRecord }>("/api/scenarios", {
+      method: "POST",
+      body: JSON.stringify(scenario),
+    }),
+  ask: (question: string, scenario?: string) =>
+    api<{
+      answer: string;
+      provider: string;
+      citations: { tool: string; label: string; value: number | string }[];
+    }>("/api/analyst/ask", { method: "POST", body: JSON.stringify({ question, scenario }) }),
+};

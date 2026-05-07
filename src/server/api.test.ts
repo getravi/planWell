@@ -1,0 +1,461 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { describe, expect, it } from "vite-plus/test";
+import { createApp } from "./app.ts";
+import { createFileRepository, createTestRepository } from "./repository.ts";
+
+describe("PlanWell API", () => {
+  it("logs in, imports long CSV actuals, creates forecasts, and returns variance", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+
+    const login = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "director@planwell.local", password: "planwell-demo" }),
+    });
+    expect(login.status).toBe(200);
+    const cookie = login.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("planwell_session=");
+
+    const imported = await app.request("/api/imports/csv", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        csv: `month,department,account,value
+2025-12,GPU Cloud,Revenue,1000
+2025-12,GPU Cloud,COGS,450
+2025-12,GPU Cloud,Headcount,10
+2025-12,GPU Cloud,OpEx,180000
+`,
+      }),
+    });
+    expect(imported.status).toBe(200);
+    expect(await imported.json()).toMatchObject({ diagnostics: { rowsImported: 4 } });
+
+    const scenarios = await app.request("/api/scenarios", { headers: { cookie } });
+    expect(scenarios.status).toBe(200);
+    const scenarioBody = await scenarios.json();
+    expect(scenarioBody.scenarios.map((scenario: { name: string }) => scenario.name)).toEqual([
+      "Base Case",
+      "Aggressive Growth",
+      "Conservative",
+    ]);
+
+    const variance = await app.request(
+      "/api/cube/variance?left=Base%20Case&right=Aggressive%20Growth",
+      {
+        headers: { cookie },
+      },
+    );
+    expect(variance.status).toBe(200);
+    const varianceBody = await variance.json();
+    expect(
+      varianceBody.rows.some(
+        (row: { account: string; variance: number }) =>
+          row.account === "Revenue" && row.variance > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it("migrates legacy scenario JSON into driver assumption rows", () => {
+    const dbPath = join(mkdtempSync(join(tmpdir(), "planwell-")), "legacy.sqlite");
+    const legacyDb = new DatabaseSync(dbPath);
+    legacyDb.exec(`
+      create table scenarios (
+        id text primary key,
+        name text not null unique,
+        assumptions_json text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+    `);
+    legacyDb
+      .prepare(
+        "insert into scenarios (id, name, assumptions_json, created_at, updated_at) values (?, ?, ?, ?, ?)",
+      )
+      .run(
+        "legacy-scenario",
+        "Legacy Case",
+        JSON.stringify({
+          name: "Legacy Case",
+          global: {
+            revenueGrowthRate: 0.02,
+            cogsPctOfRevenue: 0.4,
+            headcountGrowthRate: 0.01,
+            costPerHead: 12000,
+          },
+          monthly: {
+            "2026-02": { revenueGrowthRate: 0.05 },
+          },
+          overrides: {
+            "GPU Cloud": {
+              cogsPctOfRevenue: 0.38,
+              monthly: {
+                "2026-03": { costPerHead: 13000 },
+              },
+            },
+          },
+        }),
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-02T00:00:00.000Z",
+      );
+    legacyDb.close();
+
+    const repo = createFileRepository(dbPath);
+    const scenario = repo.listScenarios().find((item) => item.name === "Legacy Case");
+    expect(scenario?.assumptions).toMatchObject({
+      global: {
+        revenueGrowthRate: 0.02,
+        cogsPctOfRevenue: 0.4,
+        headcountGrowthRate: 0.01,
+        costPerHead: 12000,
+      },
+      monthly: {
+        "2026-02": { revenueGrowthRate: 0.05 },
+      },
+      overrides: {
+        "GPU Cloud": {
+          cogsPctOfRevenue: 0.38,
+          monthly: {
+            "2026-03": { costPerHead: 13000 },
+          },
+        },
+      },
+    });
+
+    const migratedDb = new DatabaseSync(dbPath);
+    const scenarioColumns = migratedDb.prepare("pragma table_info(scenarios)").all() as {
+      name: string;
+    }[];
+    expect(scenarioColumns.map((column) => column.name)).not.toContain("assumptions_json");
+    const driverRows = migratedDb
+      .prepare(
+        "select scope_type, scope_key, month, driver_key, value from driver_assumptions where scenario_id = ? order by scope_type, scope_key, month, driver_key",
+      )
+      .all("legacy-scenario");
+    expect(driverRows).toContainEqual({
+      scope_type: "global",
+      scope_key: "__global__",
+      month: "__all__",
+      driver_key: "revenueGrowthRate",
+      value: 0.02,
+    });
+    expect(driverRows).toContainEqual({
+      scope_type: "global",
+      scope_key: "__global__",
+      month: "2026-02",
+      driver_key: "revenueGrowthRate",
+      value: 0.05,
+    });
+    expect(driverRows).toContainEqual({
+      scope_type: "department",
+      scope_key: "GPU Cloud",
+      month: "2026-03",
+      driver_key: "costPerHead",
+      value: 13000,
+    });
+    migratedDb.close();
+  });
+
+  it("keeps analyst answers grounded in aggregate tools", async () => {
+    const repo = createTestRepository();
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+    ]);
+    const app = createApp({ repo });
+
+    const login = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "director@planwell.local", password: "planwell-demo" }),
+    });
+    const cookie = login.headers.get("set-cookie") ?? "";
+    const response = await app.request("/api/analyst/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ question: "What is GPU Cloud gross margin?" }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.answer).toContain("GPU Cloud");
+    expect(body.citations[0]).toMatchObject({ tool: "getMetricSummary" });
+  });
+
+  it("manages department hierarchies and safely cascades renames", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "Inference Platform", account: "Revenue", value: 600 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+    ]);
+
+    const createProduct = await app.request("/api/dimensions/department/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Product" }),
+    });
+    expect(createProduct.status).toBe(201);
+
+    const moveGpu = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "Product" }),
+    });
+    expect(moveGpu.status).toBe(200);
+
+    const moveInference = await app.request(
+      "/api/dimensions/department/members/Inference%20Platform",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({ parentName: "Product" }),
+      },
+    );
+    expect(moveInference.status).toBe(200);
+
+    const dimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const body = await dimensions.json();
+    const product = body.department.find((item: { name: string }) => item.name === "Product");
+    expect(product.children.map((child: { name: string }) => child.name)).toEqual([
+      "GPU Cloud",
+      "Inference Platform",
+    ]);
+
+    const reorderInference = await app.request(
+      "/api/dimensions/department/members/Inference%20Platform",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({ sortOrder: -0.5 }),
+      },
+    );
+    expect(reorderInference.status).toBe(200);
+
+    const reorderedDimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const reorderedBody = await reorderedDimensions.json();
+    const reorderedProduct = reorderedBody.department.find(
+      (item: { name: string }) => item.name === "Product",
+    );
+    expect(reorderedProduct.children.map((child: { name: string }) => child.name)).toEqual([
+      "Inference Platform",
+      "GPU Cloud",
+    ]);
+
+    const rename = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Cloud AI", parentName: "Product" }),
+    });
+    expect(rename.status).toBe(200);
+
+    const actuals = await app.request("/api/cube/actuals", { headers: { cookie } });
+    const actualsBody = await actuals.json();
+    expect(
+      actualsBody.rows.some((row: { department: string }) => row.department === "Cloud AI"),
+    ).toBe(true);
+    expect(
+      actualsBody.summary.departments.find(
+        (department: { department: string; revenue: number }) =>
+          department.department === "Product",
+      )?.revenue,
+    ).toBe(1600);
+
+    await app.request("/api/dimensions/account/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Financial Accounts" }),
+    });
+    await app.request("/api/dimensions/account/members/Revenue", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "Financial Accounts" }),
+    });
+    await app.request("/api/dimensions/account/members/COGS", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "Financial Accounts" }),
+    });
+
+    const rolledUpActuals = await app.request("/api/cube/actuals", { headers: { cookie } });
+    const rolledUpBody = await rolledUpActuals.json();
+    expect(
+      rolledUpBody.summary.accounts.find(
+        (account: { account: string; value: number }) => account.account === "Financial Accounts",
+      )?.value,
+    ).toBe(2000);
+  });
+
+  it("rejects hierarchy cycles and requires force before deleting referenced members", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+    ]);
+
+    await app.request("/api/dimensions/department/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Product" }),
+    });
+
+    await app.request("/api/dimensions/department/members/Product", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "GPU Cloud" }),
+    });
+
+    const cycle = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "Product" }),
+    });
+    expect(cycle.status).toBe(400);
+    expect(await cycle.json()).toMatchObject({ error: "Hierarchy cycle detected." });
+
+    const blockedDelete = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    expect(blockedDelete.status).toBe(409);
+    expect(await blockedDelete.json()).toMatchObject({
+      impact: { actualRows: 1, forecastRows: 144, scenarioOverrides: 1, childCount: 1 },
+    });
+
+    const forcedDelete = await app.request(
+      "/api/dimensions/department/members/GPU%20Cloud?force=1",
+      { method: "DELETE", headers: { cookie } },
+    );
+    expect(forcedDelete.status).toBe(200);
+    expect(await forcedDelete.json()).toMatchObject({ ok: true });
+  });
+
+  it("recalculates forecasts after department hierarchy changes", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+    ]);
+
+    await app.request("/api/dimensions/department/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Product" }),
+    });
+    const scenario = await app.request("/api/scenarios", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        name: "Hierarchy Sensitivity",
+        global: {
+          revenueGrowthRate: 0.01,
+          cogsPctOfRevenue: 0.5,
+          headcountGrowthRate: 0,
+          costPerHead: 10000,
+        },
+        monthly: {},
+        overrides: {
+          Product: {
+            monthly: {
+              "2026-01": { revenueGrowthRate: 0.5 },
+            },
+          },
+        },
+      }),
+    });
+    expect(scenario.status).toBe(201);
+
+    const beforeMove = await app.request("/api/cube/forecast?scenario=Hierarchy%20Sensitivity", {
+      headers: { cookie },
+    });
+    const beforeMoveBody = await beforeMove.json();
+    expect(
+      beforeMoveBody.rows.find(
+        (row: { month: string; department: string; account: string }) =>
+          row.month === "2026-01" && row.department === "GPU Cloud" && row.account === "Revenue",
+      )?.value,
+    ).toBe(1010);
+
+    const moveGpu = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ parentName: "Product" }),
+    });
+    expect(moveGpu.status).toBe(200);
+
+    const afterMove = await app.request("/api/cube/forecast?scenario=Hierarchy%20Sensitivity", {
+      headers: { cookie },
+    });
+    const afterMoveBody = await afterMove.json();
+    expect(
+      afterMoveBody.rows.find(
+        (row: { month: string; department: string; account: string }) =>
+          row.month === "2026-01" && row.department === "GPU Cloud" && row.account === "Revenue",
+      )?.value,
+    ).toBe(1500);
+  });
+
+  it("manages month members and derives year and quarter hierarchy", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const createMonth = await app.request("/api/dimensions/time/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "2026-02" }),
+    });
+    expect(createMonth.status).toBe(201);
+
+    const invalidMonth = await app.request("/api/dimensions/time/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Feb 2026" }),
+    });
+    expect(invalidMonth.status).toBe(400);
+
+    const dimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const body = await dimensions.json();
+    expect(body.time).toEqual([
+      {
+        name: "2026",
+        parentName: null,
+        referenceCount: 0,
+        children: [
+          {
+            name: "2026 Q1",
+            parentName: "2026",
+            referenceCount: 0,
+            children: [
+              {
+                name: "2026-02",
+                parentName: "2026 Q1",
+                referenceCount: 0,
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+});
+
+async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {
+  const login = await app.request("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "director@planwell.local", password: "planwell-demo" }),
+  });
+  return login.headers.get("set-cookie") ?? "";
+}

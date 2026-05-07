@@ -1,0 +1,43 @@
+{
+  "name": "planwell",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"node src/server/index.ts\" \"vp dev --host 127.0.0.1\"",
+    "api": "node src/server/index.ts",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "dependencies": {
+    "@google/genai": "^1.52.0",
+    "@hono/node-server": "^2.0.1",
+    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-table": "^8.21.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "concurrently": "^9.2.1",
+    "csv-parse": "^6.2.1",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.16",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^29.1.1",
+    "typescript": "~6.0.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@10.33.3"
+}
