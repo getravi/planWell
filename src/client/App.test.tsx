@@ -1287,7 +1287,8 @@ describe("PlanWell workbench UI", () => {
 
     await userEvent.clear(await screen.findByLabelText("Version name Board Case"));
     await userEvent.type(screen.getByLabelText("Version name Board Case"), "Operating Plan");
-    await userEvent.click(screen.getByRole("button", { name: /save board case/i }));
+    expect(screen.queryByRole("button", { name: /save board case/i })).toBeNull();
+    await userEvent.keyboard("{Enter}");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/versions/board",
       expect.objectContaining({

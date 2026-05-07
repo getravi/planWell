@@ -1489,6 +1489,13 @@ function VersionsView({
       await refresh();
     },
   });
+  const saveVersionName = (version: VersionRecord) => {
+    const name = (draftNames[version.id] ?? version.name).trim();
+    if (!name || name === version.name) {
+      return;
+    }
+    rename.mutate({ id: version.id, name });
+  };
 
   if (isLoading) {
     return <div className="screen-center">Loading versions...</div>;
@@ -1584,6 +1591,12 @@ function VersionsView({
                             [version.id]: event.target.value,
                           }))
                         }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            saveVersionName(version);
+                          }
+                        }}
                       />
                     ) : (
                       version.name
@@ -1592,22 +1605,14 @@ function VersionsView({
                   <td>{version.kind === "actuals" ? "Actuals" : "Scenario"}</td>
                   <td>
                     <div className="grid-toolbar">
-                      {version.canRename ? (
+                      {version.canDelete ? (
                         <GhostButton
                           type="button"
-                          onClick={() =>
-                            rename.mutate({
-                              id: version.id,
-                              name: draftNames[version.id] ?? version.name,
-                            })
-                          }
+                          aria-label={`Delete ${version.name}`}
+                          title={`Delete ${version.name}`}
+                          onClick={() => remove.mutate(version.id)}
                         >
-                          <Save size={15} /> Save {version.name}
-                        </GhostButton>
-                      ) : null}
-                      {version.canDelete ? (
-                        <GhostButton type="button" onClick={() => remove.mutate(version.id)}>
-                          <Trash2 size={15} /> Delete {version.name}
+                          <Trash2 size={15} aria-hidden="true" />
                         </GhostButton>
                       ) : null}
                     </div>
