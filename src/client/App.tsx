@@ -56,7 +56,32 @@ import type {
   VarianceRow,
 } from "../domain/types.ts";
 import { client, type MetricSummary, type ScenarioRecord, type VersionRecord } from "./api.ts";
-import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "./ui.tsx";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  EmptyState,
+  GhostButton,
+  Input,
+  Label,
+  Panel,
+  Select,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SiteHeader,
+} from "./ui.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
@@ -219,70 +244,84 @@ function Workbench({ userEmail }: { userEmail: string }) {
   }, [forecastDepartment, forecastDepartments]);
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
+    <SidebarProvider className="app-shell">
+      <Sidebar>
+        <SidebarHeader className="brand">
           <span className="brand-mark">PW</span>
           <div>
             <strong>PlanWell</strong>
             <small>{userEmail}</small>
           </div>
-        </div>
-        <nav>
-          <span className="nav-section-label">Workspace</span>
-          {[
-            ["Actuals", FileUp],
-            ["Forecast Model", Settings2],
-            ["Scenarios", ChartNoAxesCombined],
-            ["Variance", GitCompareArrows],
-            ["Analyst", Bot],
-          ].map(([label, Icon]) => (
-            <button
-              key={label as string}
-              className={view === label ? "active" : ""}
-              onClick={() => setView(label as string)}
-            >
-              <Icon size={17} />
-              {label as string}
-            </button>
-          ))}
-          <div className="nav-group">
-            <span className="nav-section-label">Admin</span>
-            <button
-              type="button"
-              className={`nav-group-toggle ${isAdminView ? "active" : ""}`}
-              aria-expanded={adminOpen}
-              aria-controls="admin-nav"
-              onClick={() => setAdminOpen((open) => !open)}
-            >
-              <Settings size={17} />
-              Admin
-              <ChevronDown size={15} className={adminOpen ? "chevron open" : "chevron"} />
-            </button>
-            {adminOpen ? (
-              <div className="nav-sublist" id="admin-nav">
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
                 {[
-                  ["Dimensions", Network],
-                  ["Versions", Copy],
-                  ["Schema", Database],
+                  ["Actuals", FileUp],
+                  ["Forecast Model", Settings2],
+                  ["Scenarios", ChartNoAxesCombined],
+                  ["Variance", GitCompareArrows],
+                  ["Analyst", Bot],
                 ].map(([label, Icon]) => (
-                  <button
-                    key={label as string}
-                    className={view === label ? "active" : ""}
-                    onClick={() => setView(label as string)}
-                  >
-                    <Icon size={16} />
-                    {label as string}
-                  </button>
+                  <SidebarMenuItem key={label as string}>
+                    <SidebarMenuButton
+                      isActive={view === label}
+                      onClick={() => setView(label as string)}
+                    >
+                      <Icon size={17} />
+                      {label as string}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 ))}
-              </div>
-            ) : null}
-          </div>
-        </nav>
-      </aside>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    className="nav-group-toggle"
+                    isActive={isAdminView}
+                    aria-expanded={adminOpen}
+                    aria-controls="admin-nav"
+                    onClick={() => setAdminOpen((open) => !open)}
+                  >
+                    <Settings size={17} />
+                    Admin
+                    <ChevronDown size={15} className={adminOpen ? "chevron open" : "chevron"} />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+              {adminOpen ? (
+                <SidebarMenu className="nav-sublist" id="admin-nav">
+                  {[
+                    ["Dimensions", Network],
+                    ["Versions", Copy],
+                    ["Schema", Database],
+                  ].map(([label, Icon]) => (
+                    <SidebarMenuItem key={label as string}>
+                      <SidebarMenuButton
+                        isActive={view === label}
+                        onClick={() => setView(label as string)}
+                      >
+                        <Icon size={16} />
+                        {label as string}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              ) : null}
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
 
-      <section className="workspace">
-        <header className="topbar">
+      <SidebarInset className="workspace">
+        <SiteHeader className="topbar">
           <div>
             <p className="eyebrow">PlanWell / Modeling Workbench</p>
             <h1>{view}</h1>
@@ -335,7 +374,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
               </label>
             ) : null}
           </div>
-        </header>
+        </SiteHeader>
 
         {view !== "Schema" && view !== "Dimensions" && view !== "Versions" ? (
           <KpiStrip summary={currentSummary} />
@@ -391,8 +430,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
           />
         ) : null}
         {view === "Schema" ? <SchemaView /> : null}
-      </section>
-    </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -414,11 +453,15 @@ function KpiStrip({ summary }: { summary?: MetricSummary }) {
 
 function Kpi({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="kpi">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {detail ? <small>{detail}</small> : null}
-    </div>
+    <Card className="kpi">
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <CardTitle>{value}</CardTitle>
+        {detail ? <small>{detail}</small> : null}
+      </CardContent>
+    </Card>
   );
 }
 

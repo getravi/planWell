@@ -133,6 +133,10 @@ describe("PlanWell workbench UI", () => {
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect((await screen.findAllByText("Forecast Model")).length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-slot="sidebar-provider"]')).toBeTruthy();
+    expect(document.querySelector('[data-slot="sidebar"]')).toBeTruthy();
+    expect(document.querySelector('[data-slot="sidebar-inset"]')).toBeTruthy();
+    expect(document.querySelector('[data-slot="card"]')).toBeTruthy();
     expect(screen.getByRole("button", { name: /admin/i }).getAttribute("aria-expanded")).toBe(
       "false",
     );
