@@ -715,11 +715,15 @@ th {
   border: 1px solid var(--line);
   background: var(--surface);
 }
+.spreadsheet-grid tbody tr {
+  height: 46px;
+}
 .spreadsheet-grid th,
 .spreadsheet-grid td {
   border: 1px solid var(--line);
   padding: 7px 8px;
-  height: 36px;
+  height: 46px;
+  vertical-align: middle;
 }
 .spreadsheet-grid thead th {
   position: sticky;
@@ -754,8 +758,15 @@ th {
   border: 0;
   border-radius: 0;
   background: transparent;
+  min-height: 32px;
+  height: 32px;
+  padding: 6px 8px;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.spreadsheet-grid tbody th:first-child .input {
+  font-variant-numeric: normal;
+  text-align: left;
 }
 .spreadsheet-grid .input:focus {
   outline: 2px solid var(--blue);

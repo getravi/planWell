@@ -1230,24 +1230,28 @@ describe("PlanWell workbench UI", () => {
       }
       if (url.endsWith("/api/versions")) {
         if (init?.method === "POST") {
-          versions = [
-            ...versions,
-            {
-              id: "board",
-              name: "Board Case",
-              kind: "scenario",
-              canRename: true,
-              canDelete: true,
-            },
-          ];
-          return json({ version: versions[2], versions }, 201);
+          const version = {
+            id: "board",
+            name: "Board Case",
+            kind: "scenario",
+            canRename: true,
+            canDelete: true,
+          };
+          return json({ version, versions: [...versions, version] }, 201);
         }
         return json({ versions });
       }
       if (url.endsWith("/api/versions/board") && init?.method === "PATCH") {
-        versions = versions.map((version) =>
-          version.id === "board" ? { ...version, name: "Operating Plan" } : version,
-        );
+        versions = [
+          ...versions,
+          {
+            id: "board",
+            name: "Operating Plan",
+            kind: "scenario",
+            canRename: true,
+            canDelete: true,
+          },
+        ];
         return json({ version: versions[2], versions });
       }
       if (url.endsWith("/api/versions/board") && init?.method === "DELETE") {
@@ -1287,6 +1291,8 @@ describe("PlanWell workbench UI", () => {
         body: JSON.stringify({ name: "Board Case", sourceId: "actuals" }),
       }),
     );
+    expect(screen.queryByRole("dialog", { name: /add version/i })).toBeNull();
+    expect(screen.getByLabelText("Version name Board Case")).toBeTruthy();
 
     await userEvent.clear(await screen.findByLabelText("Version name Board Case"));
     await userEvent.type(screen.getByLabelText("Version name Board Case"), "Operating Plan");

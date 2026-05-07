@@ -1460,9 +1460,11 @@ function VersionsView({
     }));
   }, [versions]);
 
-  const refresh = async () => {
+  const syncVersions = (nextVersions: VersionRecord[]) => {
+    queryClient.setQueryData(["versions"], { versions: nextVersions });
+  };
+  const refreshPlanningData = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["versions"] }),
       queryClient.invalidateQueries({ queryKey: ["scenarios"] }),
       queryClient.invalidateQueries({ queryKey: ["forecast"] }),
       queryClient.invalidateQueries({ queryKey: ["variance"] }),
@@ -1470,25 +1472,28 @@ function VersionsView({
   };
   const create = useMutation({
     mutationFn: () => client.createVersion(newName, sourceId),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      syncVersions(result.versions);
       setNewName("");
       setCreateOpen(false);
       setStatus("Version added.");
-      await refresh();
+      await refreshPlanningData();
     },
   });
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => client.renameVersion(id, name),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      syncVersions(result.versions);
       setStatus("Version saved.");
-      await refresh();
+      await refreshPlanningData();
     },
   });
   const remove = useMutation({
     mutationFn: (id: string) => client.deleteVersion(id),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      syncVersions(result.versions);
       setStatus("Version deleted.");
-      await refresh();
+      await refreshPlanningData();
     },
   });
   const saveVersionName = (version: VersionRecord) => {
