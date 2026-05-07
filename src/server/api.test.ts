@@ -209,6 +209,20 @@ describe("PlanWell API", () => {
     expect(listedBody.versions.map((version: { name: string }) => version.name)).toContain(
       "Base Case",
     );
+    const inspectDb = new DatabaseSync(dbPath);
+    const versionColumns = inspectDb.prepare("pragma table_info(versions)").all() as {
+      name: string;
+    }[];
+    expect(versionColumns.map((column) => column.name)).toEqual([
+      "id",
+      "name",
+      "kind",
+      "created_at",
+      "updated_at",
+    ]);
+    expect(
+      inspectDb.prepare("select id, name, kind from versions where id = ?").get("actuals"),
+    ).toMatchObject({ id: "actuals", name: "Actuals", kind: "actuals" });
 
     const copied = await app.request("/api/versions", {
       method: "POST",
@@ -219,6 +233,10 @@ describe("PlanWell API", () => {
     expect(await copied.json()).toMatchObject({
       version: { name: "Board Case", kind: "scenario", canDelete: true },
     });
+    const boardTableRow = inspectDb
+      .prepare("select name, kind from versions where name = ?")
+      .get("Board Case");
+    expect(boardTableRow).toMatchObject({ name: "Board Case", kind: "scenario" });
     expect(repo.listForecast("Board Case")).toEqual([
       { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
       { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
@@ -233,6 +251,9 @@ describe("PlanWell API", () => {
     });
     expect(renamed.status).toBe(200);
     expect(repo.listScenarios().some((scenario) => scenario.name === "Operating Plan")).toBe(true);
+    expect(
+      inspectDb.prepare("select name from versions where id = ?").get(boardVersion!.id),
+    ).toMatchObject({ name: "Operating Plan" });
     expect(repo.listForecast("Operating Plan")).toEqual([
       { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
       { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
@@ -248,7 +269,6 @@ describe("PlanWell API", () => {
     const operatingPlan = repo
       .listScenarios()
       .find((scenario) => scenario.name === "Operating Plan");
-    const inspectDb = new DatabaseSync(dbPath);
     const countRows = (table: string) =>
       (
         inspectDb
@@ -270,6 +290,13 @@ describe("PlanWell API", () => {
       (
         inspectDb
           .prepare("select count(*) as count from scenarios where id = ?")
+          .get(operatingPlan!.id) as { count: number }
+      ).count,
+    ).toBe(0);
+    expect(
+      (
+        inspectDb
+          .prepare("select count(*) as count from versions where id = ?")
           .get(operatingPlan!.id) as { count: number }
       ).count,
     ).toBe(0);

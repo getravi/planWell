@@ -47,6 +47,14 @@ export const scenarios = sqliteTable("scenarios", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const versions = sqliteTable("versions", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  kind: text("kind").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const driverAssumptions = sqliteTable(
   "driver_assumptions",
   {

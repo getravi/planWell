@@ -86,6 +86,13 @@ export type Repository = {
 
 type UserRow = { id: string; email: string; password_hash: string };
 type ScenarioRow = { id: string; name: string; updated_at: string };
+type VersionRow = {
+  id: string;
+  name: string;
+  kind: "actuals" | "scenario";
+  created_at: string;
+  updated_at: string;
+};
 type LegacyScenarioRow = ScenarioRow & {
   assumptions_json: string;
   created_at: string;
@@ -185,8 +192,8 @@ function createRepository(db: DatabaseSync): Repository {
         .prepare(`
         select forecast_values.month, forecast_values.department, forecast_values.account, forecast_values.value
         from forecast_values
-        join scenarios on scenarios.id = forecast_values.scenario_id
-        where scenarios.name = ?
+        join versions on versions.id = forecast_values.scenario_id
+        where versions.name = ?
         order by forecast_values.month, forecast_values.department, forecast_values.account
       `)
         .all(scenarioName) as ForecastRow[];
@@ -215,16 +222,23 @@ function createRepository(db: DatabaseSync): Repository {
     },
     upsertScenario(assumptions) {
       const existing = db
-        .prepare("select id from scenarios where name = ?")
+        .prepare("select id from versions where name = ?")
         .get(assumptions.name) as { id: string } | undefined;
       const id = existing?.id ?? crypto.randomUUID();
       const now = new Date().toISOString();
-      db.prepare(`
-        insert into scenarios (id, name, created_at, updated_at)
-        values (?, ?, ?, ?)
-        on conflict(name) do update set updated_at = excluded.updated_at
-      `).run(id, assumptions.name, now, now);
-      replaceDriverAssumptions(db, id, assumptions);
+      withTransaction(db, () => {
+        db.prepare(`
+          insert into versions (id, name, kind, created_at, updated_at)
+          values (?, ?, ?, ?, ?)
+          on conflict(id) do update set name = excluded.name, updated_at = excluded.updated_at
+        `).run(id, assumptions.name, "scenario", now, now);
+        db.prepare(`
+          insert into scenarios (id, name, created_at, updated_at)
+          values (?, ?, ?, ?)
+          on conflict(id) do update set name = excluded.name, updated_at = excluded.updated_at
+        `).run(id, assumptions.name, now, now);
+        replaceDriverAssumptions(db, id, assumptions);
+      });
       recalculateScenario(db, assumptions.name);
       return readScenarios(db).find((scenario) => scenario.name === assumptions.name)!;
     },
@@ -280,6 +294,13 @@ function migrate(db: DatabaseSync): void {
       created_at text not null,
       updated_at text not null
     );
+    create table if not exists versions (
+      id text primary key,
+      name text not null unique,
+      kind text not null,
+      created_at text not null,
+      updated_at text not null
+    );
     create table if not exists driver_assumptions (
       scenario_id text not null,
       scope_type text not null,
@@ -301,12 +322,34 @@ function migrate(db: DatabaseSync): void {
     create index if not exists forecast_cube_idx on forecast_values (scenario_id, month, department, account);
   `);
   migrateLegacyScenarioAssumptions(db);
+  migrateVersions(db);
   ensureColumn(db, "department", "parent_name", "text");
   ensureColumn(db, "account", "parent_name", "text");
   ensureColumn(db, "department", "sort_order", "real");
   ensureColumn(db, "account", "sort_order", "real");
   backfillDimensionOrder(db, "department");
   backfillDimensionOrder(db, "account");
+}
+
+function migrateVersions(db: DatabaseSync): void {
+  const now = new Date().toISOString();
+  db.prepare(`
+    insert into versions (id, name, kind, created_at, updated_at)
+    values (?, ?, ?, ?, ?)
+    on conflict(id) do nothing
+  `).run(actualsVersionId, "Actuals", "actuals", now, now);
+
+  const insertScenarioVersion = db.prepare(`
+    insert into versions (id, name, kind, created_at, updated_at)
+    values (?, ?, ?, ?, ?)
+    on conflict(id) do nothing
+  `);
+  const scenarioRows = db
+    .prepare("select id, name, created_at, updated_at from scenarios")
+    .all() as (ScenarioRow & { created_at: string })[];
+  for (const row of scenarioRows) {
+    insertScenarioVersion.run(row.id, row.name, "scenario", row.created_at, row.updated_at);
+  }
 }
 
 function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
@@ -353,31 +396,28 @@ function updateScenarioAssumptions(
   scenarioId: string,
   assumptions: ScenarioAssumptions,
 ): void {
-  db.prepare("update scenarios set updated_at = ? where id = ?").run(
-    new Date().toISOString(),
-    scenarioId,
-  );
+  const now = new Date().toISOString();
+  db.prepare("update scenarios set updated_at = ? where id = ?").run(now, scenarioId);
+  db.prepare("update versions set updated_at = ? where id = ?").run(now, scenarioId);
   replaceDriverAssumptions(db, scenarioId, assumptions);
 }
 
 function listVersions(db: DatabaseSync): VersionRecord[] {
-  return [
-    {
-      id: actualsVersionId,
-      name: "Actuals",
-      kind: "actuals",
-      canRename: false,
-      canDelete: false,
-    },
-    ...readScenarios(db).map((scenario) => ({
-      id: scenario.id,
-      name: scenario.name,
-      kind: "scenario" as const,
-      canRename: true,
-      canDelete: true,
-      updatedAt: scenario.updatedAt,
-    })),
-  ];
+  return (db.prepare("select * from versions order by kind, name").all() as VersionRow[])
+    .map((version) => ({
+      id: version.id,
+      name: version.name,
+      kind: version.kind,
+      canRename: version.kind !== "actuals",
+      canDelete: version.kind !== "actuals",
+      updatedAt: version.updated_at,
+    }))
+    .sort(
+      (left, right) =>
+        (left.kind === "actuals" ? 0 : 1) - (right.kind === "actuals" ? 0 : 1) ||
+        scenarioOrder(left.name) - scenarioOrder(right.name) ||
+        left.name.localeCompare(right.name),
+    );
 }
 
 function createVersion(db: DatabaseSync, rawName: string, sourceId: string): VersionRecord {
@@ -390,6 +430,9 @@ function createVersion(db: DatabaseSync, rawName: string, sourceId: string): Ver
       ? emptyScenarioAssumptions(name)
       : { ...readScenarioById(db, sourceId).assumptions, name };
   withTransaction(db, () => {
+    db.prepare(
+      "insert into versions (id, name, kind, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    ).run(id, name, "scenario", now, now);
     db.prepare("insert into scenarios (id, name, created_at, updated_at) values (?, ?, ?, ?)").run(
       id,
       name,
@@ -413,12 +456,10 @@ function renameVersion(db: DatabaseSync, id: string, rawName: string): VersionRe
   const name = normalizeVersionName(rawName);
   ensureVersionNameAvailable(db, name, id);
   const scenario = readScenarioById(db, id);
+  const now = new Date().toISOString();
   withTransaction(db, () => {
-    db.prepare("update scenarios set name = ?, updated_at = ? where id = ?").run(
-      name,
-      new Date().toISOString(),
-      id,
-    );
+    db.prepare("update versions set name = ?, updated_at = ? where id = ?").run(name, now, id);
+    db.prepare("update scenarios set name = ?, updated_at = ? where id = ?").run(name, now, id);
     replaceDriverAssumptions(db, id, { ...scenario.assumptions, name });
   });
   return listVersions(db).find((version) => version.id === id)!;
@@ -433,6 +474,7 @@ function deleteVersion(db: DatabaseSync, id: string): void {
     db.prepare("delete from forecast_values where scenario_id = ?").run(id);
     db.prepare("delete from driver_assumptions where scenario_id = ?").run(id);
     db.prepare("delete from scenarios where id = ?").run(id);
+    db.prepare("delete from versions where id = ?").run(id);
   });
 }
 
@@ -452,7 +494,7 @@ function ensureVersionNameAvailable(
   name: string,
   currentScenarioId: string | null,
 ): void {
-  const existing = db.prepare("select id from scenarios where name = ?").get(name) as
+  const existing = db.prepare("select id from versions where name = ?").get(name) as
     | { id: string }
     | undefined;
   if (existing && existing.id !== currentScenarioId) {
@@ -587,14 +629,24 @@ function seedDemoUser(db: DatabaseSync): void {
 }
 
 function ensureDefaultScenarios(db: DatabaseSync): void {
-  const insert = db.prepare(`
+  const insertVersion = db.prepare(`
+    insert into versions (id, name, kind, created_at, updated_at)
+    values (?, ?, ?, ?, ?)
+    on conflict(name) do nothing
+  `);
+  const insertScenario = db.prepare(`
     insert into scenarios (id, name, created_at, updated_at)
     values (?, ?, ?, ?)
     on conflict(name) do nothing
   `);
   for (const scenario of defaultScenarios) {
     const now = new Date().toISOString();
-    insert.run(crypto.randomUUID(), scenario.name, now, now);
+    const id = crypto.randomUUID();
+    insertVersion.run(id, scenario.name, "scenario", now, now);
+    const version = db.prepare("select id from versions where name = ?").get(scenario.name) as {
+      id: string;
+    };
+    insertScenario.run(version.id, scenario.name, now, now);
     const row = db.prepare("select id from scenarios where name = ?").get(scenario.name) as {
       id: string;
     };
@@ -1099,7 +1151,17 @@ function recalculateScenario(db: DatabaseSync, name: string): void {
 }
 
 function readScenarios(db: DatabaseSync): ScenarioRecord[] {
-  return (db.prepare("select * from scenarios order by name").all() as ScenarioRow[])
+  return (
+    db
+      .prepare(`
+    select scenarios.id, versions.name, versions.updated_at
+    from scenarios
+    join versions on versions.id = scenarios.id
+    where versions.kind = 'scenario'
+    order by versions.name
+  `)
+      .all() as ScenarioRow[]
+  )
     .map((row) => ({
       id: row.id,
       name: row.name,

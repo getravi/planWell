@@ -1194,6 +1194,8 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
     expect(screen.getByText("driver_assumptions")).toBeTruthy();
     expect(screen.getAllByText("scenarios").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("versions").length).toBeGreaterThan(0);
+    expect(screen.getByText("kind")).toBeTruthy();
     expect(screen.queryByText("assumptions_json")).toBeNull();
     expect(screen.getByText("scope_type")).toBeTruthy();
     expect(screen.getByText("driver_key")).toBeTruthy();
@@ -1201,7 +1203,7 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByText("sort_order").length).toBeGreaterThan(0);
     expect(screen.getByText("Derived time hierarchy")).toBeTruthy();
     expect(screen.getAllByText("Versions").length).toBeGreaterThan(0);
-    expect(screen.getByText("Actuals is the protected baseline version")).toBeTruthy();
+    expect(screen.getByText("Version names and kinds live in the versions table")).toBeTruthy();
     expect(screen.getByText("Hierarchy level assumptions")).toBeTruthy();
     expect(screen.getByText("Driver assumptions")).toBeTruthy();
     expect(screen.getByLabelText("ERD relationship lines")).toBeTruthy();

@@ -1978,9 +1978,9 @@ function SchemaView() {
           <h2>Planning cube structure</h2>
         </div>
         <p className="muted">
-          Actuals and forecasts are stored separately. Time, department, account, and scenario
-          dimensions keep the model extensible for new planning slices, with editable department and
-          account hierarchy parents.
+          Actuals and forecasts are stored separately. Versions are their own metadata table, while
+          time, department, account, and scenario dimensions keep the model extensible for new
+          planning slices.
         </p>
       </section>
 
@@ -2051,6 +2051,18 @@ function SchemaView() {
         <div className="erd-lane scenarios">
           <span className="lane-label">Planning logic</span>
           <SchemaTable
+            name="versions"
+            tone="scenario"
+            fields={[
+              ["PK", "id"],
+              ["UQ", "name"],
+              ["", "kind"],
+              ["", "created_at"],
+              ["", "updated_at"],
+            ]}
+          />
+          <SchemaRelation label="scenario versions share IDs with scenarios" />
+          <SchemaTable
             name="scenarios"
             tone="scenario"
             fields={[
@@ -2077,9 +2089,10 @@ function SchemaView() {
           <SchemaRelation label="Driver assumptions generate forecast cells" />
           <div className="schema-note-card">
             <strong>Versions</strong>
-            <span>Actuals is the protected baseline version</span>
-            <span>Scenario versions copy forecast rows and driver assumptions</span>
+            <span>Version names and kinds live in the versions table</span>
+            <span>Actuals is protected; scenario versions copy forecast rows and assumptions</span>
             <code>actuals</code>
+            <code>versions</code>
             <code>scenarios</code>
             <code>forecast_values</code>
           </div>
