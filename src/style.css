@@ -271,6 +271,16 @@ nav button:hover {
   gap: 12px;
   margin-bottom: 14px;
 }
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.table-actions span {
+  color: var(--muted);
+  font-size: 13px;
+}
 
 .btn {
   display: inline-flex;
@@ -324,6 +334,23 @@ label {
   grid-template-columns: minmax(220px, 1fr);
   gap: 12px;
   margin-bottom: 10px;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgb(15 24 18 / 0.42);
+  padding: 20px;
+}
+.modal-panel {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgb(15 24 18 / 0.22);
+  padding: 16px;
 }
 .driver-note {
   margin-bottom: 14px;

@@ -1273,10 +1273,13 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByRole("heading", { name: "Versions", level: 1 })).toBeTruthy();
     expect((await screen.findAllByText("Actuals")).length).toBeGreaterThan(1);
     expect(screen.queryByRole("button", { name: /delete actuals/i })).toBeNull();
+    expect(screen.queryByLabelText("New version name")).toBeNull();
 
+    await userEvent.click(screen.getByRole("button", { name: /add version/i }));
+    expect(screen.getByRole("dialog", { name: /add version/i })).toBeTruthy();
     await userEvent.type(screen.getByLabelText("New version name"), "Board Case");
     await userEvent.selectOptions(screen.getByLabelText("Copy data from"), "actuals");
-    await userEvent.click(screen.getByRole("button", { name: /add version/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create version/i }));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/versions",
       expect.objectContaining({

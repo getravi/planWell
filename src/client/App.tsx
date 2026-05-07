@@ -1450,6 +1450,7 @@ function VersionsView({
   const [sourceId, setSourceId] = useState("");
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("");
+  const [isCreateOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     setSourceId((current) => current || versions[0]?.id || "");
@@ -1471,6 +1472,7 @@ function VersionsView({
     mutationFn: () => client.createVersion(newName, sourceId),
     onSuccess: async () => {
       setNewName("");
+      setCreateOpen(false);
       setStatus("Version added.");
       await refresh();
     },
@@ -1530,43 +1532,13 @@ function VersionsView({
 
       <Panel>
         <div className="panel-heading">
-          <h2>Add version</h2>
-          <Copy size={18} />
-        </div>
-        <div className="driver-controls">
-          <label>
-            <Label>New version name</Label>
-            <Input
-              aria-label="New version name"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-          </label>
-          <label>
-            <Label>Copy data from</Label>
-            <Select
-              aria-label="Copy data from"
-              value={sourceId}
-              onChange={(event) => setSourceId(event.target.value)}
-            >
-              {versions.map((version) => (
-                <option key={version.id} value={version.id}>
-                  {version.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <Button type="button" onClick={() => create.mutate()} disabled={!newName || !sourceId}>
-            Add version
-          </Button>
-        </div>
-        {create.error ? <p className="error">{create.error.message}</p> : null}
-      </Panel>
-
-      <Panel>
-        <div className="panel-heading">
           <h2>All versions</h2>
-          <span>{versions.length} versions</span>
+          <div className="table-actions">
+            <span>{versions.length} versions</span>
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Plus size={16} /> Add version
+            </Button>
+          </div>
         </div>
         <div className="spreadsheet-wrap">
           <table className="spreadsheet-grid">
@@ -1626,6 +1598,58 @@ function VersionsView({
         {remove.error ? <p className="error">{remove.error.message}</p> : null}
         {status ? <p className="muted">{status}</p> : null}
       </Panel>
+
+      {isCreateOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-version-title"
+          >
+            <div className="panel-heading">
+              <h2 id="add-version-title">Add version</h2>
+              <GhostButton type="button" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </GhostButton>
+            </div>
+            <form
+              className="driver-controls"
+              onSubmit={(event) => {
+                event.preventDefault();
+                create.mutate();
+              }}
+            >
+              <label>
+                <Label>New version name</Label>
+                <Input
+                  aria-label="New version name"
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                />
+              </label>
+              <label>
+                <Label>Copy data from</Label>
+                <Select
+                  aria-label="Copy data from"
+                  value={sourceId}
+                  onChange={(event) => setSourceId(event.target.value)}
+                >
+                  {versions.map((version) => (
+                    <option key={version.id} value={version.id}>
+                      {version.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <Button type="submit" disabled={!newName || !sourceId || create.isPending}>
+                <Copy size={16} /> Create version
+              </Button>
+            </form>
+            {create.error ? <p className="error">{create.error.message}</p> : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
