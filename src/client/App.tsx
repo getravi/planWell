@@ -229,6 +229,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
           </div>
         </div>
         <nav>
+          <span className="nav-section-label">Workspace</span>
           {[
             ["Actuals", FileUp],
             ["Forecast Model", Settings2],
@@ -246,6 +247,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             </button>
           ))}
           <div className="nav-group">
+            <span className="nav-section-label">Admin</span>
             <button
               type="button"
               className={`nav-group-toggle ${isAdminView ? "active" : ""}`}
@@ -282,9 +284,12 @@ function Workbench({ userEmail }: { userEmail: string }) {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Modeling Workbench</p>
+            <p className="eyebrow">PlanWell / Modeling Workbench</p>
             <h1>{view}</h1>
           </div>
+          {view !== "Schema" && view !== "Dimensions" && view !== "Versions" ? (
+            <span className="status-pill">Live model</span>
+          ) : null}
           <div className="scenario-pickers">
             {view === "Forecast Model" ? (
               <label>
