@@ -187,7 +187,8 @@ describe("PlanWell API", () => {
   });
 
   it("manages versions while protecting Actuals", async () => {
-    const repo = createTestRepository();
+    const dbPath = join(mkdtempSync(join(tmpdir(), "planwell-versions-")), "versions.sqlite");
+    const repo = createFileRepository(dbPath);
     const app = createApp({ repo });
     const cookie = await loginCookie(app);
     repo.replaceActuals([
@@ -247,12 +248,32 @@ describe("PlanWell API", () => {
     const operatingPlan = repo
       .listScenarios()
       .find((scenario) => scenario.name === "Operating Plan");
+    const inspectDb = new DatabaseSync(dbPath);
+    const countRows = (table: string) =>
+      (
+        inspectDb
+          .prepare(`select count(*) as count from ${table} where scenario_id = ?`)
+          .get(operatingPlan!.id) as { count: number }
+      ).count;
+    expect(countRows("forecast_values")).toBeGreaterThan(0);
+    expect(countRows("driver_assumptions")).toBeGreaterThan(0);
+
     const deleted = await app.request(`/api/versions/${operatingPlan!.id}`, {
       method: "DELETE",
       headers: { cookie },
     });
     expect(deleted.status).toBe(200);
     expect(repo.listScenarios().some((scenario) => scenario.name === "Operating Plan")).toBe(false);
+    expect(countRows("forecast_values")).toBe(0);
+    expect(countRows("driver_assumptions")).toBe(0);
+    expect(
+      (
+        inspectDb
+          .prepare("select count(*) as count from scenarios where id = ?")
+          .get(operatingPlan!.id) as { count: number }
+      ).count,
+    ).toBe(0);
+    inspectDb.close();
   });
 
   it("manages department hierarchies and safely cascades renames", async () => {

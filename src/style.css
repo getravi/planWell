@@ -352,6 +352,15 @@ label {
   box-shadow: 0 24px 70px rgb(15 24 18 / 0.22);
   padding: 16px;
 }
+.warning-copy {
+  border: 1px solid #f1c7c2;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #7a2f28;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding: 12px;
+}
 .driver-note {
   margin-bottom: 14px;
 }

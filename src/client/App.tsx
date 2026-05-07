@@ -1451,6 +1451,7 @@ function VersionsView({
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("");
   const [isCreateOpen, setCreateOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<VersionRecord | null>(null);
 
   useEffect(() => {
     setSourceId((current) => current || versions[0]?.id || "");
@@ -1489,7 +1490,20 @@ function VersionsView({
     },
   });
   const remove = useMutation({
-    mutationFn: (id: string) => client.deleteVersion(id),
+    mutationFn: (version: VersionRecord) => client.deleteVersion(version.id),
+    onMutate: async (version) => {
+      const previous = queryClient.getQueryData<{ versions: VersionRecord[] }>(["versions"]);
+      const currentVersions = previous?.versions ?? versions;
+      syncVersions(currentVersions.filter((item) => item.id !== version.id));
+      setPendingDelete(null);
+      return { previous };
+    },
+    onError: (_error, _version, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["versions"], context.previous);
+      }
+      setStatus("Could not delete version.");
+    },
     onSuccess: async (result) => {
       syncVersions(result.versions);
       setStatus("Version deleted.");
@@ -1587,7 +1601,7 @@ function VersionsView({
                           type="button"
                           aria-label={`Delete ${version.name}`}
                           title={`Delete ${version.name}`}
-                          onClick={() => remove.mutate(version.id)}
+                          onClick={() => setPendingDelete(version)}
                         >
                           <Trash2 size={15} aria-hidden="true" />
                         </GhostButton>
@@ -1652,6 +1666,36 @@ function VersionsView({
               </Button>
             </form>
             {create.error ? <p className="error">{create.error.message}</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {pendingDelete ? (
+        <div className="modal-backdrop" role="presentation">
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-version-title"
+          >
+            <div className="panel-heading">
+              <h2 id="delete-version-title">Delete {pendingDelete.name}</h2>
+              <GhostButton type="button" onClick={() => setPendingDelete(null)}>
+                Cancel
+              </GhostButton>
+            </div>
+            <p className="warning-copy">
+              This will permanently delete forecast values and driver assumptions for this version.
+              This data cannot be restored from PlanWell after deletion.
+            </p>
+            <div className="button-row">
+              <Button type="button" onClick={() => remove.mutate(pendingDelete)}>
+                <Trash2 size={16} /> Delete version
+              </Button>
+              <GhostButton type="button" onClick={() => setPendingDelete(null)}>
+                Keep version
+              </GhostButton>
+            </div>
           </div>
         </div>
       ) : null}

@@ -1220,6 +1220,7 @@ describe("PlanWell workbench UI", () => {
         canDelete: true,
       },
     ];
+    let resolveDelete: ((response: Response) => void) | undefined;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.endsWith("/api/auth/me")) {
@@ -1255,8 +1256,12 @@ describe("PlanWell workbench UI", () => {
         return json({ version: versions[2], versions });
       }
       if (url.endsWith("/api/versions/board") && init?.method === "DELETE") {
-        versions = versions.filter((version) => version.id !== "board");
-        return json({ ok: true, versions });
+        return new Promise<Response>((resolve) => {
+          resolveDelete = (response) => {
+            versions = versions.filter((version) => version.id !== "board");
+            resolve(response);
+          };
+        });
       }
       if (url.includes("/api/cube/actuals")) {
         return json(emptyCube());
@@ -1307,9 +1312,23 @@ describe("PlanWell workbench UI", () => {
     );
 
     await userEvent.click(await screen.findByRole("button", { name: /delete operating plan/i }));
+    expect(screen.getByRole("dialog", { name: /delete operating plan/i })).toBeTruthy();
+    expect(
+      screen.getByText(/permanently delete forecast values and driver assumptions/i),
+    ).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/versions/board",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /delete version/i }));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/versions/board",
       expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(screen.queryByLabelText("Version name Operating Plan")).toBeNull();
+    resolveDelete?.(
+      json({ ok: true, versions: versions.filter((version) => version.id !== "board") }),
     );
   });
 });
