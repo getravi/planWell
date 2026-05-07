@@ -281,13 +281,7 @@ describe("PlanWell workbench UI", () => {
         .closest("section")
         ?.classList.contains("span-two"),
     ).toBe(true);
-    const assumptionLevel = (await screen.findByLabelText(
-      /assumption level/i,
-    )) as HTMLSelectElement;
-    const assumptionOptions = [...assumptionLevel.options].map((option) => ({
-      label: option.textContent,
-      value: option.value,
-    }));
+    const assumptionOptions = await getSelectOptions(/assumption level/i);
     expect(assumptionOptions.filter((option) => option.label === "Total Company")).toHaveLength(1);
     expect(assumptionOptions.find((option) => option.value === "__company__")).toBeUndefined();
     expect(assumptionOptions.map((option) => option.label)).toEqual([
@@ -297,7 +291,7 @@ describe("PlanWell workbench UI", () => {
       "Engineering",
     ]);
     expect(screen.queryByRole("option", { name: "Company defaults" })).toBeNull();
-    expect(screen.getAllByRole("option", { name: "Engineering" }).length).toBeGreaterThan(0);
+    expect(assumptionOptions.some((option) => option.label === "Engineering")).toBe(true);
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("rowheader", { name: "Revenue growth" })).toBeTruthy();
@@ -396,7 +390,7 @@ describe("PlanWell workbench UI", () => {
 
     const department = await screen.findByLabelText(/forecast department/i);
     expect(department).toBeTruthy();
-    await userEvent.selectOptions(department, "GPU Cloud");
+    await chooseSelectOption(/forecast department/i, "GPU Cloud");
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /copy grid/i }).length).toBeGreaterThan(0);
@@ -475,10 +469,12 @@ describe("PlanWell workbench UI", () => {
     render(<App />);
 
     const department = await screen.findByLabelText(/forecast department/i);
-    expect((await screen.findAllByRole("option", { name: "Product" })).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("option", { name: "New Ventures" }).length).toBeGreaterThan(0);
+    expect(department).toBeTruthy();
+    const departmentOptions = await getSelectOptions(/forecast department/i);
+    expect(departmentOptions.some((option) => option.label === "Product")).toBe(true);
+    expect(departmentOptions.some((option) => option.label === "New Ventures")).toBe(true);
 
-    await userEvent.selectOptions(department, "Product");
+    await chooseSelectOption(/forecast department/i, "Product");
     expect(await screen.findByRole("rowheader", { name: "Product" })).toBeTruthy();
     expect(
       screen
@@ -488,7 +484,11 @@ describe("PlanWell workbench UI", () => {
     ).toBe(true);
     expect(await screen.findByRole("rowheader", { name: "GPU Cloud" })).toBeTruthy();
     expect(screen.queryByRole("rowheader", { name: "Engineering" })).toBeNull();
-    expect(screen.getAllByRole("option", { name: "New Ventures" }).length).toBeGreaterThan(0);
+    expect(
+      (await getSelectOptions(/forecast department/i)).some(
+        (option) => option.label === "New Ventures",
+      ),
+    ).toBe(true);
   });
 
   it("shows parent department rows in variance tables", async () => {
@@ -1291,7 +1291,7 @@ describe("PlanWell workbench UI", () => {
     await userEvent.click(screen.getByRole("button", { name: /add version/i }));
     expect(screen.getByRole("dialog", { name: /add version/i })).toBeTruthy();
     await userEvent.type(screen.getByLabelText("New version name"), "Board Case");
-    await userEvent.selectOptions(screen.getByLabelText("Copy data from"), "actuals");
+    await chooseSelectOption("Copy data from", "actuals");
     await userEvent.click(screen.getByRole("button", { name: /create version/i }));
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/versions",
@@ -1343,6 +1343,42 @@ async function openAdminPage(name: RegExp): Promise<void> {
     await userEvent.click(admin);
   }
   await userEvent.click(await screen.findByRole("button", { name }));
+}
+
+async function getSelectOptions(
+  label: string | RegExp,
+): Promise<{ label: string; value: string }[]> {
+  const trigger = await screen.findByRole("combobox", { name: label });
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    await userEvent.click(trigger);
+  }
+  const options = await screen.findAllByRole("option");
+  const values = options.map((option) => ({
+    label: option.textContent?.trim() ?? "",
+    value: option.getAttribute("data-value") ?? "",
+  }));
+  await userEvent.keyboard("{Escape}");
+  return values;
+}
+
+async function chooseSelectOption(
+  label: string | RegExp,
+  optionValueOrLabel: string,
+): Promise<void> {
+  const trigger = await screen.findByRole("combobox", { name: label });
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    await userEvent.click(trigger);
+  }
+  const options = await screen.findAllByRole("option");
+  const option = options.find(
+    (item) =>
+      item.getAttribute("data-value") === optionValueOrLabel ||
+      item.textContent?.trim() === optionValueOrLabel,
+  );
+  if (!option) {
+    throw new Error(`Could not find select option ${optionValueOrLabel}`);
+  }
+  await userEvent.click(option);
 }
 
 function json(body: unknown, status = 200): Response {

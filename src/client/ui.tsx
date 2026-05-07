@@ -1,9 +1,20 @@
-import type {
-  ButtonHTMLAttributes,
-  HTMLAttributes,
-  InputHTMLAttributes,
-  PropsWithChildren,
-  SelectHTMLAttributes,
+import { Check, ChevronDown } from "lucide-react";
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ChangeEvent,
+  type FocusEvent,
+  type HTMLAttributes,
+  type InputHTMLAttributes,
+  type PropsWithChildren,
+  type ReactNode,
+  type SelectHTMLAttributes,
 } from "react";
 import { twMerge } from "tailwind-merge";
 import { clsx } from "clsx";
@@ -24,8 +35,159 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return <input className={cn("input", className)} data-slot="input" {...props} />;
 }
 
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn("input", className)} data-slot="select" {...props} />;
+type SelectOption = {
+  disabled: boolean;
+  label: string;
+  value: string;
+};
+
+function textFromNode(node: ReactNode): string {
+  return Children.toArray(node)
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number") {
+        return String(child);
+      }
+      if (isValidElement<{ children?: ReactNode }>(child)) {
+        return textFromNode(child.props.children);
+      }
+      return "";
+    })
+    .join("");
+}
+
+function optionsFromChildren(children: ReactNode): SelectOption[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (
+      !isValidElement<{ children?: ReactNode; disabled?: boolean; value?: string | number }>(child)
+    ) {
+      return [];
+    }
+    const label = textFromNode(child.props.children);
+    return [
+      {
+        disabled: Boolean(child.props.disabled),
+        label,
+        value: String(child.props.value ?? label),
+      },
+    ];
+  });
+}
+
+export function Select({
+  "aria-label": ariaLabel,
+  children,
+  className,
+  defaultValue,
+  disabled,
+  id,
+  name,
+  onBlur,
+  onChange,
+  onFocus,
+  required,
+  value,
+}: SelectHTMLAttributes<HTMLSelectElement>) {
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
+  const contentId = `${selectId}-content`;
+  const options = useMemo(() => optionsFromChildren(children), [children]);
+  const isControlled = value !== undefined;
+  const [open, setOpen] = useState(false);
+  const [internalValue, setInternalValue] = useState(() =>
+    String(defaultValue ?? value ?? options[0]?.value ?? ""),
+  );
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selectedValue = String(isControlled ? (value ?? "") : internalValue);
+  const selectedOption =
+    options.find((option) => option.value === selectedValue) ??
+    options.find((option) => !option.disabled);
+
+  useEffect(() => {
+    if (!isControlled && !internalValue && selectedOption?.value) {
+      setInternalValue(selectedOption.value);
+    }
+  }, [internalValue, isControlled, selectedOption?.value]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const selectOption = (nextValue: string) => {
+    if (!isControlled) {
+      setInternalValue(nextValue);
+    }
+    onChange?.({
+      currentTarget: { value: nextValue },
+      target: { value: nextValue },
+    } as ChangeEvent<HTMLSelectElement>);
+    setOpen(false);
+  };
+
+  return (
+    <div className={cn("select", className)} data-slot="select" ref={rootRef}>
+      {name ? <input type="hidden" name={name} required={required} value={selectedValue} /> : null}
+      <button
+        aria-controls={contentId}
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        className="select-trigger"
+        data-slot="select-trigger"
+        disabled={disabled}
+        id={selectId}
+        onBlur={(event) => onBlur?.(event as unknown as FocusEvent<HTMLSelectElement>)}
+        onClick={() => setOpen((current) => !current)}
+        onFocus={(event) => onFocus?.(event as unknown as FocusEvent<HTMLSelectElement>)}
+        role="combobox"
+        type="button"
+      >
+        <span className="select-value" data-slot="select-value">
+          {selectedOption?.label ?? "Select..."}
+        </span>
+        <ChevronDown className={open ? "select-chevron open" : "select-chevron"} size={16} />
+      </button>
+      {open ? (
+        <div className="select-content" data-slot="select-content" id={contentId} role="listbox">
+          {options.map((option) => (
+            <button
+              aria-selected={option.value === selectedValue}
+              className={option.value === selectedValue ? "select-item selected" : "select-item"}
+              data-slot="select-item"
+              data-value={option.value}
+              disabled={option.disabled}
+              key={option.value}
+              onClick={() => selectOption(option.value)}
+              role="option"
+              type="button"
+            >
+              <Check
+                className={option.value === selectedValue ? "select-check visible" : "select-check"}
+                size={14}
+              />
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
