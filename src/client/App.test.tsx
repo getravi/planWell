@@ -319,6 +319,105 @@ describe("PlanWell workbench UI", () => {
     ).toBe(true);
   });
 
+  it("pastes Excel and CSV blocks into the Forecast Model driver grid", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [
+            { name: "Total Company", parentName: null, referenceCount: 0, children: [] },
+          ],
+          account: [],
+          time: [],
+        });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        if ((input instanceof Request ? input.method : init?.method) === "POST") {
+          return json({ scenario: { id: "base", name: "Base Case", assumptions: {} } });
+        }
+        return json({
+          scenarios: [
+            {
+              id: "base",
+              name: "Base Case",
+              assumptions: {
+                name: "Base Case",
+                global: {
+                  revenueGrowthRate: 0.03,
+                  cogsPctOfRevenue: 0.44,
+                  headcountGrowthRate: 0.01,
+                  costPerHead: 19000,
+                },
+                monthly: {},
+                overrides: {},
+              },
+            },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/actuals")) {
+        return json(emptyCube());
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json({
+          rows: [
+            { month: "2026-01", department: "Total Company", account: "Revenue", value: 1000 },
+            { month: "2026-02", department: "Total Company", account: "Revenue", value: 1200 },
+          ],
+          summary: { ...emptyCube().summary, months: ["2026-01", "2026-02"] },
+        });
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: /forecast model/i }));
+
+    fireEvent.paste(await screen.findByLabelText("Revenue growth 2026-01"), {
+      clipboardData: {
+        getData: () => "10%,11%\n45%,46%",
+      },
+    });
+    fireEvent.paste(await screen.findByLabelText("Headcount growth 2026-01"), {
+      clipboardData: {
+        getData: () => "2\t3\n20000\t21000",
+      },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /save scenario/i }));
+
+    expect(
+      fetchMock.mock.calls.some(([input, init]) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        if (
+          !url.endsWith("/api/scenarios") ||
+          init?.method !== "POST" ||
+          typeof init.body !== "string"
+        ) {
+          return false;
+        }
+        const body = JSON.parse(init.body);
+        const override = body.overrides["Total Company"]?.monthly;
+        return (
+          override?.["2026-01"]?.revenueGrowthRate === 0.1 &&
+          override?.["2026-02"]?.revenueGrowthRate === 0.11 &&
+          override?.["2026-01"]?.cogsPctOfRevenue === 0.45 &&
+          override?.["2026-02"]?.cogsPctOfRevenue === 0.46 &&
+          override?.["2026-01"]?.headcountGrowthRate === 0.02 &&
+          override?.["2026-02"]?.headcountGrowthRate === 0.03 &&
+          override?.["2026-01"]?.costPerHead === 20000 &&
+          override?.["2026-02"]?.costPerHead === 21000
+        );
+      }),
+    ).toBe(true);
+  });
+
   it("filters Forecast Model by department and uses month-column spreadsheet grids", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();

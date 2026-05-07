@@ -696,10 +696,7 @@ function ScenarioEditor({
 
   const applyDriverPaste = (text: string, startRow: number, startColumn: number) => {
     const next = structuredClone(active);
-    const lines = text
-      .trim()
-      .split(/\r?\n/)
-      .map((line) => line.split("\t"));
+    const lines = parsePastedGrid(text);
 
     for (let rowIndex = 0; rowIndex < lines.length; rowIndex += 1) {
       const driver = driverRows[startRow + rowIndex];
@@ -841,7 +838,8 @@ function ScenarioEditor({
                           const rowIndex = Number(event.currentTarget.dataset.rowIndex ?? 0);
                           const columnIndex = Number(event.currentTarget.dataset.columnIndex ?? 0);
                           const text = event.clipboardData.getData("text");
-                          if (!text.includes("\t") && !text.includes("\n")) {
+                          const lines = parsePastedGrid(text);
+                          if (!isMultiCellGrid(lines)) {
                             return;
                           }
                           event.preventDefault();
@@ -2666,6 +2664,54 @@ function summarizeRows(rows: ActualRow[]): MetricSummary {
 
 function sumAccount(rows: ActualRow[], account: string): number {
   return rows.filter((row) => row.account === account).reduce((total, row) => total + row.value, 0);
+}
+
+function parsePastedGrid(text: string): string[][] {
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n$/, "");
+  if (!normalized.trim()) {
+    return [];
+  }
+  return normalized
+    .split("\n")
+    .map((line) => (line.includes("\t") ? line.split("\t") : parseCsvRow(line)))
+    .filter((row) => row.some((cell) => cell.trim()));
+}
+
+function parseCsvRow(line: string): string[] {
+  const cells: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (inQuotes) {
+      if (char === '"' && line[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ",") {
+      cells.push(cell);
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  cells.push(cell);
+  return cells;
+}
+
+function isMultiCellGrid(lines: string[][]): boolean {
+  return lines.length > 1 || lines.some((line) => line.length > 1);
 }
 
 function aggregateByMonth(rows: ActualRow[], account: string) {
