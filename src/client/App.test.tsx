@@ -1193,9 +1193,14 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByText("actuals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
     expect(screen.getByText("driver_assumptions")).toBeTruthy();
-    expect(screen.getAllByText("scenarios").length).toBeGreaterThan(0);
     expect(screen.getAllByText("versions").length).toBeGreaterThan(0);
     expect(screen.getByText("kind")).toBeTruthy();
+    expect(screen.getByText("actuals or scenario")).toBeTruthy();
+    expect(
+      screen
+        .queryAllByText("scenarios")
+        .filter((element) => element.tagName.toLowerCase() === "header"),
+    ).toHaveLength(0);
     expect(screen.queryByText("assumptions_json")).toBeNull();
     expect(screen.getByText("scope_type")).toBeTruthy();
     expect(screen.getByText("driver_key")).toBeTruthy();
@@ -1203,7 +1208,15 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByText("sort_order").length).toBeGreaterThan(0);
     expect(screen.getByText("Derived time hierarchy")).toBeTruthy();
     expect(screen.getAllByText("Versions").length).toBeGreaterThan(0);
-    expect(screen.getByText("Version names and kinds live in the versions table")).toBeTruthy();
+    expect(screen.getByText("Scenarios are versions with kind = scenario")).toBeTruthy();
+    expect(screen.getByText("Everything other than Actuals is a scenario version")).toBeTruthy();
+    const versionsTable = screen
+      .getAllByText("versions")
+      .find((element) => element.tagName.toLowerCase() === "header");
+    expect(versionsTable?.closest(".erd-lane")?.querySelector(".lane-label")?.textContent).toBe(
+      "Dimensions",
+    );
+    expect(screen.getAllByText("scenario_id -> versions.id").length).toBeGreaterThan(0);
     expect(screen.getByText("Hierarchy level assumptions")).toBeTruthy();
     expect(screen.getByText("Driver assumptions")).toBeTruthy();
     expect(screen.getByLabelText("ERD relationship lines")).toBeTruthy();

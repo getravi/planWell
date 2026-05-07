@@ -1978,9 +1978,9 @@ function SchemaView() {
           <h2>Planning cube structure</h2>
         </div>
         <p className="muted">
-          Actuals and forecasts are stored separately. Versions are their own metadata table, while
-          time, department, account, and scenario dimensions keep the model extensible for new
-          planning slices.
+          Actuals and forecasts are stored separately. Versions now sit with the model dimensions as
+          their own metadata table. Scenarios are simply versions with kind = scenario; every
+          non-Actuals version follows that scenario path.
         </p>
       </section>
 
@@ -2018,6 +2018,17 @@ function SchemaView() {
               ["", "Revenue, COGS, OpEx, Headcount"],
             ]}
           />
+          <SchemaTable
+            name="versions"
+            tone="dimension"
+            fields={[
+              ["PK", "id"],
+              ["UQ", "name"],
+              ["", "kind"],
+              ["", "actuals or scenario"],
+              ["", "created_at / updated_at"],
+            ]}
+          />
         </div>
 
         <div className="erd-lane facts">
@@ -2038,7 +2049,7 @@ function SchemaView() {
             name="forecast_values"
             tone="fact"
             fields={[
-              ["FK", "scenario_id -> scenarios.id"],
+              ["FK", "scenario_id -> versions.id"],
               ["FK", "month -> time_month.id"],
               ["FK", "department -> department.name"],
               ["FK", "account -> account.name"],
@@ -2050,34 +2061,12 @@ function SchemaView() {
 
         <div className="erd-lane scenarios">
           <span className="lane-label">Planning logic</span>
-          <SchemaTable
-            name="versions"
-            tone="scenario"
-            fields={[
-              ["PK", "id"],
-              ["UQ", "name"],
-              ["", "kind"],
-              ["", "created_at"],
-              ["", "updated_at"],
-            ]}
-          />
-          <SchemaRelation label="scenario versions share IDs with scenarios" />
-          <SchemaTable
-            name="scenarios"
-            tone="scenario"
-            fields={[
-              ["PK", "id"],
-              ["UQ", "name"],
-              ["", "created_at"],
-              ["", "updated_at"],
-            ]}
-          />
-          <SchemaRelation label="scenario_id" />
+          <SchemaRelation label="scenario rows use versions.id" />
           <SchemaTable
             name="driver_assumptions"
             tone="scenario"
             fields={[
-              ["FK", "scenario_id -> scenarios.id"],
+              ["FK", "scenario_id -> versions.id"],
               ["", "scope_type"],
               ["", "scope_key"],
               ["", "month"],
@@ -2089,11 +2078,10 @@ function SchemaView() {
           <SchemaRelation label="Driver assumptions generate forecast cells" />
           <div className="schema-note-card">
             <strong>Versions</strong>
-            <span>Version names and kinds live in the versions table</span>
-            <span>Actuals is protected; scenario versions copy forecast rows and assumptions</span>
+            <span>Scenarios are versions with kind = scenario</span>
+            <span>Everything other than Actuals is a scenario version</span>
             <code>actuals</code>
             <code>versions</code>
-            <code>scenarios</code>
             <code>forecast_values</code>
           </div>
           <div className="schema-note-card">
