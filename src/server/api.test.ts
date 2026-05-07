@@ -186,6 +186,75 @@ describe("PlanWell API", () => {
     expect(body.citations[0]).toMatchObject({ tool: "getMetricSummary" });
   });
 
+  it("manages versions while protecting Actuals", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+    ]);
+
+    const listed = await app.request("/api/versions", { headers: { cookie } });
+    expect(listed.status).toBe(200);
+    const listedBody = await listed.json();
+    expect(listedBody.versions[0]).toMatchObject({
+      id: "actuals",
+      name: "Actuals",
+      kind: "actuals",
+      canDelete: false,
+      canRename: false,
+    });
+    expect(listedBody.versions.map((version: { name: string }) => version.name)).toContain(
+      "Base Case",
+    );
+
+    const copied = await app.request("/api/versions", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Board Case", sourceId: "actuals" }),
+    });
+    expect(copied.status).toBe(201);
+    expect(await copied.json()).toMatchObject({
+      version: { name: "Board Case", kind: "scenario", canDelete: true },
+    });
+    expect(repo.listForecast("Board Case")).toEqual([
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+    ]);
+
+    const boardVersion = repo.listScenarios().find((scenario) => scenario.name === "Board Case");
+    expect(boardVersion).toBeTruthy();
+    const renamed = await app.request(`/api/versions/${boardVersion!.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "Operating Plan" }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(repo.listScenarios().some((scenario) => scenario.name === "Operating Plan")).toBe(true);
+    expect(repo.listForecast("Operating Plan")).toEqual([
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+    ]);
+
+    const deleteActuals = await app.request("/api/versions/actuals", {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    expect(deleteActuals.status).toBe(400);
+    expect(await deleteActuals.json()).toMatchObject({ error: "Actuals cannot be deleted." });
+
+    const operatingPlan = repo
+      .listScenarios()
+      .find((scenario) => scenario.name === "Operating Plan");
+    const deleted = await app.request(`/api/versions/${operatingPlan!.id}`, {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    expect(deleted.status).toBe(200);
+    expect(repo.listScenarios().some((scenario) => scenario.name === "Operating Plan")).toBe(false);
+  });
+
   it("manages department hierarchies and safely cascades renames", async () => {
     const repo = createTestRepository();
     const app = createApp({ repo });

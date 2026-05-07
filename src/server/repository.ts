@@ -24,6 +24,15 @@ export type ScenarioRecord = {
   updatedAt: string;
 };
 
+export type VersionRecord = {
+  id: string;
+  name: string;
+  kind: "actuals" | "scenario";
+  canRename: boolean;
+  canDelete: boolean;
+  updatedAt?: string;
+};
+
 export type MetricCitation = {
   tool: string;
   label: string;
@@ -65,6 +74,10 @@ export type Repository = {
   deleteDimensionMember(kind: DimensionKind, name: string, force: boolean): DimensionImpact;
   listScenarios(): ScenarioRecord[];
   upsertScenario(assumptions: ScenarioAssumptions): ScenarioRecord;
+  listVersions(): VersionRecord[];
+  createVersion(name: string, sourceId: string): VersionRecord;
+  renameVersion(id: string, name: string): VersionRecord;
+  deleteVersion(id: string): void;
   recalculateScenario(name: string): void;
   recalculateAllScenarios(): void;
   compare(leftName: string, rightName: string): VarianceRow[];
@@ -88,6 +101,7 @@ type DriverAssumptionRow = {
 type DimensionRow = { name: string; parent_name: string | null; sort_order?: number | null };
 
 const allMonths = "__all__";
+const actualsVersionId = "actuals";
 const globalScopeKey = "__global__";
 const driverKeys = [
   "revenueGrowthRate",
@@ -214,6 +228,18 @@ function createRepository(db: DatabaseSync): Repository {
       recalculateScenario(db, assumptions.name);
       return readScenarios(db).find((scenario) => scenario.name === assumptions.name)!;
     },
+    listVersions() {
+      return listVersions(db);
+    },
+    createVersion(name, sourceId) {
+      return createVersion(db, name, sourceId);
+    },
+    renameVersion(id, name) {
+      return renameVersion(db, id, name);
+    },
+    deleteVersion(id) {
+      deleteVersion(db, id);
+    },
     recalculateScenario(name) {
       recalculateScenario(db, name);
     },
@@ -332,6 +358,128 @@ function updateScenarioAssumptions(
     scenarioId,
   );
   replaceDriverAssumptions(db, scenarioId, assumptions);
+}
+
+function listVersions(db: DatabaseSync): VersionRecord[] {
+  return [
+    {
+      id: actualsVersionId,
+      name: "Actuals",
+      kind: "actuals",
+      canRename: false,
+      canDelete: false,
+    },
+    ...readScenarios(db).map((scenario) => ({
+      id: scenario.id,
+      name: scenario.name,
+      kind: "scenario" as const,
+      canRename: true,
+      canDelete: true,
+      updatedAt: scenario.updatedAt,
+    })),
+  ];
+}
+
+function createVersion(db: DatabaseSync, rawName: string, sourceId: string): VersionRecord {
+  const name = normalizeVersionName(rawName);
+  ensureVersionNameAvailable(db, name, null);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const assumptions =
+    sourceId === actualsVersionId
+      ? emptyScenarioAssumptions(name)
+      : { ...readScenarioById(db, sourceId).assumptions, name };
+  withTransaction(db, () => {
+    db.prepare("insert into scenarios (id, name, created_at, updated_at) values (?, ?, ?, ?)").run(
+      id,
+      name,
+      now,
+      now,
+    );
+    replaceDriverAssumptions(db, id, assumptions);
+    const sourceRows =
+      sourceId === actualsVersionId
+        ? selectCubeRows(db, "actuals")
+        : selectForecastRowsByScenarioId(db, sourceId);
+    insertForecastRows(db, id, sourceRows);
+  });
+  return listVersions(db).find((version) => version.id === id)!;
+}
+
+function renameVersion(db: DatabaseSync, id: string, rawName: string): VersionRecord {
+  if (id === actualsVersionId) {
+    throw new Error("Actuals cannot be renamed.");
+  }
+  const name = normalizeVersionName(rawName);
+  ensureVersionNameAvailable(db, name, id);
+  const scenario = readScenarioById(db, id);
+  withTransaction(db, () => {
+    db.prepare("update scenarios set name = ?, updated_at = ? where id = ?").run(
+      name,
+      new Date().toISOString(),
+      id,
+    );
+    replaceDriverAssumptions(db, id, { ...scenario.assumptions, name });
+  });
+  return listVersions(db).find((version) => version.id === id)!;
+}
+
+function deleteVersion(db: DatabaseSync, id: string): void {
+  if (id === actualsVersionId) {
+    throw new Error("Actuals cannot be deleted.");
+  }
+  readScenarioById(db, id);
+  withTransaction(db, () => {
+    db.prepare("delete from forecast_values where scenario_id = ?").run(id);
+    db.prepare("delete from driver_assumptions where scenario_id = ?").run(id);
+    db.prepare("delete from scenarios where id = ?").run(id);
+  });
+}
+
+function normalizeVersionName(value: string): string {
+  const name = value.trim();
+  if (!name) {
+    throw new Error("Version name is required.");
+  }
+  if (name === "Actuals") {
+    throw new Error("Actuals is reserved.");
+  }
+  return name;
+}
+
+function ensureVersionNameAvailable(
+  db: DatabaseSync,
+  name: string,
+  currentScenarioId: string | null,
+): void {
+  const existing = db.prepare("select id from scenarios where name = ?").get(name) as
+    | { id: string }
+    | undefined;
+  if (existing && existing.id !== currentScenarioId) {
+    throw new Error(`${name} already exists.`);
+  }
+}
+
+function readScenarioById(db: DatabaseSync, id: string): ScenarioRecord {
+  const scenario = readScenarios(db).find((item) => item.id === id);
+  if (!scenario) {
+    throw new Error("Version not found.");
+  }
+  return scenario;
+}
+
+function emptyScenarioAssumptions(name: string): ScenarioAssumptions {
+  return {
+    name,
+    global: {
+      revenueGrowthRate: 0,
+      cogsPctOfRevenue: 0,
+      headcountGrowthRate: 0,
+      costPerHead: 0,
+    },
+    monthly: {},
+    overrides: {},
+  };
 }
 
 function replaceDriverAssumptions(
@@ -946,12 +1094,7 @@ function recalculateScenario(db: DatabaseSync, name: string): void {
   );
   withTransaction(db, () => {
     db.prepare("delete from forecast_values where scenario_id = ?").run(scenario.id);
-    const insert = db.prepare(
-      "insert into forecast_values (scenario_id, month, department, account, value) values (?, ?, ?, ?, ?)",
-    );
-    for (const row of forecast) {
-      insert.run(scenario.id, row.month, row.department, row.account, row.value);
-    }
+    insertForecastRows(db, scenario.id, forecast);
   });
 }
 
@@ -981,6 +1124,23 @@ function selectCubeRows(db: DatabaseSync, table: "actuals" | "forecast_values"):
       `select month, department, account, value from ${table} order by month, department, account`,
     )
     .all() as ActualRow[];
+}
+
+function selectForecastRowsByScenarioId(db: DatabaseSync, scenarioId: string): ForecastRow[] {
+  return db
+    .prepare(
+      "select month, department, account, value from forecast_values where scenario_id = ? order by month, department, account",
+    )
+    .all(scenarioId) as ForecastRow[];
+}
+
+function insertForecastRows(db: DatabaseSync, scenarioId: string, rows: ForecastRow[]): void {
+  const insert = db.prepare(
+    "insert into forecast_values (scenario_id, month, department, account, value) values (?, ?, ?, ?, ?)",
+  );
+  for (const row of rows) {
+    insert.run(scenarioId, row.month, row.department, row.account, row.value);
+  }
 }
 
 function sum(rows: ActualRow[], account: string): number {

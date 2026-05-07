@@ -55,7 +55,7 @@ import type {
   ScenarioAssumptions,
   VarianceRow,
 } from "../domain/types.ts";
-import { client, type MetricSummary, type ScenarioRecord } from "./api.ts";
+import { client, type MetricSummary, type ScenarioRecord, type VersionRecord } from "./api.ts";
 import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "./ui.tsx";
 
 const queryClient = new QueryClient({
@@ -162,6 +162,11 @@ function Workbench({ userEmail }: { userEmail: string }) {
       view === "Scenarios" ||
       view === "Variance",
   });
+  const versions = useQuery({
+    queryKey: ["versions"],
+    queryFn: client.versions,
+    enabled: view === "Versions",
+  });
   const forecast = useQuery({
     queryKey: ["forecast", leftScenario],
     queryFn: () => client.forecast(leftScenario),
@@ -205,7 +210,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
       : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenarios" || view === "Variance" || view === "Analyst";
-  const isAdminView = view === "Dimensions" || view === "Schema";
+  const isAdminView = view === "Dimensions" || view === "Versions" || view === "Schema";
 
   useEffect(() => {
     if (forecastDepartment !== "__all__" && !forecastDepartments.includes(forecastDepartment)) {
@@ -256,6 +261,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
               <div className="nav-sublist" id="admin-nav">
                 {[
                   ["Dimensions", Network],
+                  ["Versions", Copy],
                   ["Schema", Database],
                 ].map(([label, Icon]) => (
                   <button
@@ -326,7 +332,9 @@ function Workbench({ userEmail }: { userEmail: string }) {
           </div>
         </header>
 
-        {view !== "Schema" && view !== "Dimensions" ? <KpiStrip summary={currentSummary} /> : null}
+        {view !== "Schema" && view !== "Dimensions" && view !== "Versions" ? (
+          <KpiStrip summary={currentSummary} />
+        ) : null}
 
         {view === "Actuals" ? (
           <ActualsView actuals={actuals.data?.rows ?? []} summary={actuals.data?.summary} />
@@ -367,6 +375,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
             error={dimensions.error}
             isLoading={dimensions.isLoading}
             onRetry={() => void dimensions.refetch()}
+          />
+        ) : null}
+        {view === "Versions" ? (
+          <VersionsView
+            versions={versions.data?.versions ?? []}
+            error={versions.error}
+            isLoading={versions.isLoading}
+            onRetry={() => void versions.refetch()}
           />
         ) : null}
         {view === "Schema" ? <SchemaView /> : null}
@@ -1418,6 +1434,197 @@ function DimensionEditor({ kind, members }: { kind: DimensionKind; members: Dime
   );
 }
 
+function VersionsView({
+  versions,
+  error,
+  isLoading,
+  onRetry,
+}: {
+  versions: VersionRecord[];
+  error: Error | null;
+  isLoading: boolean;
+  onRetry: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [newName, setNewName] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const [draftNames, setDraftNames] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    setSourceId((current) => current || versions[0]?.id || "");
+    setDraftNames((current) => ({
+      ...Object.fromEntries(versions.map((version) => [version.id, version.name])),
+      ...current,
+    }));
+  }, [versions]);
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["versions"] }),
+      queryClient.invalidateQueries({ queryKey: ["scenarios"] }),
+      queryClient.invalidateQueries({ queryKey: ["forecast"] }),
+      queryClient.invalidateQueries({ queryKey: ["variance"] }),
+    ]);
+  };
+  const create = useMutation({
+    mutationFn: () => client.createVersion(newName, sourceId),
+    onSuccess: async () => {
+      setNewName("");
+      setStatus("Version added.");
+      await refresh();
+    },
+  });
+  const rename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => client.renameVersion(id, name),
+    onSuccess: async () => {
+      setStatus("Version saved.");
+      await refresh();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => client.deleteVersion(id),
+    onSuccess: async () => {
+      setStatus("Version deleted.");
+      await refresh();
+    },
+  });
+
+  if (isLoading) {
+    return <div className="screen-center">Loading versions...</div>;
+  }
+  if (error) {
+    return (
+      <Panel>
+        <EmptyState
+          title="Could not load versions"
+          body="The versions API did not return the current planning versions."
+        />
+        <p className="error centered-status">{error.message}</p>
+        <Button type="button" onClick={onRetry}>
+          Retry
+        </Button>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="model-structure">
+      <section className="schema-summary">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h2>Versions</h2>
+        </div>
+        <p className="muted">
+          Manage Actuals and scenario versions. New versions copy their data from an existing
+          version.
+        </p>
+      </section>
+
+      <Panel>
+        <div className="panel-heading">
+          <h2>Add version</h2>
+          <Copy size={18} />
+        </div>
+        <div className="driver-controls">
+          <label>
+            <Label>New version name</Label>
+            <Input
+              aria-label="New version name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+            />
+          </label>
+          <label>
+            <Label>Copy data from</Label>
+            <Select
+              aria-label="Copy data from"
+              value={sourceId}
+              onChange={(event) => setSourceId(event.target.value)}
+            >
+              {versions.map((version) => (
+                <option key={version.id} value={version.id}>
+                  {version.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <Button type="button" onClick={() => create.mutate()} disabled={!newName || !sourceId}>
+            Add version
+          </Button>
+        </div>
+        {create.error ? <p className="error">{create.error.message}</p> : null}
+      </Panel>
+
+      <Panel>
+        <div className="panel-heading">
+          <h2>All versions</h2>
+          <span>{versions.length} versions</span>
+        </div>
+        <div className="spreadsheet-wrap">
+          <table className="spreadsheet-grid">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((version) => (
+                <tr key={version.id}>
+                  <th scope="row">
+                    {version.canRename ? (
+                      <Input
+                        aria-label={`Version name ${version.name}`}
+                        value={draftNames[version.id] ?? version.name}
+                        onChange={(event) =>
+                          setDraftNames((current) => ({
+                            ...current,
+                            [version.id]: event.target.value,
+                          }))
+                        }
+                      />
+                    ) : (
+                      version.name
+                    )}
+                  </th>
+                  <td>{version.kind === "actuals" ? "Actuals" : "Scenario"}</td>
+                  <td>
+                    <div className="grid-toolbar">
+                      {version.canRename ? (
+                        <GhostButton
+                          type="button"
+                          onClick={() =>
+                            rename.mutate({
+                              id: version.id,
+                              name: draftNames[version.id] ?? version.name,
+                            })
+                          }
+                        >
+                          <Save size={15} /> Save {version.name}
+                        </GhostButton>
+                      ) : null}
+                      {version.canDelete ? (
+                        <GhostButton type="button" onClick={() => remove.mutate(version.id)}>
+                          <Trash2 size={15} /> Delete {version.name}
+                        </GhostButton>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {rename.error ? <p className="error">{rename.error.message}</p> : null}
+        {remove.error ? <p className="error">{remove.error.message}</p> : null}
+        {status ? <p className="muted">{status}</p> : null}
+      </Panel>
+    </div>
+  );
+}
+
 function DimensionTreeNode({
   member,
   level,
@@ -1731,6 +1938,14 @@ function SchemaView() {
             ]}
           />
           <SchemaRelation label="Driver assumptions generate forecast cells" />
+          <div className="schema-note-card">
+            <strong>Versions</strong>
+            <span>Actuals is the protected baseline version</span>
+            <span>Scenario versions copy forecast rows and driver assumptions</span>
+            <code>actuals</code>
+            <code>scenarios</code>
+            <code>forecast_values</code>
+          </div>
           <div className="schema-note-card">
             <strong>Driver assumptions</strong>
             <span>Hierarchy level assumptions</span>

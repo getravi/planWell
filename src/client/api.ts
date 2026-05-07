@@ -17,6 +17,15 @@ export type ScenarioRecord = {
   updatedAt?: string;
 };
 
+export type VersionRecord = {
+  id: string;
+  name: string;
+  kind: "actuals" | "scenario";
+  canRename: boolean;
+  canDelete: boolean;
+  updatedAt?: string;
+};
+
 export type MetricSummary = {
   kpis: KpiSummary;
   accounts: {
@@ -83,6 +92,19 @@ export const client = {
       `/api/cube/variance?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
     ),
   scenarios: () => api<{ scenarios: ScenarioRecord[] }>("/api/scenarios"),
+  versions: () => api<{ versions: VersionRecord[] }>("/api/versions"),
+  createVersion: (name: string, sourceId: string) =>
+    api<{ version: VersionRecord; versions: VersionRecord[] }>("/api/versions", {
+      method: "POST",
+      body: JSON.stringify({ name, sourceId }),
+    }),
+  renameVersion: (id: string, name: string) =>
+    api<{ version: VersionRecord; versions: VersionRecord[] }>(`/api/versions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+  deleteVersion: (id: string) =>
+    api<{ ok: true; versions: VersionRecord[] }>(`/api/versions/${id}`, { method: "DELETE" }),
   dimensions: () => api<Dimensions>("/api/dimensions"),
   createDimensionMember: (kind: DimensionKind, name: string, parentName?: string | null) =>
     api<{ dimensions: Dimensions }>(`/api/dimensions/${kind}/members`, {

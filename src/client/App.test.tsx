@@ -1186,19 +1186,121 @@ describe("PlanWell workbench UI", () => {
 
     expect(screen.getByRole("heading", { name: "Schema" })).toBeTruthy();
     expect(screen.getByText("time_month")).toBeTruthy();
-    expect(screen.getByText("actuals")).toBeTruthy();
-    expect(screen.getByText("forecast_values")).toBeTruthy();
+    expect(screen.getAllByText("actuals").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
     expect(screen.getByText("driver_assumptions")).toBeTruthy();
-    expect(screen.getByText("scenarios")).toBeTruthy();
+    expect(screen.getAllByText("scenarios").length).toBeGreaterThan(0);
     expect(screen.queryByText("assumptions_json")).toBeNull();
     expect(screen.getByText("scope_type")).toBeTruthy();
     expect(screen.getByText("driver_key")).toBeTruthy();
     expect(screen.getAllByText("parent_name").length).toBeGreaterThan(0);
     expect(screen.getAllByText("sort_order").length).toBeGreaterThan(0);
     expect(screen.getByText("Derived time hierarchy")).toBeTruthy();
+    expect(screen.getAllByText("Versions").length).toBeGreaterThan(0);
+    expect(screen.getByText("Actuals is the protected baseline version")).toBeTruthy();
     expect(screen.getByText("Hierarchy level assumptions")).toBeTruthy();
     expect(screen.getByText("Driver assumptions")).toBeTruthy();
     expect(screen.getByLabelText("ERD relationship lines")).toBeTruthy();
+  });
+
+  it("manages versions under Admin while protecting Actuals", async () => {
+    let versions = [
+      {
+        id: "actuals",
+        name: "Actuals",
+        kind: "actuals",
+        canRename: false,
+        canDelete: false,
+      },
+      {
+        id: "base",
+        name: "Base Case",
+        kind: "scenario",
+        canRename: true,
+        canDelete: true,
+      },
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        return json({ scenarios: [] });
+      }
+      if (url.endsWith("/api/versions")) {
+        if (init?.method === "POST") {
+          versions = [
+            ...versions,
+            {
+              id: "board",
+              name: "Board Case",
+              kind: "scenario",
+              canRename: true,
+              canDelete: true,
+            },
+          ];
+          return json({ version: versions[2], versions }, 201);
+        }
+        return json({ versions });
+      }
+      if (url.endsWith("/api/versions/board") && init?.method === "PATCH") {
+        versions = versions.map((version) =>
+          version.id === "board" ? { ...version, name: "Operating Plan" } : version,
+        );
+        return json({ version: versions[2], versions });
+      }
+      if (url.endsWith("/api/versions/board") && init?.method === "DELETE") {
+        versions = versions.filter((version) => version.id !== "board");
+        return json({ ok: true, versions });
+      }
+      if (url.includes("/api/cube/actuals")) {
+        return json(emptyCube());
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json(emptyCube());
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await openAdminPage(/^versions$/i);
+
+    expect(screen.getByRole("heading", { name: "Versions", level: 1 })).toBeTruthy();
+    expect((await screen.findAllByText("Actuals")).length).toBeGreaterThan(1);
+    expect(screen.queryByRole("button", { name: /delete actuals/i })).toBeNull();
+
+    await userEvent.type(screen.getByLabelText("New version name"), "Board Case");
+    await userEvent.selectOptions(screen.getByLabelText("Copy data from"), "actuals");
+    await userEvent.click(screen.getByRole("button", { name: /add version/i }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/versions",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "Board Case", sourceId: "actuals" }),
+      }),
+    );
+
+    await userEvent.clear(await screen.findByLabelText("Version name Board Case"));
+    await userEvent.type(screen.getByLabelText("Version name Board Case"), "Operating Plan");
+    await userEvent.click(screen.getByRole("button", { name: /save board case/i }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/versions/board",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ name: "Operating Plan" }),
+      }),
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /delete operating plan/i }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/versions/board",
+      expect.objectContaining({ method: "DELETE" }),
+    );
   });
 });
 

@@ -61,6 +61,15 @@ const dimensionMemberUpdateSchema = z.object({
   sortOrder: z.number().optional(),
 });
 
+const versionCreateSchema = z.object({
+  name: z.string().min(1),
+  sourceId: z.string().min(1),
+});
+
+const versionUpdateSchema = z.object({
+  name: z.string().min(1),
+});
+
 export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const analyst = createAnalyst(repo);
@@ -148,6 +157,46 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.get("/api/scenarios", (context) => {
     return context.json({ scenarios: repo.listScenarios() });
+  });
+
+  app.get("/api/versions", (context) => {
+    return context.json({ versions: repo.listVersions() });
+  });
+
+  app.post("/api/versions", async (context) => {
+    const payload = versionCreateSchema.parse(await context.req.json());
+    try {
+      return context.json(
+        {
+          version: repo.createVersion(payload.name, payload.sourceId),
+          versions: repo.listVersions(),
+        },
+        201,
+      );
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.patch("/api/versions/:id", async (context) => {
+    const payload = versionUpdateSchema.parse(await context.req.json());
+    try {
+      return context.json({
+        version: repo.renameVersion(context.req.param("id"), payload.name),
+        versions: repo.listVersions(),
+      });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.delete("/api/versions/:id", (context) => {
+    try {
+      repo.deleteVersion(context.req.param("id"));
+      return context.json({ ok: true, versions: repo.listVersions() });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   app.get("/api/dimensions", (context) => {
