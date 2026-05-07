@@ -63,6 +63,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  DataTable,
   EmptyState,
   GhostButton,
   Input,
@@ -1600,67 +1601,77 @@ function VersionsView({
       <Panel>
         <div className="panel-heading">
           <h2>All versions</h2>
-          <div className="table-actions">
-            <span>{versions.length} versions</span>
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              <Plus size={16} /> Add version
-            </Button>
-          </div>
         </div>
-        <div className="spreadsheet-wrap">
-          <table className="spreadsheet-grid">
-            <thead>
-              <tr>
-                <th>Version</th>
-                <th>Type</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {versions.map((version) => (
-                <tr key={version.id}>
-                  <th scope="row">
-                    {version.canRename ? (
-                      <Input
-                        aria-label={`Version name ${version.name}`}
-                        value={draftNames[version.id] ?? version.name}
-                        onChange={(event) =>
-                          setDraftNames((current) => ({
-                            ...current,
-                            [version.id]: event.target.value,
-                          }))
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            saveVersionName(version);
-                          }
-                        }}
-                      />
-                    ) : (
-                      version.name
-                    )}
-                  </th>
-                  <td>{version.kind === "actuals" ? "Actuals" : "Scenario"}</td>
-                  <td>
-                    <div className="grid-toolbar">
-                      {version.canDelete ? (
-                        <GhostButton
-                          type="button"
-                          aria-label={`Delete ${version.name}`}
-                          title={`Delete ${version.name}`}
-                          onClick={() => setPendingDelete(version)}
-                        >
-                          <Trash2 size={15} aria-hidden="true" />
-                        </GhostButton>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          ariaLabel="All versions"
+          columns={[
+            {
+              id: "version",
+              header: "Version",
+              cell: (version) =>
+                version.canRename ? (
+                  <Input
+                    aria-label={`Version name ${version.name}`}
+                    value={draftNames[version.id] ?? version.name}
+                    onChange={(event) =>
+                      setDraftNames((current) => ({
+                        ...current,
+                        [version.id]: event.target.value,
+                      }))
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        saveVersionName(version);
+                      }
+                    }}
+                  />
+                ) : (
+                  <strong>{version.name}</strong>
+                ),
+            },
+            {
+              id: "type",
+              header: "Type",
+              cell: (version) => (
+                <span className="data-table-badge">
+                  {version.kind === "actuals" ? "Actuals" : "Scenario"}
+                </span>
+              ),
+            },
+            {
+              className: "data-table-actions-cell",
+              header: "Actions",
+              headerClassName: "data-table-actions-head",
+              id: "actions",
+              cell: (version) => (
+                <div className="grid-toolbar">
+                  {version.canDelete ? (
+                    <GhostButton
+                      type="button"
+                      aria-label={`Delete ${version.name}`}
+                      title={`Delete ${version.name}`}
+                      onClick={() => setPendingDelete(version)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </GhostButton>
+                  ) : null}
+                </div>
+              ),
+            },
+          ]}
+          data={versions}
+          getRowId={(version) => version.id}
+          rowLabel={(version) => version.name}
+          toolbar={
+            <div className="table-actions">
+              <span>{versions.length} versions</span>
+              <Button type="button" onClick={() => setCreateOpen(true)}>
+                <Plus size={16} /> Add version
+              </Button>
+            </div>
+          }
+        />
         {rename.error ? <p className="error">{rename.error.message}</p> : null}
         {remove.error ? <p className="error">{remove.error.message}</p> : null}
         {status ? <p className="muted">{status}</p> : null}

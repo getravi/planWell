@@ -41,6 +41,14 @@ type SelectOption = {
   value: string;
 };
 
+export type DataTableColumn<TData> = {
+  cell: (row: TData) => ReactNode;
+  className?: string;
+  header: ReactNode;
+  headerClassName?: string;
+  id: string;
+};
+
 function textFromNode(node: ReactNode): string {
   return Children.toArray(node)
     .map((child) => {
@@ -186,6 +194,79 @@ export function Select({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function DataTable<TData>({
+  ariaLabel,
+  className,
+  columns,
+  data,
+  emptyMessage = "No results.",
+  getRowId,
+  rowLabel,
+  toolbar,
+}: {
+  ariaLabel: string;
+  className?: string;
+  columns: DataTableColumn<TData>[];
+  data: TData[];
+  emptyMessage?: string;
+  getRowId: (row: TData) => string;
+  rowLabel?: (row: TData) => string;
+  toolbar?: ReactNode;
+}) {
+  return (
+    <div className={cn("data-table", className)} data-slot="data-table">
+      <div className="data-table-toolbar" data-slot="data-table-toolbar">
+        {toolbar}
+      </div>
+      <div className="data-table-container" data-slot="data-table-container">
+        <table aria-label={ariaLabel} className="data-table-grid" data-slot="table">
+          <thead className="data-table-header" data-slot="table-header">
+            <tr className="data-table-row" data-slot="table-row">
+              {columns.map((column) => (
+                <th
+                  className={column.headerClassName}
+                  data-slot="table-head"
+                  key={column.id}
+                  scope="col"
+                >
+                  {column.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="data-table-body" data-slot="table-body">
+            {data.length > 0 ? (
+              data.map((row) => (
+                <tr
+                  aria-label={rowLabel?.(row)}
+                  className="data-table-row"
+                  data-slot="table-row"
+                  key={getRowId(row)}
+                >
+                  {columns.map((column) => (
+                    <td className={column.className} data-slot="table-cell" key={column.id}>
+                      {column.cell(row)}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr className="data-table-row" data-slot="table-row">
+                <td className="data-table-empty" colSpan={columns.length} data-slot="table-cell">
+                  {emptyMessage}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="data-table-footer" data-slot="data-table-footer">
+        {data.length} row(s)
+      </div>
     </div>
   );
 }

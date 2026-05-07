@@ -1284,6 +1284,8 @@ describe("PlanWell workbench UI", () => {
     await openAdminPage(/^versions$/i);
 
     expect(screen.getByRole("heading", { name: "Versions", level: 1 })).toBeTruthy();
+    expect(document.querySelector('[data-slot="data-table"]')).toBeTruthy();
+    expect(screen.getByRole("table", { name: /all versions/i })).toBeTruthy();
     expect((await screen.findAllByText("Actuals")).length).toBeGreaterThan(1);
     expect(screen.queryByRole("button", { name: /delete actuals/i })).toBeNull();
     expect(screen.queryByLabelText("New version name")).toBeNull();
