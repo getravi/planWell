@@ -625,9 +625,8 @@ textarea {
   top: calc(100% + 4px);
   left: 0;
   z-index: 30;
-  min-width: max(100%, 220px);
-  width: max-content;
-  max-width: min(360px, calc(100vw - 16px));
+  min-width: var(--select-trigger-width, 100%);
+  width: var(--select-trigger-width, 100%);
   max-height: 280px;
   overflow-x: hidden;
   overflow-y: auto;

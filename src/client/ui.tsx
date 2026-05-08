@@ -10,6 +10,7 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type ChangeEvent,
+  type CSSProperties,
   type FocusEvent,
   type HTMLAttributes,
   type InputHTMLAttributes,
@@ -111,6 +112,7 @@ export function Select({
     String(defaultValue ?? value ?? options[0]?.value ?? ""),
   );
   const [placement, setPlacement] = useState<SelectPlacement>({ align: "start", side: "bottom" });
+  const [triggerWidth, setTriggerWidth] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const selectedValue = String(isControlled ? (value ?? "") : internalValue);
@@ -161,9 +163,10 @@ export function Select({
       const viewportGap = 8;
       const rootRect = root.getBoundingClientRect();
       const contentRect = content.getBoundingClientRect();
-      const contentWidth = Math.max(contentRect.width, rootRect.width);
+      const contentWidth = rootRect.width;
       const spaceBelow = window.innerHeight - rootRect.bottom - viewportGap;
       const spaceAbove = rootRect.top - viewportGap;
+      setTriggerWidth(rootRect.width);
       const nextPlacement: SelectPlacement = {
         align:
           rootRect.left + contentWidth > window.innerWidth - viewportGap &&
@@ -231,6 +234,11 @@ export function Select({
           id={contentId}
           ref={contentRef}
           role="listbox"
+          style={
+            triggerWidth
+              ? ({ "--select-trigger-width": `${triggerWidth}px` } as CSSProperties)
+              : undefined
+          }
         >
           {options.map((option) => (
             <button

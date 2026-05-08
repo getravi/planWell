@@ -144,6 +144,9 @@ describe("shadcn-style local primitives", () => {
     await waitFor(() => {
       expect(screen.getByRole("listbox").getAttribute("data-align")).toBe("end");
       expect(screen.getByRole("listbox").getAttribute("data-side")).toBe("top");
+      expect(screen.getByRole("listbox").style.getPropertyValue("--select-trigger-width")).toBe(
+        "140px",
+      );
     });
   });
 
