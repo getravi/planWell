@@ -406,7 +406,10 @@ function Workbench({ userEmail }: { userEmail: string }) {
         view !== "Dimensions" &&
         view !== "Time Settings" &&
         view !== "Versions" ? (
-          <KpiStrip summary={currentSummary} />
+          <KpiStrip
+            summary={currentSummary}
+            variant={view === "Scenario Comparison" ? "variance" : "standard"}
+          />
         ) : null}
 
         {view === "Actuals" ? (
@@ -465,8 +468,24 @@ function Workbench({ userEmail }: { userEmail: string }) {
   );
 }
 
-function KpiStrip({ summary }: { summary?: MetricSummary }) {
+function KpiStrip({
+  summary,
+  variant = "standard",
+}: {
+  summary?: MetricSummary;
+  variant?: "standard" | "variance";
+}) {
   const kpis = summary?.kpis;
+  if (variant === "variance") {
+    return (
+      <section className="kpi-strip">
+        <Kpi label="Revenue variance" value={currency(kpis?.revenue ?? 0)} />
+        <Kpi label="Gross margin variance" value={currency(kpis?.grossMargin ?? 0)} />
+        <Kpi label="OpEx variance" value={currency(kpis?.opex ?? 0)} />
+        <Kpi label="Headcount variance" value={number(kpis?.headcount ?? 0)} />
+      </section>
+    );
+  }
   return (
     <section className="kpi-strip">
       <Kpi label="Revenue" value={currency(kpis?.revenue ?? 0)} />

@@ -726,11 +726,13 @@ describe("PlanWell workbench UI", () => {
         .find((item) => item.closest('[data-slot="card"]'))
         ?.closest('[data-slot="card"]');
     await waitFor(() => {
-      expect(kpiCard("Revenue")?.textContent).toContain("$200");
+      expect(kpiCard("Revenue variance")?.textContent).toContain("$200");
     });
-    expect(kpiCard("Revenue")?.textContent).not.toContain("$1,000");
-    expect(kpiCard("Gross margin")?.textContent).toContain("$200");
-    expect(kpiCard("OpEx ratio")?.textContent).toContain("75%");
+    expect(kpiCard("Revenue variance")?.textContent).not.toContain("$1,000");
+    expect(kpiCard("Gross margin variance")?.textContent).toContain("$200");
+    expect(kpiCard("OpEx variance")?.textContent).toContain("$150");
+    expect(kpiCard("Headcount variance")?.textContent).toContain("0");
+    expect(screen.queryByText("OpEx ratio")).toBeNull();
     expect(screen.getAllByRole("button", { name: /copy grid/i })).toHaveLength(1);
     expect(await screen.findAllByRole("rowheader", { name: "Product" })).not.toHaveLength(0);
     expect(
