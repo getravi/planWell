@@ -67,9 +67,14 @@ const versionCreateSchema = z.object({
   sourceId: z.string().min(1),
 });
 
-const versionUpdateSchema = z.object({
-  name: z.string().min(1),
-});
+const versionUpdateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    locked: z.boolean().optional(),
+  })
+  .refine((payload) => payload.name !== undefined || payload.locked !== undefined, {
+    message: "Provide a version name or locked setting.",
+  });
 
 export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -183,7 +188,7 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     const payload = versionUpdateSchema.parse(await context.req.json());
     try {
       return context.json({
-        version: repo.renameVersion(context.req.param("id"), payload.name),
+        version: repo.updateVersion(context.req.param("id"), payload),
         versions: repo.listVersions(),
       });
     } catch (error) {
@@ -255,12 +260,20 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.post("/api/scenarios", async (context) => {
     const scenario = scenarioSchema.parse(await context.req.json());
-    return context.json({ scenario: repo.upsertScenario(scenario) }, 201);
+    try {
+      return context.json({ scenario: repo.upsertScenario(scenario) }, 201);
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   app.put("/api/scenarios/:id", async (context) => {
     const scenario = scenarioSchema.parse(await context.req.json());
-    return context.json({ scenario: repo.upsertScenario(scenario) });
+    try {
+      return context.json({ scenario: repo.upsertScenario(scenario) });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   app.post("/api/scenarios/:id/recalculate", (context) => {
@@ -268,7 +281,11 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     if (!scenario) {
       return context.json({ error: "Scenario not found." }, 404);
     }
-    repo.recalculateScenario(scenario.name);
+    try {
+      repo.recalculateScenario(scenario.name);
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
     return context.json({ ok: true });
   });
 

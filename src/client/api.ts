@@ -13,6 +13,7 @@ import type {
 export type ScenarioRecord = {
   id: string;
   name: string;
+  locked: boolean;
   assumptions: ScenarioAssumptions;
   updatedAt?: string;
 };
@@ -21,6 +22,8 @@ export type VersionRecord = {
   id: string;
   name: string;
   kind: "actuals" | "scenario";
+  locked: boolean;
+  canLock: boolean;
   canRename: boolean;
   canDelete: boolean;
   updatedAt?: string;
@@ -98,10 +101,10 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ name, sourceId }),
     }),
-  renameVersion: (id: string, name: string) =>
+  updateVersion: (id: string, changes: { name?: string; locked?: boolean }) =>
     api<{ version: VersionRecord; versions: VersionRecord[] }>(`/api/versions/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(changes),
     }),
   deleteVersion: (id: string) =>
     api<{ ok: true; versions: VersionRecord[] }>(`/api/versions/${id}`, { method: "DELETE" }),

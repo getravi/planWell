@@ -1,4 +1,4 @@
-import { index, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const timeMonths = sqliteTable("time_month", {
   id: text("id").primaryKey(),
@@ -51,6 +51,7 @@ export const versions = sqliteTable("versions", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   kind: text("kind").notNull(),
+  locked: integer("locked").notNull().default(0),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

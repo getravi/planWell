@@ -20,6 +20,7 @@ import { hashPassword } from "./security.ts";
 export type ScenarioRecord = {
   id: string;
   name: string;
+  locked: boolean;
   assumptions: ScenarioAssumptions;
   updatedAt: string;
 };
@@ -28,6 +29,8 @@ export type VersionRecord = {
   id: string;
   name: string;
   kind: "actuals" | "scenario";
+  locked: boolean;
+  canLock: boolean;
   canRename: boolean;
   canDelete: boolean;
   updatedAt?: string;
@@ -76,7 +79,7 @@ export type Repository = {
   upsertScenario(assumptions: ScenarioAssumptions): ScenarioRecord;
   listVersions(): VersionRecord[];
   createVersion(name: string, sourceId: string): VersionRecord;
-  renameVersion(id: string, name: string): VersionRecord;
+  updateVersion(id: string, changes: { name?: string; locked?: boolean }): VersionRecord;
   deleteVersion(id: string): void;
   recalculateScenario(name: string): void;
   recalculateAllScenarios(): void;
@@ -90,6 +93,7 @@ type VersionRow = {
   id: string;
   name: string;
   kind: "actuals" | "scenario";
+  locked: number;
   created_at: string;
   updated_at: string;
 };
@@ -225,8 +229,11 @@ function createRepository(db: DatabaseSync): Repository {
     },
     upsertScenario(assumptions) {
       const existing = db
-        .prepare("select id from versions where name = ?")
-        .get(assumptions.name) as { id: string } | undefined;
+        .prepare("select id, locked from versions where name = ?")
+        .get(assumptions.name) as { id: string; locked: number } | undefined;
+      if (existing?.locked) {
+        throw new Error(`${assumptions.name} is locked and cannot be edited.`);
+      }
       const id = existing?.id ?? crypto.randomUUID();
       const now = new Date().toISOString();
       withTransaction(db, () => {
@@ -251,8 +258,8 @@ function createRepository(db: DatabaseSync): Repository {
     createVersion(name, sourceId) {
       return createVersion(db, name, sourceId);
     },
-    renameVersion(id, name) {
-      return renameVersion(db, id, name);
+    updateVersion(id, changes) {
+      return updateVersion(db, id, changes);
     },
     deleteVersion(id) {
       deleteVersion(db, id);
@@ -301,6 +308,7 @@ function migrate(db: DatabaseSync): void {
       id text primary key,
       name text not null unique,
       kind text not null,
+      locked integer not null default 0,
       created_at text not null,
       updated_at text not null
     );
@@ -326,6 +334,7 @@ function migrate(db: DatabaseSync): void {
   `);
   migrateLegacyScenarioAssumptions(db);
   migrateVersions(db);
+  ensureColumn(db, "versions", "locked", "integer not null default 0");
   ensureColumn(db, "department", "parent_name", "text");
   ensureColumn(db, "account", "parent_name", "text");
   ensureColumn(db, "department", "sort_order", "real");
@@ -411,6 +420,8 @@ function listVersions(db: DatabaseSync): VersionRecord[] {
       id: version.id,
       name: version.name,
       kind: version.kind,
+      locked: Boolean(version.locked),
+      canLock: version.kind === "scenario",
       canRename: version.kind !== "actuals",
       canDelete: version.kind !== "actuals",
       updatedAt: version.updated_at,
@@ -452,18 +463,36 @@ function createVersion(db: DatabaseSync, rawName: string, sourceId: string): Ver
   return listVersions(db).find((version) => version.id === id)!;
 }
 
-function renameVersion(db: DatabaseSync, id: string, rawName: string): VersionRecord {
-  if (id === actualsVersionId) {
+function updateVersion(
+  db: DatabaseSync,
+  id: string,
+  changes: { name?: string; locked?: boolean },
+): VersionRecord {
+  const current = readVersionById(db, id);
+  if (current.kind === "actuals" && changes.name !== undefined) {
     throw new Error("Actuals cannot be renamed.");
   }
-  const name = normalizeVersionName(rawName);
+  if (current.kind === "actuals" && changes.locked !== undefined) {
+    throw new Error("Actuals cannot be locked.");
+  }
+  const name =
+    changes.name !== undefined
+      ? normalizeVersionName(changes.name)
+      : normalizeVersionName(current.name);
   ensureVersionNameAvailable(db, name, id);
   const scenario = readScenarioById(db, id);
   const now = new Date().toISOString();
   withTransaction(db, () => {
-    db.prepare("update versions set name = ?, updated_at = ? where id = ?").run(name, now, id);
+    db.prepare("update versions set name = ?, locked = ?, updated_at = ? where id = ?").run(
+      name,
+      changes.locked === undefined ? current.locked : changes.locked ? 1 : 0,
+      now,
+      id,
+    );
     db.prepare("update scenarios set name = ?, updated_at = ? where id = ?").run(name, now, id);
-    replaceDriverAssumptions(db, id, { ...scenario.assumptions, name });
+    if (changes.name !== undefined) {
+      replaceDriverAssumptions(db, id, { ...scenario.assumptions, name });
+    }
   });
   return listVersions(db).find((version) => version.id === id)!;
 }
@@ -511,6 +540,23 @@ function readScenarioById(db: DatabaseSync, id: string): ScenarioRecord {
     throw new Error("Version not found.");
   }
   return scenario;
+}
+
+function readVersionById(db: DatabaseSync, id: string): VersionRow {
+  const version = db.prepare("select * from versions where id = ?").get(id) as
+    | VersionRow
+    | undefined;
+  if (!version) {
+    throw new Error("Version not found.");
+  }
+  return version;
+}
+
+function isVersionLocked(db: DatabaseSync, id: string): boolean {
+  const version = db.prepare("select locked from versions where id = ?").get(id) as
+    | { locked: number }
+    | undefined;
+  return Boolean(version?.locked);
 }
 
 function emptyScenarioAssumptions(name: string): ScenarioAssumptions {
@@ -1132,6 +1178,9 @@ function countScenarioOverrides(db: DatabaseSync, department: string): number {
 
 function renameScenarioOverride(db: DatabaseSync, from: string, to: string): void {
   for (const scenario of readScenarios(db)) {
+    if (isVersionLocked(db, scenario.id)) {
+      continue;
+    }
     const override = scenario.assumptions.overrides[from];
     if (!override) {
       continue;
@@ -1148,6 +1197,9 @@ function renameScenarioOverride(db: DatabaseSync, from: string, to: string): voi
 
 function deleteScenarioOverride(db: DatabaseSync, department: string): void {
   for (const scenario of readScenarios(db)) {
+    if (isVersionLocked(db, scenario.id)) {
+      continue;
+    }
     if (!scenario.assumptions.overrides[department]) {
       continue;
     }
@@ -1162,6 +1214,9 @@ function deleteScenarioOverride(db: DatabaseSync, department: string): void {
 
 function recalculateAll(db: DatabaseSync): void {
   for (const scenario of readScenarios(db)) {
+    if (isVersionLocked(db, scenario.id)) {
+      continue;
+    }
     recalculateScenario(db, scenario.name);
   }
 }
@@ -1170,6 +1225,9 @@ function recalculateScenario(db: DatabaseSync, name: string): void {
   const scenario = readScenarios(db).find((item) => item.name === name);
   if (!scenario) {
     throw new Error(`Scenario not found: ${name}`);
+  }
+  if (isVersionLocked(db, scenario.id)) {
+    throw new Error(`${scenario.name} is locked and cannot be edited.`);
   }
   const forecast = buildForecast(
     selectCubeRows(db, "actuals"),
@@ -1187,17 +1245,18 @@ function readScenarios(db: DatabaseSync): ScenarioRecord[] {
   return (
     db
       .prepare(`
-    select scenarios.id, versions.name, versions.updated_at
+    select scenarios.id, versions.name, versions.locked, versions.updated_at
     from scenarios
     join versions on versions.id = scenarios.id
     where versions.kind = 'scenario'
     order by versions.name
   `)
-      .all() as ScenarioRow[]
+      .all() as (ScenarioRow & { locked: number })[]
   )
     .map((row) => ({
       id: row.id,
       name: row.name,
+      locked: Boolean(row.locked),
       assumptions: readDriverAssumptions(db, row),
       updatedAt: row.updated_at,
     }))

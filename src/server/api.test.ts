@@ -233,6 +233,7 @@ describe("PlanWell API", () => {
       kind: "actuals",
       canDelete: false,
       canRename: false,
+      locked: false,
     });
     expect(listedBody.versions.map((version: { name: string }) => version.name)).toContain(
       "Base Case",
@@ -245,12 +246,13 @@ describe("PlanWell API", () => {
       "id",
       "name",
       "kind",
+      "locked",
       "created_at",
       "updated_at",
     ]);
     expect(
-      inspectDb.prepare("select id, name, kind from versions where id = ?").get("actuals"),
-    ).toMatchObject({ id: "actuals", name: "Actuals", kind: "actuals" });
+      inspectDb.prepare("select id, name, kind, locked from versions where id = ?").get("actuals"),
+    ).toMatchObject({ id: "actuals", name: "Actuals", kind: "actuals", locked: 0 });
 
     const copied = await app.request("/api/versions", {
       method: "POST",
@@ -272,6 +274,49 @@ describe("PlanWell API", () => {
 
     const boardVersion = repo.listScenarios().find((scenario) => scenario.name === "Board Case");
     expect(boardVersion).toBeTruthy();
+    const locked = await app.request(`/api/versions/${boardVersion!.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ locked: true }),
+    });
+    expect(locked.status).toBe(200);
+    expect(await locked.json()).toMatchObject({
+      version: { name: "Board Case", kind: "scenario", locked: true },
+    });
+    expect(
+      inspectDb.prepare("select locked from versions where id = ?").get(boardVersion!.id),
+    ).toMatchObject({ locked: 1 });
+
+    const editLocked = await app.request("/api/scenarios", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        name: "Board Case",
+        global: {
+          revenueGrowthRate: 0.1,
+          cogsPctOfRevenue: 0.3,
+          headcountGrowthRate: 0,
+          costPerHead: 12000,
+        },
+        monthly: {},
+        overrides: {},
+      }),
+    });
+    expect(editLocked.status).toBe(400);
+    expect(await editLocked.json()).toMatchObject({
+      error: "Board Case is locked and cannot be edited.",
+    });
+
+    const unlock = await app.request(`/api/versions/${boardVersion!.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ locked: false }),
+    });
+    expect(unlock.status).toBe(200);
+    expect(await unlock.json()).toMatchObject({
+      version: { name: "Board Case", kind: "scenario", locked: false },
+    });
+
     const renamed = await app.request(`/api/versions/${boardVersion!.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json", cookie },

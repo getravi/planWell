@@ -1406,6 +1406,7 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByText("Derived time hierarchy")).toBeTruthy();
     expect(screen.getAllByText("Versions").length).toBeGreaterThan(0);
     expect(screen.getByText("Scenarios are versions with kind = scenario")).toBeTruthy();
+    expect(screen.getByText("Locked scenario versions are read-only")).toBeTruthy();
     expect(screen.getByText("Everything other than Actuals is a scenario version")).toBeTruthy();
     const versionsTable = screen
       .getAllByText("versions")
@@ -1425,6 +1426,8 @@ describe("PlanWell workbench UI", () => {
         id: "actuals",
         name: "Actuals",
         kind: "actuals",
+        locked: false,
+        canLock: false,
         canRename: false,
         canDelete: false,
       },
@@ -1432,6 +1435,8 @@ describe("PlanWell workbench UI", () => {
         id: "base",
         name: "Base Case",
         kind: "scenario",
+        locked: false,
+        canLock: true,
         canRename: true,
         canDelete: true,
       },
@@ -1451,6 +1456,8 @@ describe("PlanWell workbench UI", () => {
             id: "board",
             name: "Board Case",
             kind: "scenario",
+            locked: false,
+            canLock: true,
             canRename: true,
             canDelete: true,
           };
@@ -1459,17 +1466,19 @@ describe("PlanWell workbench UI", () => {
         return json({ versions });
       }
       if (url.endsWith("/api/versions/board") && init?.method === "PATCH") {
-        versions = [
-          ...versions,
-          {
-            id: "board",
-            name: "Operating Plan",
-            kind: "scenario",
-            canRename: true,
-            canDelete: true,
-          },
-        ];
-        return json({ version: versions[2], versions });
+        const body = JSON.parse(init.body as string) as { name?: string; locked?: boolean };
+        const currentBoard = versions.find((version) => version.id === "board");
+        const nextVersion = {
+          id: "board",
+          name: body.name ?? currentBoard?.name ?? "Board Case",
+          kind: "scenario",
+          locked: body.locked ?? currentBoard?.locked ?? false,
+          canLock: true,
+          canRename: true,
+          canDelete: true,
+        };
+        versions = [...versions.filter((version) => version.id !== "board"), nextVersion];
+        return json({ version: nextVersion, versions });
       }
       if (url.endsWith("/api/versions/board") && init?.method === "DELETE") {
         return new Promise<Response>((resolve) => {
@@ -1516,6 +1525,16 @@ describe("PlanWell workbench UI", () => {
     );
     expect(screen.queryByRole("dialog", { name: /add version/i })).toBeNull();
     expect(screen.getByLabelText("Version name Board Case")).toBeTruthy();
+
+    const lockBoard = await screen.findByRole("checkbox", { name: /lock Board Case/i });
+    await userEvent.click(lockBoard);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/versions/board",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ locked: true }),
+      }),
+    );
 
     await userEvent.clear(await screen.findByLabelText("Version name Board Case"));
     await userEvent.type(screen.getByLabelText("Version name Board Case"), "Operating Plan");

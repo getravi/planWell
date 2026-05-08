@@ -489,6 +489,23 @@ a {
   font-weight: 650;
   padding: 3px 8px;
 }
+.lock-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.lock-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--green);
+}
+.lock-toggle:has(input:checked) {
+  color: var(--ink);
+}
 .data-table-empty {
   height: 96px;
   color: var(--muted);

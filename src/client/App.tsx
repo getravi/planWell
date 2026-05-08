@@ -640,6 +640,7 @@ function ScenarioEditor({
   const [selectedDepartment, setSelectedDepartment] = useState("");
   const [hasManualAssumptionLevel, setHasManualAssumptionLevel] = useState(false);
   const active = draft ?? scenario?.assumptions;
+  const isLocked = Boolean(scenario?.locked);
   const ancestorLookup = useMemo(
     () => buildAncestorLookup(departmentHierarchy),
     [departmentHierarchy],
@@ -800,8 +801,9 @@ function ScenarioEditor({
         </label>
       </div>
       <p className="muted driver-note">
-        Editing {selectedDepartment} assumptions by month. Child departments inherit these values
-        until they set their own values.
+        {isLocked
+          ? `${scenario?.name} is locked. Driver assumptions are read-only until it is unlocked in Versions.`
+          : `Editing ${selectedDepartment} assumptions by month. Child departments inherit these values until they set their own values.`}
       </p>
       <div className="driver-matrix-wrap">
         <div className="grid-toolbar">
@@ -841,6 +843,7 @@ function ScenarioEditor({
                         aria-label={`${driver.label} ${month}`}
                         data-column-index={monthOptions.indexOf(month)}
                         data-row-index={driverRows.indexOf(driver)}
+                        disabled={isLocked}
                         type="number"
                         step={driver.percent ? 0.1 : 100}
                         value={
@@ -875,9 +878,13 @@ function ScenarioEditor({
           </tbody>
         </table>
       </div>
-      <Button disabled={!draft || save.isPending} onClick={() => active && save.mutate(active)}>
+      <Button
+        disabled={isLocked || !draft || save.isPending}
+        onClick={() => active && save.mutate(active)}
+      >
         <Save size={16} /> Save scenario
       </Button>
+      {save.error ? <p className="error">{save.error.message}</p> : null}
     </Panel>
   );
 }
@@ -1621,8 +1628,9 @@ function VersionsView({
       await refreshPlanningData();
     },
   });
-  const rename = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => client.renameVersion(id, name),
+  const updateVersion = useMutation({
+    mutationFn: ({ id, changes }: { id: string; changes: { name?: string; locked?: boolean } }) =>
+      client.updateVersion(id, changes),
     onSuccess: async (result) => {
       syncVersions(result.versions);
       setStatus("Version saved.");
@@ -1655,7 +1663,10 @@ function VersionsView({
     if (!name || name === version.name) {
       return;
     }
-    rename.mutate({ id: version.id, name });
+    updateVersion.mutate({ id: version.id, changes: { name } });
+  };
+  const toggleVersionLock = (version: VersionRecord, locked: boolean) => {
+    updateVersion.mutate({ id: version.id, changes: { locked } });
   };
 
   if (isLoading) {
@@ -1731,6 +1742,25 @@ function VersionsView({
               ),
             },
             {
+              id: "locked",
+              header: "Locked",
+              cell: (version) =>
+                version.canLock ? (
+                  <label className="lock-toggle">
+                    <input
+                      aria-label={`Lock ${version.name}`}
+                      checked={version.locked}
+                      disabled={updateVersion.isPending}
+                      onChange={(event) => toggleVersionLock(version, event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span>{version.locked ? "Locked" : "Unlocked"}</span>
+                  </label>
+                ) : (
+                  <span className="muted">Read-only</span>
+                ),
+            },
+            {
               className: "data-table-actions-cell",
               header: "Actions",
               headerClassName: "data-table-actions-head",
@@ -1763,7 +1793,7 @@ function VersionsView({
             </div>
           }
         />
-        {rename.error ? <p className="error">{rename.error.message}</p> : null}
+        {updateVersion.error ? <p className="error">{updateVersion.error.message}</p> : null}
         {remove.error ? <p className="error">{remove.error.message}</p> : null}
         {status ? <p className="muted">{status}</p> : null}
       </Panel>
@@ -2117,6 +2147,7 @@ function SchemaView() {
               ["UQ", "name"],
               ["", "kind"],
               ["", "actuals or scenario"],
+              ["", "locked"],
               ["", "created_at / updated_at"],
             ]}
           />
@@ -2170,6 +2201,7 @@ function SchemaView() {
           <div className="schema-note-card">
             <strong>Versions</strong>
             <span>Scenarios are versions with kind = scenario</span>
+            <span>Locked scenario versions are read-only</span>
             <span>Everything other than Actuals is a scenario version</span>
             <code>actuals</code>
             <code>versions</code>
