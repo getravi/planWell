@@ -159,8 +159,11 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByRole("button", { name: /^schema$/i })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /actuals/i }));
     expect(screen.getByText("Import actuals")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /scenarios/i }));
+    expect(screen.queryByRole("button", { name: /^scenarios$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^variance$/i })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /scenario comparison/i }));
     expect(screen.getByText("Compare scenarios")).toBeTruthy();
+    expect(screen.getByText("Variance analysis")).toBeTruthy();
   });
 
   it("exposes month-level driver grid with months as columns and hierarchy assumption levels", async () => {
@@ -697,8 +700,10 @@ describe("PlanWell workbench UI", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await userEvent.click(await screen.findByRole("button", { name: /variance/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /scenario comparison/i }));
 
+    expect(await screen.findByText("Compare scenarios")).toBeTruthy();
+    expect(screen.getByText("Variance analysis")).toBeTruthy();
     expect(await screen.findAllByRole("rowheader", { name: "Product" })).not.toHaveLength(0);
     expect(
       screen
@@ -811,7 +816,7 @@ describe("PlanWell workbench UI", () => {
         .style.getPropertyValue("--select-option-padding-left"),
     ).toBe("24px");
 
-    await userEvent.click(screen.getByRole("button", { name: /scenarios/i }));
+    await userEvent.click(screen.getByRole("button", { name: /scenario comparison/i }));
     expect(await screen.findByText("Compare to")).toBeTruthy();
     const labels = Array.from(document.querySelectorAll(".topbar .page-selector-label")).map(
       (label) => label.textContent,

@@ -10,7 +10,6 @@ import {
   ArrowUp,
   Bot,
   CalendarDays,
-  ChartNoAxesCombined,
   ChevronDown,
   Copy,
   Database,
@@ -187,8 +186,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
       view === "Dimensions" ||
       view === "Time Settings" ||
       view === "Forecast Model" ||
-      view === "Scenarios" ||
-      view === "Variance",
+      view === "Scenario Comparison",
   });
   const versions = useQuery({
     queryKey: ["versions"],
@@ -237,8 +235,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
       ? summarizeRows(filteredForecastRows)
       : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
-    view === "Forecast Model" || view === "Scenarios" || view === "Variance" || view === "Analyst";
-  const showComparisonLabels = view === "Scenarios" || view === "Variance";
+    view === "Forecast Model" || view === "Scenario Comparison" || view === "Analyst";
+  const showComparisonLabels = view === "Scenario Comparison";
   const isAdminView =
     view === "Dimensions" || view === "Time Settings" || view === "Versions" || view === "Schema";
 
@@ -273,8 +271,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                 {[
                   ["Actuals", FileUp],
                   ["Forecast Model", Settings2],
-                  ["Scenarios", ChartNoAxesCombined],
-                  ["Variance", GitCompareArrows],
+                  ["Scenario Comparison", GitCompareArrows],
                   ["Analyst", Bot],
                 ].map(([label, Icon]) => (
                   <SidebarMenuItem key={label as string}>
@@ -382,7 +379,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                 </Select>
               </label>
             ) : null}
-            {view === "Scenarios" || view === "Variance" ? (
+            {view === "Scenario Comparison" ? (
               <label className="page-selector inline-selector">
                 <span className="page-selector-label">Compare to</span>
                 <Select
@@ -420,17 +417,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
             accountHierarchy={dimensions.data?.account ?? []}
           />
         ) : null}
-        {view === "Scenarios" ? (
-          <ScenarioComparison
-            rows={variance.data?.rows ?? []}
-            left={leftScenario}
-            right={rightScenario}
-            departmentHierarchy={dimensions.data?.department ?? []}
-            accountHierarchy={dimensions.data?.account ?? []}
-          />
-        ) : null}
-        {view === "Variance" ? (
-          <VarianceView
+        {view === "Scenario Comparison" ? (
+          <ScenarioComparisonPage
             rows={variance.data?.rows ?? []}
             left={leftScenario}
             right={rightScenario}
@@ -998,6 +986,39 @@ function ScenarioComparison({
         />
       </Panel>
     </div>
+  );
+}
+
+function ScenarioComparisonPage({
+  rows,
+  left,
+  right,
+  departmentHierarchy,
+  accountHierarchy,
+}: {
+  rows: VarianceRow[];
+  left: string;
+  right: string;
+  departmentHierarchy: DimensionMember[];
+  accountHierarchy: DimensionMember[];
+}) {
+  return (
+    <>
+      <ScenarioComparison
+        rows={rows}
+        left={left}
+        right={right}
+        departmentHierarchy={departmentHierarchy}
+        accountHierarchy={accountHierarchy}
+      />
+      <VarianceView
+        rows={rows}
+        left={left}
+        right={right}
+        departmentHierarchy={departmentHierarchy}
+        accountHierarchy={accountHierarchy}
+      />
+    </>
   );
 }
 
