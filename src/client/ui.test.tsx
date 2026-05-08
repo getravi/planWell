@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
@@ -21,9 +21,25 @@ import {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("shadcn-style local primitives", () => {
+  const rect = (values: {
+    bottom: number;
+    height: number;
+    left: number;
+    right: number;
+    top: number;
+    width: number;
+    x: number;
+    y: number;
+  }) =>
+    ({
+      ...values,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
   it("renders dashboard shell primitives with stable component classes", () => {
     render(
       <SidebarProvider>
@@ -81,6 +97,54 @@ describe("shadcn-style local primitives", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0]?.[0].target.value).toBe("growth");
     expect(document.querySelector('[data-slot="select-content"]')).toBeNull();
+  });
+
+  it("positions Select content inside the visible viewport", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        if (this.getAttribute("data-slot") === "select") {
+          return rect({
+            bottom: 756,
+            height: 36,
+            left: 900,
+            right: 1040,
+            top: 720,
+            width: 140,
+            x: 900,
+            y: 720,
+          });
+        }
+        if (this.getAttribute("data-slot") === "select-content") {
+          return rect({
+            bottom: 0,
+            height: 220,
+            left: 0,
+            right: 0,
+            top: 0,
+            width: 260,
+            x: 0,
+            y: 0,
+          });
+        }
+        return rect({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0, x: 0, y: 0 });
+      },
+    );
+
+    render(
+      <Select aria-label="Primary scenario" value="base">
+        <option value="base">Base Case</option>
+        <option value="growth">Aggressive Growth</option>
+      </Select>,
+    );
+
+    await userEvent.click(screen.getByRole("combobox", { name: /primary scenario/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("listbox").getAttribute("data-align")).toBe("end");
+      expect(screen.getByRole("listbox").getAttribute("data-side")).toBe("top");
+    });
   });
 
   it("renders DataTable with shadcn dashboard table slots", () => {

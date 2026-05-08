@@ -4,6 +4,7 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,11 @@ type SelectOption = {
   disabled: boolean;
   label: string;
   value: string;
+};
+
+type SelectPlacement = {
+  align: "end" | "start";
+  side: "bottom" | "top";
 };
 
 export type DataTableColumn<TData> = {
@@ -104,7 +110,9 @@ export function Select({
   const [internalValue, setInternalValue] = useState(() =>
     String(defaultValue ?? value ?? options[0]?.value ?? ""),
   );
+  const [placement, setPlacement] = useState<SelectPlacement>({ align: "start", side: "bottom" });
   const rootRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const selectedValue = String(isControlled ? (value ?? "") : internalValue);
   const selectedOption =
     options.find((option) => option.value === selectedValue) ??
@@ -135,6 +143,49 @@ export function Select({
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const positionContent = () => {
+      const root = rootRef.current;
+      const content = contentRef.current;
+      if (!root || !content) {
+        return;
+      }
+
+      const viewportGap = 8;
+      const rootRect = root.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      const contentWidth = Math.max(contentRect.width, rootRect.width);
+      const spaceBelow = window.innerHeight - rootRect.bottom - viewportGap;
+      const spaceAbove = rootRect.top - viewportGap;
+      const nextPlacement: SelectPlacement = {
+        align:
+          rootRect.left + contentWidth > window.innerWidth - viewportGap &&
+          rootRect.right - contentWidth >= viewportGap
+            ? "end"
+            : "start",
+        side: spaceBelow < contentRect.height && spaceAbove > spaceBelow ? "top" : "bottom",
+      };
+
+      setPlacement((current) =>
+        current.align === nextPlacement.align && current.side === nextPlacement.side
+          ? current
+          : nextPlacement,
+      );
+    };
+
+    positionContent();
+    window.addEventListener("resize", positionContent);
+    window.addEventListener("scroll", positionContent, true);
+    return () => {
+      window.removeEventListener("resize", positionContent);
+      window.removeEventListener("scroll", positionContent, true);
     };
   }, [open]);
 
@@ -172,7 +223,15 @@ export function Select({
         <ChevronDown className={open ? "select-chevron open" : "select-chevron"} size={16} />
       </button>
       {open ? (
-        <div className="select-content" data-slot="select-content" id={contentId} role="listbox">
+        <div
+          className="select-content"
+          data-align={placement.align}
+          data-side={placement.side}
+          data-slot="select-content"
+          id={contentId}
+          ref={contentRef}
+          role="listbox"
+        >
           {options.map((option) => (
             <button
               aria-selected={option.value === selectedValue}

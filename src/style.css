@@ -243,7 +243,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow);
 }
 .workspace > *:not(.topbar) {
@@ -255,7 +255,7 @@ a {
 }
 .workspace {
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .topbar {
   display: flex;
@@ -272,6 +272,23 @@ a {
   gap: 8px;
   align-items: center;
   margin-left: auto;
+}
+.page-selector {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.page-selector.inline-selector {
+  gap: 8px;
+}
+.page-selector-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.page-selector .select {
+  min-width: 170px;
 }
 .eyebrow {
   text-transform: uppercase;
@@ -555,6 +572,7 @@ textarea {
 .select {
   position: relative;
   width: 100%;
+  min-width: 0;
 }
 .select-trigger {
   width: 100%;
@@ -607,14 +625,25 @@ textarea {
   top: calc(100% + 4px);
   left: 0;
   z-index: 30;
-  width: max(100%, 220px);
+  min-width: max(100%, 220px);
+  width: max-content;
+  max-width: min(360px, calc(100vw - 16px));
   max-height: 280px;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow-pop);
   padding: 4px;
+}
+.select-content[data-align="end"] {
+  right: 0;
+  left: auto;
+}
+.select-content[data-side="top"] {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 .select-item {
   width: 100%;
@@ -629,6 +658,12 @@ textarea {
   cursor: pointer;
   padding: 7px 8px;
   text-align: left;
+}
+.select-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .select-item:hover,
 .select-item.selected {

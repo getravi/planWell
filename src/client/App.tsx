@@ -238,6 +238,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
       : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenarios" || view === "Variance" || view === "Analyst";
+  const showComparisonLabels = view === "Scenarios" || view === "Variance";
   const isAdminView =
     view === "Dimensions" || view === "Time Settings" || view === "Versions" || view === "Schema";
 
@@ -338,8 +339,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
           ) : null}
           <div className="scenario-pickers">
             {view === "Forecast Model" ? (
-              <label>
-                <Label>Forecast department</Label>
+              <label className="page-selector">
                 <Select
                   aria-label="Forecast department"
                   value={forecastDepartment}
@@ -355,9 +355,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
               </label>
             ) : null}
             {showScenarioPicker ? (
-              <label>
-                <Label>Primary scenario</Label>
+              <label
+                className={showComparisonLabels ? "page-selector inline-selector" : "page-selector"}
+              >
+                {showComparisonLabels ? (
+                  <span className="page-selector-label">Primary scenario</span>
+                ) : null}
                 <Select
+                  aria-label="Primary scenario"
                   value={leftScenario}
                   onChange={(event) => setLeftScenario(event.target.value)}
                 >
@@ -368,9 +373,10 @@ function Workbench({ userEmail }: { userEmail: string }) {
               </label>
             ) : null}
             {view === "Scenarios" || view === "Variance" ? (
-              <label>
-                <Label>Compare to</Label>
+              <label className="page-selector inline-selector">
+                <span className="page-selector-label">Compare to</span>
                 <Select
+                  aria-label="Compare to"
                   value={rightScenario}
                   onChange={(event) => setRightScenario(event.target.value)}
                 >

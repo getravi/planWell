@@ -743,10 +743,18 @@ describe("PlanWell workbench UI", () => {
     render(<App />);
 
     await screen.findByText("Driver assumptions");
+    expect(document.querySelectorAll(".topbar .page-selector-label")).toHaveLength(0);
+    expect(screen.getByLabelText("Forecast department")).toBeTruthy();
+    expect(screen.getByLabelText("Primary scenario")).toBeTruthy();
     expect(screen.queryByText("Compare to")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /scenarios/i }));
     expect(await screen.findByText("Compare to")).toBeTruthy();
+    const labels = Array.from(document.querySelectorAll(".topbar .page-selector-label")).map(
+      (label) => label.textContent,
+    );
+    expect(labels).toEqual(["Primary scenario", "Compare to"]);
+    expect(document.querySelectorAll(".topbar .inline-selector")).toHaveLength(2);
   });
 
   it("sends the comparison scenario to the grounded analyst", async () => {
