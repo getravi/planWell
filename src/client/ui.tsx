@@ -38,6 +38,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 }
 
 type SelectOption = {
+  depth: number;
   disabled: boolean;
   label: string;
   value: string;
@@ -73,13 +74,20 @@ function textFromNode(node: ReactNode): string {
 function optionsFromChildren(children: ReactNode): SelectOption[] {
   return Children.toArray(children).flatMap((child) => {
     if (
-      !isValidElement<{ children?: ReactNode; disabled?: boolean; value?: string | number }>(child)
+      !isValidElement<{
+        children?: ReactNode;
+        "data-depth"?: number | string;
+        disabled?: boolean;
+        value?: string | number;
+      }>(child)
     ) {
       return [];
     }
+    const depth = Number(child.props["data-depth"] ?? 0);
     const label = textFromNode(child.props.children);
     return [
       {
+        depth: Number.isFinite(depth) && depth > 0 ? depth : 0,
         disabled: Boolean(child.props.disabled),
         label,
         value: String(child.props.value ?? label),
@@ -246,10 +254,18 @@ export function Select({
               className={option.value === selectedValue ? "select-item selected" : "select-item"}
               data-slot="select-item"
               data-value={option.value}
+              data-depth={option.depth}
               disabled={option.disabled}
               key={option.value}
               onClick={() => selectOption(option.value)}
               role="option"
+              style={
+                option.depth
+                  ? ({
+                      "--select-option-padding-left": `${8 + option.depth * 16}px`,
+                    } as CSSProperties)
+                  : undefined
+              }
               type="button"
             >
               <Check

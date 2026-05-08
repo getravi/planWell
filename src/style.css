@@ -656,6 +656,7 @@ textarea {
   color: var(--ink);
   cursor: pointer;
   padding: 7px 8px;
+  padding-left: var(--select-option-padding-left, 8px);
   text-align: left;
 }
 .select-item span {

@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import App from "./App.tsx";
+import App, { queryClient } from "./App.tsx";
 
 afterEach(() => {
   cleanup();
+  queryClient.clear();
   vi.unstubAllGlobals();
 });
 
@@ -293,6 +294,12 @@ describe("PlanWell workbench UI", () => {
       "GPU Cloud",
       "Engineering",
     ]);
+    expect(assumptionOptions.find((option) => option.label === "Total Company")?.depth).toBe("0");
+    expect(assumptionOptions.find((option) => option.label === "Product")?.depth).toBe("1");
+    expect(assumptionOptions.find((option) => option.label === "GPU Cloud")?.depth).toBe("2");
+    expect(assumptionOptions.find((option) => option.label === "GPU Cloud")?.paddingLeft).toBe(
+      "40px",
+    );
     expect(screen.queryByRole("option", { name: "Company defaults" })).toBeNull();
     expect(assumptionOptions.some((option) => option.label === "Engineering")).toBe(true);
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
@@ -426,6 +433,27 @@ describe("PlanWell workbench UI", () => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.endsWith("/api/auth/me")) {
         return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [
+            {
+              name: "Product",
+              parentName: null,
+              referenceCount: 0,
+              children: [
+                {
+                  name: "GPU Cloud",
+                  parentName: "Product",
+                  referenceCount: 0,
+                  children: [],
+                },
+              ],
+            },
+          ],
+          account: [],
+          time: [],
+        });
       }
       if (url.endsWith("/api/scenarios")) {
         return json({
@@ -691,6 +719,27 @@ describe("PlanWell workbench UI", () => {
       if (url.endsWith("/api/auth/me")) {
         return json({ user: { email: "director@planwell.local" } });
       }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [
+            {
+              name: "Product",
+              parentName: null,
+              referenceCount: 0,
+              children: [
+                {
+                  name: "GPU Cloud",
+                  parentName: "Product",
+                  referenceCount: 0,
+                  children: [],
+                },
+              ],
+            },
+          ],
+          account: [],
+          time: [],
+        });
+      }
       if (url.endsWith("/api/scenarios")) {
         return json({
           scenarios: [
@@ -747,6 +796,20 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByLabelText("Forecast department")).toBeTruthy();
     expect(screen.getByLabelText("Primary scenario")).toBeTruthy();
     expect(screen.queryByText("Compare to")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /forecast department/i }).textContent).toContain(
+        "Product",
+      ),
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: /forecast department/i }));
+    expect(screen.queryByRole("option", { name: /all departments/i })).toBeNull();
+    expect(screen.getByRole("option", { name: "Product" }).getAttribute("data-depth")).toBe("0");
+    expect(screen.getByRole("option", { name: "GPU Cloud" }).getAttribute("data-depth")).toBe("1");
+    expect(
+      screen
+        .getByRole("option", { name: "GPU Cloud" })
+        .style.getPropertyValue("--select-option-padding-left"),
+    ).toBe("24px");
 
     await userEvent.click(screen.getByRole("button", { name: /scenarios/i }));
     expect(await screen.findByText("Compare to")).toBeTruthy();
@@ -1591,16 +1654,23 @@ async function openAdminPage(name: RegExp): Promise<void> {
   await userEvent.click(await screen.findByRole("button", { name }));
 }
 
-async function getSelectOptions(
-  label: string | RegExp,
-): Promise<{ label: string; value: string }[]> {
+async function getSelectOptions(label: string | RegExp): Promise<
+  {
+    depth: string | null;
+    label: string;
+    paddingLeft: string;
+    value: string;
+  }[]
+> {
   const trigger = await screen.findByRole("combobox", { name: label });
   if (trigger.getAttribute("aria-expanded") !== "true") {
     await userEvent.click(trigger);
   }
   const options = await screen.findAllByRole("option");
   const values = options.map((option) => ({
+    depth: option.getAttribute("data-depth"),
     label: option.textContent?.trim() ?? "",
+    paddingLeft: option.style.getPropertyValue("--select-option-padding-left"),
     value: option.getAttribute("data-value") ?? "",
   }));
   await userEvent.keyboard("{Escape}");

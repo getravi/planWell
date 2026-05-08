@@ -85,7 +85,7 @@ import {
   SiteHeader,
 } from "./ui.tsx";
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
 
@@ -207,21 +207,21 @@ function Workbench({ userEmail }: { userEmail: string }) {
   });
   const scenarioNames = scenarios.data?.scenarios.map((scenario) => scenario.name) ?? [];
   const forecastRows = forecast.data?.rows ?? [];
-  const departmentMembers = useMemo(
-    () => flattenMembers(dimensions.data?.department ?? []),
-    [dimensions.data?.department],
-  );
   const departmentDescendants = useMemo(
     () => buildDescendantLookup(dimensions.data?.department ?? []),
     [dimensions.data?.department],
   );
-  const forecastDepartments = useMemo(
+  const forecastDepartmentOptions = useMemo(
     () =>
-      orderedNamesFromMembers(departmentMembers, [
+      orderedOptionsFromMembers(dimensions.data?.department ?? [], [
         ...forecastRows.map((row) => row.department),
         ...(forecast.data?.summary.departments.map((item) => item.department) ?? []),
       ]),
-    [departmentMembers, forecast.data?.summary.departments, forecastRows],
+    [dimensions.data?.department, forecast.data?.summary.departments, forecastRows],
+  );
+  const forecastDepartments = useMemo(
+    () => forecastDepartmentOptions.map((department) => department.name),
+    [forecastDepartmentOptions],
   );
   const filteredForecastRows = useMemo(() => {
     if (forecastDepartment === "__all__") {
@@ -243,10 +243,17 @@ function Workbench({ userEmail }: { userEmail: string }) {
     view === "Dimensions" || view === "Time Settings" || view === "Versions" || view === "Schema";
 
   useEffect(() => {
-    if (forecastDepartment !== "__all__" && !forecastDepartments.includes(forecastDepartment)) {
-      setForecastDepartment("__all__");
+    if (!dimensions.isSuccess) {
+      return;
     }
-  }, [forecastDepartment, forecastDepartments]);
+    const defaultDepartment = forecastDepartments[0];
+    if (
+      defaultDepartment &&
+      (forecastDepartment === "__all__" || !forecastDepartments.includes(forecastDepartment))
+    ) {
+      setForecastDepartment(defaultDepartment);
+    }
+  }, [dimensions.isSuccess, forecastDepartment, forecastDepartments]);
 
   return (
     <SidebarProvider className="app-shell">
@@ -345,10 +352,13 @@ function Workbench({ userEmail }: { userEmail: string }) {
                   value={forecastDepartment}
                   onChange={(event) => setForecastDepartment(event.target.value)}
                 >
-                  <option value="__all__">All departments</option>
-                  {forecastDepartments.map((department) => (
-                    <option key={department} value={department}>
-                      {department}
+                  {forecastDepartmentOptions.map((department) => (
+                    <option
+                      data-depth={department.depth}
+                      key={department.name}
+                      value={department.name}
+                    >
+                      {department.name}
                     </option>
                   ))}
                 </Select>
@@ -661,14 +671,18 @@ function ScenarioEditor({
       left.localeCompare(right),
     );
   }, [active, months]);
-  const departmentOptions = useMemo(() => {
-    const hierarchyNames = flattenMembers(departmentHierarchy).map((member) => member.name);
-    const source =
-      hierarchyNames.length > 0
-        ? hierarchyNames
-        : [...departments, ...Object.keys(active?.overrides ?? {})];
-    return [...new Set(source)];
-  }, [active, departmentHierarchy, departments]);
+  const departmentSelectOptions = useMemo(
+    () =>
+      orderedOptionsFromMembers(departmentHierarchy, [
+        ...departments,
+        ...Object.keys(active?.overrides ?? {}),
+      ]),
+    [active, departmentHierarchy, departments],
+  );
+  const departmentOptions = useMemo(
+    () => departmentSelectOptions.map((department) => department.name),
+    [departmentSelectOptions],
+  );
   const save = useMutation({
     mutationFn: client.saveScenario,
     onSuccess: async () => {
@@ -797,9 +811,9 @@ function ScenarioEditor({
               setHasManualAssumptionLevel(true);
             }}
           >
-            {departmentOptions.map((department) => (
-              <option key={department} value={department}>
-                {department}
+            {departmentSelectOptions.map((department) => (
+              <option data-depth={department.depth} key={department.name} value={department.name}>
+                {department.name}
               </option>
             ))}
           </Select>
@@ -1981,6 +1995,18 @@ function flattenMembers(members: DimensionMember[]): DimensionMember[] {
   return members.flatMap((member) => [member, ...flattenMembers(member.children)]);
 }
 
+type DimensionSelectOption = {
+  depth: number;
+  name: string;
+};
+
+function flattenMembersWithDepth(members: DimensionMember[], depth = 0): DimensionSelectOption[] {
+  return members.flatMap((member) => [
+    { depth, name: member.name },
+    ...flattenMembersWithDepth(member.children, depth + 1),
+  ]);
+}
+
 function updateDimensionSortOrder(
   dimensions: Dimensions,
   kind: DimensionKind,
@@ -2024,6 +2050,19 @@ function orderedNamesFromMembers(members: DimensionMember[], fallbackNames: stri
     .filter((name) => !knownNames.has(name))
     .sort((left, right) => left.localeCompare(right));
   return [...memberNames, ...unknownNames];
+}
+
+function orderedOptionsFromMembers(
+  members: DimensionMember[],
+  fallbackNames: string[],
+): DimensionSelectOption[] {
+  const memberOptions = flattenMembersWithDepth(members);
+  const knownNames = new Set(memberOptions.map((member) => member.name));
+  const unknownOptions = [...new Set(fallbackNames)]
+    .filter((name) => !knownNames.has(name))
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => ({ depth: 0, name }));
+  return [...memberOptions, ...unknownOptions];
 }
 
 function buildDescendantLookup(members: DimensionMember[]): Map<string, string[]> {
