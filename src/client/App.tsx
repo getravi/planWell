@@ -9,6 +9,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bot,
+  CalendarDays,
   ChartNoAxesCombined,
   ChevronDown,
   Copy,
@@ -184,6 +185,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
     queryFn: client.dimensions,
     enabled:
       view === "Dimensions" ||
+      view === "Time Settings" ||
       view === "Forecast Model" ||
       view === "Scenarios" ||
       view === "Variance",
@@ -236,7 +238,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
       : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenarios" || view === "Variance" || view === "Analyst";
-  const isAdminView = view === "Dimensions" || view === "Versions" || view === "Schema";
+  const isAdminView =
+    view === "Dimensions" || view === "Time Settings" || view === "Versions" || view === "Schema";
 
   useEffect(() => {
     if (forecastDepartment !== "__all__" && !forecastDepartments.includes(forecastDepartment)) {
@@ -301,6 +304,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                 <SidebarMenu className="nav-sublist" id="admin-nav">
                   {[
                     ["Dimensions", Network],
+                    ["Time Settings", CalendarDays],
                     ["Versions", Copy],
                     ["Schema", Database],
                   ].map(([label, Icon]) => (
@@ -327,7 +331,10 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <p className="eyebrow">PlanWell / Modeling Workbench</p>
             <h1>{view}</h1>
           </div>
-          {view !== "Schema" && view !== "Dimensions" && view !== "Versions" ? (
+          {view !== "Schema" &&
+          view !== "Dimensions" &&
+          view !== "Time Settings" &&
+          view !== "Versions" ? (
             <span className="status-pill">Live model</span>
           ) : null}
           <div className="scenario-pickers">
@@ -377,7 +384,10 @@ function Workbench({ userEmail }: { userEmail: string }) {
           </div>
         </SiteHeader>
 
-        {view !== "Schema" && view !== "Dimensions" && view !== "Versions" ? (
+        {view !== "Schema" &&
+        view !== "Dimensions" &&
+        view !== "Time Settings" &&
+        view !== "Versions" ? (
           <KpiStrip summary={currentSummary} />
         ) : null}
 
@@ -418,6 +428,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
         {view === "Dimensions" ? (
           <ModelStructureView
+            dimensions={dimensions.data}
+            error={dimensions.error}
+            isLoading={dimensions.isLoading}
+            onRetry={() => void dimensions.refetch()}
+          />
+        ) : null}
+        {view === "Time Settings" ? (
+          <TimeSettingsView
             dimensions={dimensions.data}
             error={dimensions.error}
             isLoading={dimensions.isLoading}
@@ -1017,7 +1035,7 @@ function ModelStructureView({
   isLoading: boolean;
   onRetry: () => void;
 }) {
-  const [activeKind, setActiveKind] = useState<DimensionKind>("department");
+  const [activeKind, setActiveKind] = useState<"department" | "account">("department");
   if (isLoading) {
     return <div className="screen-center">Loading dimensions...</div>;
   }
@@ -1035,10 +1053,9 @@ function ModelStructureView({
       </Panel>
     );
   }
-  const labels: Record<DimensionKind, string> = {
+  const labels: Record<"department" | "account", string> = {
     department: "Departments",
     account: "Accounts",
-    time: "Time",
   };
   return (
     <div className="model-structure">
@@ -1053,7 +1070,7 @@ function ModelStructureView({
         </p>
       </section>
       <div className="tab-bar" role="tablist" aria-label="Model dimensions">
-        {(Object.keys(labels) as DimensionKind[]).map((kind) => (
+        {(Object.keys(labels) as ("department" | "account")[]).map((kind) => (
           <button
             key={kind}
             type="button"
@@ -1067,6 +1084,51 @@ function ModelStructureView({
         ))}
       </div>
       <DimensionEditor kind={activeKind} members={dimensions?.[activeKind] ?? []} />
+    </div>
+  );
+}
+
+function TimeSettingsView({
+  dimensions,
+  error,
+  isLoading,
+  onRetry,
+}: {
+  dimensions?: Record<DimensionKind, DimensionMember[]>;
+  error: Error | null;
+  isLoading: boolean;
+  onRetry: () => void;
+}) {
+  if (isLoading) {
+    return <div className="screen-center">Loading time settings...</div>;
+  }
+  if (error) {
+    return (
+      <Panel>
+        <EmptyState
+          title="Could not load time settings"
+          body="The dimensions API did not return the current time members."
+        />
+        <p className="error centered-status">{error.message}</p>
+        <Button type="button" onClick={onRetry}>
+          Retry
+        </Button>
+      </Panel>
+    );
+  }
+  return (
+    <div className="model-structure">
+      <section className="schema-summary">
+        <div>
+          <p className="eyebrow">Planning calendar</p>
+          <h2>Time Settings</h2>
+        </div>
+        <p className="muted">
+          Add planning years or individual months. Year and quarter rollups are derived from the
+          month members used by actuals and forecasts.
+        </p>
+      </section>
+      <DimensionEditor kind="time" members={dimensions?.time ?? []} />
     </div>
   );
 }

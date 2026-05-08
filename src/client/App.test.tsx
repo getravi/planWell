@@ -145,6 +145,7 @@ describe("PlanWell workbench UI", () => {
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: /model structure/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^dimensions$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^time settings$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^schema$/i })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: /admin/i }));
     expect(screen.getByRole("button", { name: /admin/i }).getAttribute("aria-expanded")).toBe(
@@ -152,6 +153,7 @@ describe("PlanWell workbench UI", () => {
     );
     expect(screen.queryByRole("button", { name: /model structure/i })).toBeNull();
     expect(screen.getByRole("button", { name: /^dimensions$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^time settings$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^schema$/i })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /actuals/i }));
     expect(screen.getByText("Import actuals")).toBeTruthy();
@@ -913,12 +915,14 @@ describe("PlanWell workbench UI", () => {
 
     expect(await screen.findByRole("tab", { name: "Departments" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Accounts" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Time" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Time" })).toBeNull();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Time" }));
+    await openAdminPage(/^time settings$/i);
+    expect(screen.getByRole("heading", { name: "Time Settings", level: 1 })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Time tree" })).toBeTruthy();
     expect(screen.getByText("Month or year")).toBeTruthy();
     expect(screen.getByPlaceholderText("2027 or 2027-01")).toBeTruthy();
-    await userEvent.click(screen.getByRole("tab", { name: "Departments" }));
+    await openAdminPage(/^dimensions$/i);
 
     await userEvent.click(screen.getByRole("button", { name: /select gpu cloud/i }));
     await userEvent.clear(screen.getByLabelText("Member name"));
