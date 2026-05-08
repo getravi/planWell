@@ -872,7 +872,18 @@ function listNamedDimension(db: DatabaseSync, kind: "department" | "account"): D
 
 function listTimeDimension(db: DatabaseSync): DimensionMember[] {
   const months = (
-    db.prepare("select id from time_month order by id").all() as { id: string }[]
+    db
+      .prepare(
+        `
+          select id from time_month
+          union
+          select month as id from actuals
+          union
+          select month as id from forecast_values
+          order by id
+        `,
+      )
+      .all() as { id: string }[]
   ).map((row) => row.id);
   const years = new Map<string, DimensionMember>();
   for (const month of months) {

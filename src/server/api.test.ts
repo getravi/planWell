@@ -566,6 +566,43 @@ describe("PlanWell API", () => {
       },
     ]);
   });
+
+  it("includes forecast months in the derived time dimension", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const imported = await app.request("/api/imports/csv", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        csv: `month,department,account,value
+2025-12,GPU Cloud,Revenue,1000
+2025-12,GPU Cloud,COGS,450
+2025-12,GPU Cloud,Headcount,10
+2025-12,GPU Cloud,OpEx,180000
+`,
+      }),
+    });
+    expect(imported.status).toBe(200);
+
+    const forecast = await app.request("/api/cube/forecast?scenario=Base%20Case", {
+      headers: { cookie },
+    });
+    const forecastBody = await forecast.json();
+    expect(forecastBody.summary.months).toContain("2026-01");
+
+    const dimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const body = await dimensions.json();
+    expect(body.time.map((member: { name: string }) => member.name)).toEqual(["2025", "2026"]);
+    expect(
+      body.time
+        .find((member: { name: string }) => member.name === "2026")
+        ?.children.flatMap((quarter: { children: { name: string }[] }) =>
+          quarter.children.map((month) => month.name),
+        ),
+    ).toContain("2026-01");
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {
