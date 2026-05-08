@@ -920,6 +920,7 @@ describe("PlanWell workbench UI", () => {
     await openAdminPage(/^time settings$/i);
     expect(screen.getByRole("heading", { name: "Time Settings", level: 1 })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Time tree" })).toBeTruthy();
+    expect(document.querySelector(".time-tree-scroll")).toBeTruthy();
     expect(screen.getByText("Month or year")).toBeTruthy();
     expect(screen.getByPlaceholderText("2027 or 2027-01")).toBeTruthy();
     await openAdminPage(/^dimensions$/i);

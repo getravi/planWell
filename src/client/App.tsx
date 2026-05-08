@@ -1386,7 +1386,10 @@ function DimensionEditor({ kind, members }: { kind: DimensionKind; members: Dime
           <Network size={18} />
         </div>
         {members.length ? (
-          <div className="dimension-tree" onDragLeave={() => setDragOverName("")}>
+          <div
+            className={kind === "time" ? "dimension-tree time-tree-scroll" : "dimension-tree"}
+            onDragLeave={() => setDragOverName("")}
+          >
             {members.map((member) => (
               <DimensionTreeNode
                 key={member.name}
