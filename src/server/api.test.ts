@@ -603,6 +603,49 @@ describe("PlanWell API", () => {
         ),
     ).toContain("2026-01");
   });
+
+  it("adds a full planning year and extends forecasts through explicit future time months", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const imported = await app.request("/api/imports/csv", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        csv: `month,department,account,value
+2025-12,GPU Cloud,Revenue,1000
+2025-12,GPU Cloud,COGS,450
+2025-12,GPU Cloud,Headcount,10
+2025-12,GPU Cloud,OpEx,180000
+`,
+      }),
+    });
+    expect(imported.status).toBe(200);
+
+    const createYear = await app.request("/api/dimensions/time/members", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ name: "2027" }),
+    });
+    expect(createYear.status).toBe(201);
+
+    const forecast = await app.request("/api/cube/forecast?scenario=Base%20Case", {
+      headers: { cookie },
+    });
+    const forecastBody = await forecast.json();
+    expect(forecastBody.summary.months.at(-1)).toBe("2027-12");
+    expect(forecastBody.rows.some((row: { month: string }) => row.month === "2027-12")).toBe(true);
+
+    const dimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const body = await dimensions.json();
+    const year = body.time.find((member: { name: string }) => member.name === "2027");
+    expect(
+      year.children.flatMap((quarter: { children: { name: string }[] }) =>
+        quarter.children.map((month) => month.name),
+      ),
+    ).toHaveLength(12);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {

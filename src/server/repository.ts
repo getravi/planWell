@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { buildForecast, compareSeries, summarizeKpis } from "../domain/forecast.ts";
+import { buildForecast, compareSeries, nextMonths, summarizeKpis } from "../domain/forecast.ts";
 import type {
   ActualRow,
   DimensionImpact,
@@ -207,6 +207,9 @@ function createRepository(db: DatabaseSync): Repository {
     },
     createDimensionMember(kind, name, parentName = null) {
       createDimensionMember(db, kind, name, parentName);
+      if (kind === "time") {
+        recalculateAll(db);
+      }
     },
     updateDimensionMember(kind, name, changes) {
       updateDimensionMember(db, kind, name, changes);
@@ -671,16 +674,22 @@ function createDimensionMember(
   rawName: string,
   rawParentName: string | null,
 ): void {
-  const name = normalizeDimensionName(kind, rawName);
   if (kind === "time") {
-    ensureTimeName(name);
-    if (dimensionExists(db, kind, name)) {
-      throw new Error(`${name} already exists.`);
+    const months = expandTimeMembers(rawName);
+    const existingCount = months.filter((month) => dimensionExists(db, kind, month)).length;
+    if (existingCount === months.length) {
+      throw new Error(`${rawName.trim()} already exists.`);
     }
-    db.prepare("insert into time_month (id) values (?)").run(name);
+    const insert = db.prepare("insert or ignore into time_month (id) values (?)");
+    withTransaction(db, () => {
+      for (const month of months) {
+        insert.run(month);
+      }
+    });
     return;
   }
 
+  const name = normalizeDimensionName(kind, rawName);
   const parentName = normalizeOptionalName(rawParentName);
   ensureNamedDimensionCanSave(db, kind, name, parentName, null);
   insertNamedDimensionIfMissing(db, kind, name, parentName);
@@ -1076,6 +1085,18 @@ function ensureTimeName(name: string): void {
   }
 }
 
+function expandTimeMembers(value: string): string[] {
+  const name = value.trim();
+  if (/^\d{4}$/.test(name)) {
+    return Array.from(
+      { length: 12 },
+      (_, index) => `${name}-${String(index + 1).padStart(2, "0")}`,
+    );
+  }
+  ensureTimeName(name);
+  return [name];
+}
+
 function getReferenceCount(db: DatabaseSync, kind: DimensionKind, name: string): number {
   const column = kind === "time" ? "month" : kind;
   return countRows(db, "actuals", column, name) + countRows(db, "forecast_values", column, name);
@@ -1154,6 +1175,7 @@ function recalculateScenario(db: DatabaseSync, name: string): void {
     selectCubeRows(db, "actuals"),
     scenario.assumptions,
     listNamedDimension(db, "department"),
+    listPlanningForecastMonths(db),
   );
   withTransaction(db, () => {
     db.prepare("delete from forecast_values where scenario_id = ?").run(scenario.id);
@@ -1214,6 +1236,20 @@ function insertForecastRows(db: DatabaseSync, scenarioId: string, rows: Forecast
   for (const row of rows) {
     insert.run(scenarioId, row.month, row.department, row.account, row.value);
   }
+}
+
+function listPlanningForecastMonths(db: DatabaseSync): string[] {
+  const actualMonths = [...new Set(selectCubeRows(db, "actuals").map((row) => row.month))].sort();
+  const lastActualMonth = actualMonths.at(-1);
+  if (!lastActualMonth) {
+    return [];
+  }
+  const explicitFutureMonths = (
+    db.prepare("select id from time_month where id > ? order by id").all(lastActualMonth) as {
+      id: string;
+    }[]
+  ).map((row) => row.id);
+  return [...new Set([...nextMonths(lastActualMonth, 12), ...explicitFutureMonths])].sort();
 }
 
 function sum(rows: ActualRow[], account: string): number {

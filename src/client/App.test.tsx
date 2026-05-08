@@ -830,6 +830,11 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByRole("tab", { name: "Accounts" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Time" })).toBeTruthy();
 
+    await userEvent.click(screen.getByRole("tab", { name: "Time" }));
+    expect(screen.getByText("Month or year")).toBeTruthy();
+    expect(screen.getByPlaceholderText("2027 or 2027-01")).toBeTruthy();
+    await userEvent.click(screen.getByRole("tab", { name: "Departments" }));
+
     await userEvent.click(screen.getByRole("button", { name: /select gpu cloud/i }));
     await userEvent.clear(screen.getByLabelText("Member name"));
     await userEvent.type(screen.getByLabelText("Member name"), "Cloud AI");

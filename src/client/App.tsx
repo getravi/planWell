@@ -1441,10 +1441,10 @@ function DimensionEditor({ kind, members }: { kind: DimensionKind; members: Dime
         </div>
         <div className="dimension-add-row">
           <label>
-            <Label>{kind === "time" ? "Month" : "Name"}</Label>
+            <Label>{kind === "time" ? "Month or year" : "Name"}</Label>
             <Input
               aria-label="New member name"
-              placeholder={kind === "time" ? "2026-02" : "New member"}
+              placeholder={kind === "time" ? "2027 or 2027-01" : "New member"}
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
             />

@@ -15,6 +15,7 @@ export function buildForecast(
   actuals: ActualRow[],
   assumptions: ScenarioAssumptions,
   departmentHierarchy: DimensionMember[] = [],
+  forecastMonths?: string[],
 ): ForecastRow[] {
   if (actuals.length === 0) {
     return [];
@@ -28,7 +29,8 @@ export function buildForecast(
 
   const rows: ForecastRow[] = [];
   const ancestorsByDepartment = buildAncestorLookup(departmentHierarchy);
-  for (const month of nextMonths(lastMonth, 12)) {
+  const months = forecastMonths?.length ? forecastMonths : nextMonths(lastMonth, 12);
+  for (const month of months.filter((month) => month > lastMonth)) {
     const monthIndex = monthsBetween(lastMonth, month);
     for (const department of departments) {
       const driver = resolveDriverAssumptions(
