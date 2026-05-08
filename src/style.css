@@ -407,6 +407,10 @@ a {
   color: var(--text);
   font-size: 14px;
 }
+.analyst-question {
+  display: grid;
+  gap: 6px;
+}
 .table-actions {
   display: flex;
   align-items: center;

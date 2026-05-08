@@ -492,6 +492,7 @@ describe("PlanWell workbench UI", () => {
     await chooseSelectOption(/forecast department/i, "GPU Cloud");
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Horizon 2026-01 to 2026-02")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /copy grid/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("rowheader", { name: "Engineering" })).toBeNull();
   });

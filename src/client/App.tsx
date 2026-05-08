@@ -567,6 +567,7 @@ function ForecastView({
       ),
     ]),
   ].sort((left, right) => left.localeCompare(right));
+  const forecastMonths = getMonths(rows);
   const modelDepartments = orderedNamesFromMembers(flattenMembers(departmentHierarchy), [
     ...departments,
     ...rows.map((row) => row.department),
@@ -591,7 +592,7 @@ function ForecastView({
       <Panel className="span-two">
         <div className="panel-heading">
           <h2>Forecast by department and account</h2>
-          <span>{rows.length} forecast cells</span>
+          <span>{formatHorizonLabel(forecastMonths) ?? `${rows.length} forecast cells`}</span>
         </div>
         <ForecastGrid
           rows={rows}
@@ -2238,7 +2239,14 @@ function AnalystView({ scenario, compareScenario }: { scenario: string; compareS
         <p className="muted">
           Answers are generated from approved aggregate tools over the imported cube.
         </p>
-        <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <label className="analyst-question">
+          <Label>Question</Label>
+          <textarea
+            aria-label="Ask a grounded planning question"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+          />
+        </label>
         <Button onClick={() => ask.mutate()} disabled={ask.isPending}>
           {ask.isPending ? "Asking..." : "Ask analyst"}
         </Button>
@@ -2464,6 +2472,13 @@ function getMonths(rows: { month: string }[]): string[] {
   return [...new Set(rows.map((row) => row.month))].sort((left, right) =>
     left.localeCompare(right),
   );
+}
+
+function formatHorizonLabel(months: string[]): string | null {
+  if (months.length === 0) {
+    return null;
+  }
+  return `Horizon ${months[0]} to ${months[months.length - 1]}`;
 }
 
 function pivotActualRows(
