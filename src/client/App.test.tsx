@@ -668,8 +668,24 @@ describe("PlanWell workbench UI", () => {
           ],
         });
       }
-      if (url.includes("/api/cube/actuals") || url.includes("/api/cube/forecast")) {
+      if (url.includes("/api/cube/actuals")) {
         return json(emptyCube());
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json({
+          rows: [],
+          summary: {
+            ...emptyCube().summary,
+            kpis: {
+              revenue: 1000,
+              grossMargin: 600,
+              grossMarginPct: 0.6,
+              opex: 500,
+              opexRatio: 0.5,
+              headcount: 12,
+            },
+          },
+        });
       }
       if (url.includes("/api/cube/variance")) {
         return json({
@@ -704,6 +720,18 @@ describe("PlanWell workbench UI", () => {
 
     expect(await screen.findByText("Compare scenarios")).toBeTruthy();
     expect(screen.getByText("Variance analysis")).toBeTruthy();
+    const kpiCard = (label: string) =>
+      screen
+        .getAllByText(label)
+        .find((item) => item.closest('[data-slot="card"]'))
+        ?.closest('[data-slot="card"]');
+    await waitFor(() => {
+      expect(kpiCard("Revenue")?.textContent).toContain("$200");
+    });
+    expect(kpiCard("Revenue")?.textContent).not.toContain("$1,000");
+    expect(kpiCard("Gross margin")?.textContent).toContain("$200");
+    expect(kpiCard("OpEx ratio")?.textContent).toContain("75%");
+    expect(screen.getAllByRole("button", { name: /copy grid/i })).toHaveLength(1);
     expect(await screen.findAllByRole("rowheader", { name: "Product" })).not.toHaveLength(0);
     expect(
       screen

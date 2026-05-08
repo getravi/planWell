@@ -230,10 +230,16 @@ function Workbench({ userEmail }: { userEmail: string }) {
     ];
     return forecastRows.filter((row) => allowedDepartments.includes(row.department));
   }, [departmentDescendants, forecastDepartment, forecastRows]);
+  const varianceSummary = useMemo(
+    () => summarizeVarianceRows(variance.data?.rows ?? []),
+    [variance.data?.rows],
+  );
   const currentSummary =
-    view === "Forecast Model" && forecastDepartment !== "__all__"
-      ? summarizeRows(filteredForecastRows)
-      : (forecast.data?.summary ?? actuals.data?.summary);
+    view === "Scenario Comparison"
+      ? varianceSummary
+      : view === "Forecast Model" && forecastDepartment !== "__all__"
+        ? summarizeRows(filteredForecastRows)
+        : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenario Comparison" || view === "Analyst";
   const showComparisonLabels = view === "Scenario Comparison";
@@ -947,45 +953,32 @@ function ScenarioComparison({
   rows,
   left,
   right,
-  departmentHierarchy,
-  accountHierarchy,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
-  departmentHierarchy: DimensionMember[];
-  accountHierarchy: DimensionMember[];
 }) {
   const chartRows = useMemo(() => aggregateVarianceByMonth(rows, "Revenue"), [rows]);
   return (
-    <div className="grid two">
-      <Panel className="span-two">
-        <div className="panel-heading">
-          <h2>Compare scenarios</h2>
-          <span>
-            {left} vs {right}
-          </span>
-        </div>
-        <ResponsiveContainer height={300}>
-          <LineChart data={chartRows}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis tickFormatter={(value) => compactCurrency(Number(value))} />
-            <Tooltip formatter={(value) => currency(Number(value))} />
-            <Legend />
-            <Line dataKey="leftValue" name={left} stroke="#166534" strokeWidth={2} />
-            <Line dataKey="rightValue" name={right} stroke="#1d4ed8" strokeWidth={2} />
-          </LineChart>
-        </ResponsiveContainer>
-      </Panel>
-      <Panel className="span-two">
-        <VarianceGrid
-          rows={rows.filter((row) => row.account === "Revenue")}
-          departmentHierarchy={departmentHierarchy}
-          accountHierarchy={accountHierarchy}
-        />
-      </Panel>
-    </div>
+    <Panel className="span-two">
+      <div className="panel-heading">
+        <h2>Compare scenarios</h2>
+        <span>
+          {left} vs {right}
+        </span>
+      </div>
+      <ResponsiveContainer height={300}>
+        <LineChart data={chartRows}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="month" />
+          <YAxis tickFormatter={(value) => compactCurrency(Number(value))} />
+          <Tooltip formatter={(value) => currency(Number(value))} />
+          <Legend />
+          <Line dataKey="leftValue" name={left} stroke="#166534" strokeWidth={2} />
+          <Line dataKey="rightValue" name={right} stroke="#1d4ed8" strokeWidth={2} />
+        </LineChart>
+      </ResponsiveContainer>
+    </Panel>
   );
 }
 
@@ -1004,13 +997,7 @@ function ScenarioComparisonPage({
 }) {
   return (
     <>
-      <ScenarioComparison
-        rows={rows}
-        left={left}
-        right={right}
-        departmentHierarchy={departmentHierarchy}
-        accountHierarchy={accountHierarchy}
-      />
+      <ScenarioComparison rows={rows} left={left} right={right} />
       <VarianceView
         rows={rows}
         left={left}
@@ -2825,6 +2812,11 @@ function summarizeRows(rows: ActualRow[]): MetricSummary {
     ),
     months: getMonths(rows),
   };
+}
+
+function summarizeVarianceRows(rows: VarianceRow[]): MetricSummary {
+  const varianceRows = rows.map((row) => ({ ...row, value: row.variance }));
+  return summarizeRows(varianceRows);
 }
 
 function sumAccount(rows: ActualRow[], account: string): number {
