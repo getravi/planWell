@@ -1117,7 +1117,7 @@ function TimeSettingsView({
     );
   }
   return (
-    <div className="model-structure">
+    <div className="model-structure time-settings-layout">
       <section className="schema-summary">
         <div>
           <p className="eyebrow">Planning calendar</p>
@@ -1380,11 +1380,17 @@ function DimensionEditor({ kind, members }: { kind: DimensionKind; members: Dime
 
   return (
     <div className="dimension-layout">
-      <Panel>
+      <Panel className={kind === "time" ? "time-tree-panel" : undefined}>
         <div className="panel-heading">
           <h2>{dimensionTitle(kind)} tree</h2>
           <Network size={18} />
         </div>
+        {kind === "time" ? (
+          <div className="time-tree-header" aria-hidden="true">
+            <span>Member</span>
+            <span>Refs</span>
+          </div>
+        ) : null}
         {members.length ? (
           <div
             className={kind === "time" ? "dimension-tree time-tree-scroll" : "dimension-tree"}
