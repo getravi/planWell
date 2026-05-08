@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import type { VarianceRow } from "../domain/types.ts";
 import type { Repository } from "./repository.ts";
 
 export type AnalystAnswer = {
@@ -8,7 +9,10 @@ export type AnalystAnswer = {
 };
 
 export type Analyst = {
-  ask(question: string, context: { scenario?: string }): Promise<AnalystAnswer>;
+  ask(
+    question: string,
+    context: { scenario?: string; compareScenario?: string },
+  ): Promise<AnalystAnswer>;
 };
 
 export function createAnalyst(repo: Repository): Analyst {
@@ -29,7 +33,14 @@ class LocalGroundedAnalyst implements Analyst {
     this.repo = repo;
   }
 
-  async ask(question: string, context: { scenario?: string }): Promise<AnalystAnswer> {
+  async ask(
+    question: string,
+    context: { scenario?: string; compareScenario?: string },
+  ): Promise<AnalystAnswer> {
+    if (context.scenario && context.compareScenario && asksForVariance(question)) {
+      return answerScenarioVariance(this.repo, context.scenario, context.compareScenario);
+    }
+
     const summary = this.repo.getMetricSummary(context.scenario);
     const lowered = question.toLowerCase();
     const department = summary.departments.find((item) =>
@@ -74,7 +85,21 @@ class GeminiAnalyst implements Analyst {
     this.client = new GoogleGenAI({ apiKey });
   }
 
-  async ask(question: string, context: { scenario?: string }): Promise<AnalystAnswer> {
+  async ask(
+    question: string,
+    context: { scenario?: string; compareScenario?: string },
+  ): Promise<AnalystAnswer> {
+    if (context.scenario && context.compareScenario && asksForVariance(question)) {
+      const varianceAnswer = answerScenarioVariance(
+        this.repo,
+        context.scenario,
+        context.compareScenario,
+      );
+      if (varianceAnswer.citations.length > 0) {
+        return varianceAnswer;
+      }
+    }
+
     const getMetricSummaryDeclaration = {
       name: "getMetricSummary",
       description: "Return grounded aggregate FP&A metrics from the imported planning cube.",
@@ -135,6 +160,48 @@ class GeminiAnalyst implements Analyst {
       ],
     };
   }
+}
+
+function asksForVariance(question: string): boolean {
+  return /versus|variance|compare|difference|changed|change|vs\.?/i.test(question);
+}
+
+function answerScenarioVariance(
+  repo: Repository,
+  leftName: string,
+  rightName: string,
+): AnalystAnswer {
+  const rows = repo.compare(leftName, rightName).filter((row) => row.variance !== 0);
+  const largest = [...rows].sort(
+    (left, right) => Math.abs(right.variance) - Math.abs(left.variance),
+  );
+  const top = largest[0];
+  if (!top) {
+    return {
+      answer: `${leftName} vs ${rightName}: there are no material variances in the current forecast rows.`,
+      provider: "local",
+      citations: [{ tool: "compareScenarios", label: "Variance rows", value: 0 }],
+    };
+  }
+
+  return {
+    answer: `${leftName} vs ${rightName}: the largest variance is ${describeVariance(top)}. The next largest changes are ${
+      largest.slice(1, 3).map(describeVariance).join("; ") || "not material"
+    }.`,
+    provider: "local",
+    citations: largest.slice(0, 3).map((row) => ({
+      tool: "compareScenarios",
+      label: `${row.month} ${row.department} ${row.account}`,
+      value: row.variance,
+    })),
+  };
+}
+
+function describeVariance(row: VarianceRow): string {
+  const direction = row.variance >= 0 ? "increased" : "decreased";
+  return `${row.account} for ${row.department} in ${row.month} ${direction} by ${formatCurrency(
+    Math.abs(row.variance),
+  )}`;
 }
 
 function formatCurrency(value: number): string {

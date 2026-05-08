@@ -186,6 +186,34 @@ describe("PlanWell API", () => {
     expect(body.citations[0]).toMatchObject({ tool: "getMetricSummary" });
   });
 
+  it("explains scenario differences from grounded variance rows", async () => {
+    const repo = createTestRepository();
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+      { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 100000 },
+    ]);
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const response = await app.request("/api/analyst/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        question: "What changed versus Aggressive Growth?",
+        scenario: "Base Case",
+        compareScenario: "Aggressive Growth",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.answer).toContain("Base Case vs Aggressive Growth");
+    expect(body.answer).toContain("largest variance");
+    expect(body.citations[0]).toMatchObject({ tool: "compareScenarios" });
+  });
+
   it("manages versions while protecting Actuals", async () => {
     const dbPath = join(mkdtempSync(join(tmpdir(), "planwell-versions-")), "versions.sqlite");
     const repo = createFileRepository(dbPath);

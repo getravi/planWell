@@ -46,6 +46,7 @@ const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
 const analystSchema = z.object({
   question: z.string().min(1),
   scenario: z.string().optional(),
+  compareScenario: z.string().optional(),
 });
 
 const dimensionKindSchema = z.enum(["department", "account", "time"]);
@@ -273,7 +274,12 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.post("/api/analyst/ask", async (context) => {
     const payload = analystSchema.parse(await context.req.json());
-    return context.json(await analyst.ask(payload.question, { scenario: payload.scenario }));
+    return context.json(
+      await analyst.ask(payload.question, {
+        scenario: payload.scenario,
+        compareScenario: payload.compareScenario,
+      }),
+    );
   });
 
   return app;

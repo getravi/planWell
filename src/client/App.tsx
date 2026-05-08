@@ -413,7 +413,9 @@ function Workbench({ userEmail }: { userEmail: string }) {
             accountHierarchy={dimensions.data?.account ?? []}
           />
         ) : null}
-        {view === "Analyst" ? <AnalystView scenario={leftScenario} /> : null}
+        {view === "Analyst" ? (
+          <AnalystView scenario={leftScenario} compareScenario={rightScenario} />
+        ) : null}
         {view === "Dimensions" ? (
           <ModelStructureView
             dimensions={dimensions.data}
@@ -2223,9 +2225,9 @@ function SchemaRelation({ label }: { label: string }) {
   );
 }
 
-function AnalystView({ scenario }: { scenario: string }) {
+function AnalystView({ scenario, compareScenario }: { scenario: string; compareScenario: string }) {
   const [question, setQuestion] = useState("What is driving gross margin in GPU Cloud?");
-  const ask = useMutation({ mutationFn: () => client.ask(question, scenario) });
+  const ask = useMutation({ mutationFn: () => client.ask(question, scenario, compareScenario) });
   return (
     <div className="grid two">
       <Panel>

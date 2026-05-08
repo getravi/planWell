@@ -134,10 +134,13 @@ export const client = {
       method: "POST",
       body: JSON.stringify(scenario),
     }),
-  ask: (question: string, scenario?: string) =>
+  ask: (question: string, scenario?: string, compareScenario?: string) =>
     api<{
       answer: string;
       provider: string;
       citations: { tool: string; label: string; value: number | string }[];
-    }>("/api/analyst/ask", { method: "POST", body: JSON.stringify({ question, scenario }) }),
+    }>("/api/analyst/ask", {
+      method: "POST",
+      body: JSON.stringify({ question, scenario, compareScenario }),
+    }),
 };

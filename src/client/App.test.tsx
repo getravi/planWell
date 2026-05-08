@@ -745,6 +745,77 @@ describe("PlanWell workbench UI", () => {
     expect(await screen.findByText("Compare to")).toBeTruthy();
   });
 
+  it("sends the comparison scenario to the grounded analyst", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({ department: [], account: [], time: [] });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        return json({
+          scenarios: [
+            {
+              id: "base",
+              name: "Base Case",
+              assumptions: { name: "Base Case", global: baseDrivers(), monthly: {}, overrides: {} },
+            },
+            {
+              id: "upside",
+              name: "Aggressive Growth",
+              assumptions: {
+                name: "Aggressive Growth",
+                global: baseDrivers(),
+                monthly: {},
+                overrides: {},
+              },
+            },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/actuals") || url.includes("/api/cube/forecast")) {
+        return json(emptyCube());
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      if (url.endsWith("/api/analyst/ask")) {
+        return json({
+          answer: "Base Case vs Aggressive Growth: largest variance is Revenue.",
+          provider: "local",
+          citations: [{ tool: "compareScenarios", label: "Revenue", value: 100 }],
+        });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: /analyst/i }));
+    await userEvent.clear(screen.getByRole("textbox"));
+    await userEvent.type(screen.getByRole("textbox"), "What changed?");
+    await userEvent.click(screen.getByRole("button", { name: /ask analyst/i }));
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input, init]) => {
+          const url = input instanceof Request ? input.url : input.toString();
+          if (
+            !url.endsWith("/api/analyst/ask") ||
+            init?.method !== "POST" ||
+            typeof init.body !== "string"
+          ) {
+            return false;
+          }
+          const body = JSON.parse(init.body);
+          return body.scenario === "Base Case" && body.compareScenario === "Aggressive Growth";
+        }),
+      ).toBe(true);
+    });
+  });
+
   it("edits dimensions and confirms destructive deletes", async () => {
     let dimensions = {
       department: [
