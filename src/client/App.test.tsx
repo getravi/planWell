@@ -913,12 +913,14 @@ describe("PlanWell workbench UI", () => {
     render(<App />);
     await openAdminPage(/^dimensions$/i);
 
+    expect(document.querySelector(".schema-summary")).toBeNull();
     expect(await screen.findByRole("tab", { name: "Departments" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Accounts" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Time" })).toBeNull();
 
     await openAdminPage(/^time settings$/i);
     expect(screen.getByRole("heading", { name: "Time Settings", level: 1 })).toBeTruthy();
+    expect(document.querySelector(".schema-summary")).toBeNull();
     expect(screen.getByRole("heading", { name: "Time tree" })).toBeTruthy();
     expect(document.querySelector(".time-settings-layout")).toBeTruthy();
     expect(document.querySelector(".time-tree-panel")).toBeTruthy();
@@ -1386,6 +1388,7 @@ describe("PlanWell workbench UI", () => {
     await openAdminPage(/^schema$/i);
 
     expect(screen.getByRole("heading", { name: "Schema" })).toBeTruthy();
+    expect(document.querySelector(".schema-summary")).toBeNull();
     expect(screen.getByText("time_month")).toBeTruthy();
     expect(screen.getAllByText("actuals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
@@ -1505,6 +1508,7 @@ describe("PlanWell workbench UI", () => {
     await openAdminPage(/^versions$/i);
 
     expect(screen.getByRole("heading", { name: "Versions", level: 1 })).toBeTruthy();
+    expect(document.querySelector(".schema-summary")).toBeNull();
     expect(document.querySelector('[data-slot="data-table"]')).toBeTruthy();
     expect(screen.getByRole("table", { name: /all versions/i })).toBeTruthy();
     expect((await screen.findAllByText("Actuals")).length).toBeGreaterThan(1);

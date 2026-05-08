@@ -767,7 +767,7 @@ label {
   gap: 16px;
 }
 .time-settings-layout {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: calc(100vh - 112px);
 }
 .tab-bar {
@@ -938,19 +938,6 @@ label {
 }
 .impact-box span {
   color: #7a2f28;
-}
-.schema-summary {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: end;
-  border-bottom: 1px solid var(--line);
-  margin-top: 20px;
-  padding-bottom: 16px;
-}
-.schema-summary h2 {
-  font-size: 22px;
-  margin-top: 5px;
 }
 .erd-canvas {
   position: relative;
@@ -1220,7 +1207,6 @@ th {
   .topbar {
     flex-wrap: wrap;
   }
-  .schema-summary,
   .erd-canvas,
   .dimension-layout {
     grid-template-columns: 1fr;

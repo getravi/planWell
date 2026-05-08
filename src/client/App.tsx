@@ -1066,16 +1066,6 @@ function ModelStructureView({
   };
   return (
     <div className="model-structure">
-      <section className="schema-summary">
-        <div>
-          <p className="eyebrow">Dimension setup</p>
-          <h2>Dimensions</h2>
-        </div>
-        <p className="muted">
-          Maintain the leaf members used by the planning cube, with single-parent rollups for
-          reporting summaries.
-        </p>
-      </section>
       <div className="tab-bar" role="tablist" aria-label="Model dimensions">
         {(Object.keys(labels) as ("department" | "account")[]).map((kind) => (
           <button
@@ -1125,16 +1115,6 @@ function TimeSettingsView({
   }
   return (
     <div className="model-structure time-settings-layout">
-      <section className="schema-summary">
-        <div>
-          <p className="eyebrow">Planning calendar</p>
-          <h2>Time Settings</h2>
-        </div>
-        <p className="muted">
-          Add planning years or individual months. Year and quarter rollups are derived from the
-          month members used by actuals and forecasts.
-        </p>
-      </section>
       <DimensionEditor kind="time" members={dimensions?.time ?? []} />
     </div>
   );
@@ -1689,17 +1669,6 @@ function VersionsView({
 
   return (
     <div className="model-structure">
-      <section className="schema-summary">
-        <div>
-          <p className="eyebrow">Admin</p>
-          <h2>Versions</h2>
-        </div>
-        <p className="muted">
-          Manage Actuals and scenario versions. New versions copy their data from an existing
-          version.
-        </p>
-      </section>
-
       <Panel>
         <div className="panel-heading">
           <h2>All versions</h2>
@@ -2093,18 +2062,6 @@ function isMonth(value: string): boolean {
 function SchemaView() {
   return (
     <div className="schema-page">
-      <section className="schema-summary">
-        <div>
-          <p className="eyebrow">SQLite dimensional model</p>
-          <h2>Planning cube structure</h2>
-        </div>
-        <p className="muted">
-          Actuals and forecasts are stored separately. Versions now sit with the model dimensions as
-          their own metadata table. Scenarios are simply versions with kind = scenario; every
-          non-Actuals version follows that scenario path.
-        </p>
-      </section>
-
       <section className="erd-canvas" aria-label="Database schema diagram">
         <SchemaLinks />
         <div className="erd-lane dimensions">
