@@ -384,6 +384,29 @@ a {
   gap: 12px;
   margin-bottom: 14px;
 }
+.variance-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.variance-insight {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-muted);
+}
+.variance-insight span,
+.variance-insight small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.variance-insight strong {
+  color: var(--text);
+  font-size: 14px;
+}
 .table-actions {
   display: flex;
   align-items: center;

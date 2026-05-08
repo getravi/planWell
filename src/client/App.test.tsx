@@ -574,10 +574,10 @@ describe("PlanWell workbench UI", () => {
     expect(departmentOptions.some((option) => option.label === "New Ventures")).toBe(true);
 
     await chooseSelectOption(/forecast department/i, "Product");
-    expect(await screen.findByRole("rowheader", { name: "Product" })).toBeTruthy();
+    expect(await screen.findAllByRole("rowheader", { name: "Product" })).not.toHaveLength(0);
     expect(
       screen
-        .getByRole("rowheader", { name: "Product" })
+        .getAllByRole("rowheader", { name: "Product" })[0]
         .closest("tr")
         ?.classList.contains("department-rollup-row"),
     ).toBe(true);
@@ -648,6 +648,15 @@ describe("PlanWell workbench UI", () => {
               variance: 200,
               variancePct: 0.2,
             },
+            {
+              month: "2026-01",
+              department: "GPU Cloud",
+              account: "OpEx",
+              leftValue: 500,
+              rightValue: 650,
+              variance: 150,
+              variancePct: 0.3,
+            },
           ],
         });
       }
@@ -658,14 +667,18 @@ describe("PlanWell workbench UI", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: /variance/i }));
 
-    expect(await screen.findByRole("rowheader", { name: "Product" })).toBeTruthy();
+    expect(await screen.findAllByRole("rowheader", { name: "Product" })).not.toHaveLength(0);
     expect(
       screen
-        .getByRole("rowheader", { name: "Product" })
+        .getAllByRole("rowheader", { name: "Product" })[0]
         .closest("tr")
         ?.classList.contains("department-rollup-row"),
     ).toBe(true);
-    expect(screen.getByRole("rowheader", { name: "GPU Cloud" })).toBeTruthy();
+    expect(screen.getAllByRole("rowheader", { name: "GPU Cloud" })).not.toHaveLength(0);
+    expect(screen.getByText("Largest favorable change")).toBeTruthy();
+    expect(screen.getByText("Revenue increased by $200")).toBeTruthy();
+    expect(screen.getByText("Largest unfavorable change")).toBeTruthy();
+    expect(screen.getByText("OpEx increased by $150")).toBeTruthy();
   });
 
   it("hides the compare selector on Forecast Model and shows it on comparison pages", async () => {

@@ -967,6 +967,7 @@ function VarianceView({
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
+  const insights = buildVarianceInsights(rows);
   return (
     <Panel>
       <div className="panel-heading">
@@ -975,12 +976,30 @@ function VarianceView({
           {left} vs {right}
         </span>
       </div>
+      <div className="variance-insights">
+        <VarianceInsightCard title="Largest favorable change" insight={insights.favorable} />
+        <VarianceInsightCard title="Largest unfavorable change" insight={insights.unfavorable} />
+      </div>
       <VarianceGrid
         rows={rows}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
       />
     </Panel>
+  );
+}
+
+function VarianceInsightCard({ title, insight }: { title: string; insight?: VarianceInsight }) {
+  return (
+    <div className="variance-insight">
+      <span>{title}</span>
+      <strong>{insight ? describeVarianceInsight(insight) : "No material change"}</strong>
+      {insight ? (
+        <small>
+          {insight.department} · {insight.month}
+        </small>
+      ) : null}
+    </div>
   );
 }
 
@@ -2435,6 +2454,10 @@ type PivotVarianceRow = {
   isParent: boolean;
 };
 
+type VarianceInsight = VarianceRow & {
+  favorability: "favorable" | "unfavorable";
+};
+
 function getMonths(rows: { month: string }[]): string[] {
   return [...new Set(rows.map((row) => row.month))].sort((left, right) =>
     left.localeCompare(right),
@@ -2664,6 +2687,39 @@ function summarizeRows(rows: ActualRow[]): MetricSummary {
 
 function sumAccount(rows: ActualRow[], account: string): number {
   return rows.filter((row) => row.account === account).reduce((total, row) => total + row.value, 0);
+}
+
+function buildVarianceInsights(rows: VarianceRow[]): {
+  favorable?: VarianceInsight;
+  unfavorable?: VarianceInsight;
+} {
+  const insights = rows
+    .filter((row) => row.variance !== 0)
+    .map((row) => ({ ...row, favorability: varianceFavorability(row) }));
+  return {
+    favorable: largestByAbsoluteVariance(
+      insights.filter((row) => row.favorability === "favorable"),
+    ),
+    unfavorable: largestByAbsoluteVariance(
+      insights.filter((row) => row.favorability === "unfavorable"),
+    ),
+  };
+}
+
+function largestByAbsoluteVariance(rows: VarianceInsight[]): VarianceInsight | undefined {
+  return rows.sort((left, right) => Math.abs(right.variance) - Math.abs(left.variance))[0];
+}
+
+function varianceFavorability(row: VarianceRow): VarianceInsight["favorability"] {
+  if (row.account === "Revenue") {
+    return row.variance > 0 ? "favorable" : "unfavorable";
+  }
+  return row.variance < 0 ? "favorable" : "unfavorable";
+}
+
+function describeVarianceInsight(row: VarianceInsight): string {
+  const direction = row.variance >= 0 ? "increased" : "decreased";
+  return `${row.account} ${direction} by ${formatCell(row.account, Math.abs(row.variance))}`;
 }
 
 function parsePastedGrid(text: string): string[][] {
