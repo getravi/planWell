@@ -133,6 +133,7 @@ describe("PlanWell workbench UI", () => {
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect((await screen.findAllByText("Forecast Model")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/planwell \/ modeling workbench/i)).toBeNull();
     expect(document.querySelector('[data-slot="sidebar-provider"]')).toBeTruthy();
     expect(document.querySelector('[data-slot="sidebar"]')).toBeTruthy();
     expect(document.querySelector('[data-slot="sidebar-inset"]')).toBeTruthy();

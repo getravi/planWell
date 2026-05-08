@@ -328,7 +328,6 @@ function Workbench({ userEmail }: { userEmail: string }) {
       <SidebarInset className="workspace">
         <SiteHeader className="topbar">
           <div>
-            <p className="eyebrow">PlanWell / Modeling Workbench</p>
             <h1>{view}</h1>
           </div>
           {view !== "Schema" &&
