@@ -829,6 +829,34 @@ label {
   color: var(--ink);
   box-shadow: var(--shadow);
 }
+.dimension-tabs.folder-tabs {
+  display: flex;
+  width: 100%;
+  gap: 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+.dimension-tabs.folder-tabs .dimension-tab {
+  position: relative;
+  top: 1px;
+  border: 1px solid var(--line);
+  border-bottom-color: var(--line);
+  border-radius: 8px 8px 0 0;
+  background: var(--surface-muted);
+  color: var(--muted);
+  padding: 9px 16px 10px;
+}
+.dimension-tabs.folder-tabs .dimension-tab.active,
+.dimension-tabs.folder-tabs .dimension-tab:hover {
+  background: var(--surface);
+  border-color: var(--line);
+  border-bottom-color: var(--surface);
+  box-shadow: none;
+  color: var(--ink);
+}
 .dimension-layout {
   display: grid;
   grid-template-columns: minmax(300px, 0.85fr) minmax(360px, 1.15fr);

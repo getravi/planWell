@@ -1024,6 +1024,10 @@ describe("PlanWell workbench UI", () => {
     expect(await screen.findByRole("tab", { name: "Departments" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Accounts" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Time" })).toBeNull();
+    expect(document.querySelector(".dimension-tabs")).toBeTruthy();
+    expect(document.querySelector(".folder-tabs")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Departments" }).className).toContain("dimension-tab");
+    expect(screen.getByRole("tab", { name: "Departments" }).className).toContain("active");
 
     await openAdminPage(/^time settings$/i);
     expect(screen.getByRole("heading", { name: "Time Settings", level: 1 })).toBeTruthy();

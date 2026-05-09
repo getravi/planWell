@@ -1112,14 +1112,18 @@ function ModelStructureView({
   };
   return (
     <div className="model-structure">
-      <div className="tab-bar" role="tablist" aria-label="Model dimensions">
+      <div
+        className="tab-bar dimension-tabs folder-tabs"
+        role="tablist"
+        aria-label="Model dimensions"
+      >
         {(Object.keys(labels) as ("department" | "account")[]).map((kind) => (
           <button
             key={kind}
             type="button"
             role="tab"
             aria-selected={activeKind === kind}
-            className={activeKind === kind ? "active" : ""}
+            className={activeKind === kind ? "dimension-tab active" : "dimension-tab"}
             onClick={() => setActiveKind(kind)}
           >
             {labels[kind]}
