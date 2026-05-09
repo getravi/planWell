@@ -130,7 +130,10 @@ a {
 }
 
 .sidebar {
-  min-height: calc(100vh - 16px);
+  height: calc(100vh - 16px);
+  position: sticky;
+  top: 8px;
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--sidebar);
@@ -240,22 +243,27 @@ a {
 
 .workspace {
   min-width: 0;
+  height: calc(100vh - 16px);
+  position: sticky;
+  top: 8px;
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface);
-  overflow: visible;
   box-shadow: var(--shadow);
 }
 .workspace > *:not(.topbar) {
   margin-left: 20px;
   margin-right: 20px;
 }
+.workspace > *:nth-child(2) {
+  margin-top: 20px;
+}
 .workspace > *:last-child {
   margin-bottom: 20px;
 }
 .workspace {
   padding: 0;
-  overflow: visible;
 }
 .topbar {
   display: flex;
@@ -314,13 +322,7 @@ a {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  margin-top: 20px;
   margin-bottom: 16px;
-  padding: 12px;
-  box-shadow: var(--shadow);
 }
 .kpi {
   background: var(--surface);
@@ -471,7 +473,7 @@ a {
   background: var(--surface-muted);
 }
 .data-table-row {
-  height: 46px;
+  height: 36px;
 }
 .data-table-row:hover td {
   background: #f8faf7;
@@ -479,10 +481,16 @@ a {
 .data-table-grid th,
 .data-table-grid td {
   border-bottom: 1px solid var(--line);
-  padding: 8px 10px;
+  padding: 4px 10px;
   text-align: left;
   vertical-align: middle;
   white-space: nowrap;
+}
+.data-table-grid td .input,
+.data-table-grid td .select-trigger {
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
 }
 .data-table-grid tbody tr:last-child td {
   border-bottom: 0;
@@ -493,6 +501,40 @@ a {
 }
 .data-table-actions-cell .grid-toolbar {
   justify-content: flex-end;
+}
+.editable-cell-label {
+  display: block;
+  cursor: text;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  transition: background 100ms ease;
+}
+.editable-cell-label:hover {
+  background: var(--surface-soft);
+  outline: 1px dashed var(--line-strong);
+  outline-offset: 0;
+}
+.tree-indent-connector {
+  display: inline-block;
+  width: 14px;
+  height: 12px;
+  margin-right: 2px;
+  margin-left: -14px;
+  vertical-align: middle;
+  border-left: 1.5px solid var(--line-strong);
+  border-bottom: 1.5px solid var(--line-strong);
+  border-radius: 0 0 0 4px;
+  position: relative;
+  top: -2px;
+}
+.time-readonly-label {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .data-table-badge {
   display: inline-flex;
@@ -730,6 +772,157 @@ label {
 }
 .driver-note {
   margin-bottom: 14px;
+}
+.sidebar-help-btn {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.help-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+.help-btn:hover {
+  background: var(--sidebar-active);
+  color: var(--text);
+}
+.help-btn.active {
+  background: var(--sidebar-active);
+  color: var(--text);
+}
+.formula-reference-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+.ref-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.ref-table th {
+  text-align: left;
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ref-table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.ref-table tr:last-child td {
+  border-bottom: none;
+}
+.formula-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+.formula-example {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.formula-example-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.formula-account-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--sidebar-active);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.formula-example-code {
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--surface-soft);
+  border-radius: 6px;
+  display: block;
+  margin: 2px 0;
+}
+.formula-editor {
+  margin: 16px 0;
+}
+.formula-editor summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.formula-editor summary::-webkit-details-marker {
+  display: none;
+}
+.formula-editor[open] summary::before {
+  content: "▼";
+  font-size: 10px;
+}
+.formula-editor:not([open]) summary::before {
+  content: "▶";
+  font-size: 10px;
+}
+.formula-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.formula-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.formula-input-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.formula-input-group .input {
+  flex: 1;
+  font-family: monospace;
+}
+.formula-ok {
+  color: var(--green);
+  font-size: 12px;
+  margin: 0;
+}
+.formula-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 0;
+}
+.input-error {
+  border-color: var(--danger) !important;
 }
 .driver-matrix-wrap {
   overflow-x: auto;

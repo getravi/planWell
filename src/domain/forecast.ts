@@ -1,5 +1,7 @@
+import { DEFAULT_FORMULAS, evaluateFormula, type FormulaContext } from "./formulaEngine.ts";
 import type {
   ActualRow,
+  CoreAccount,
   DepartmentDriverOverride,
   DimensionMember,
   DriverAssumptions,
@@ -8,6 +10,14 @@ import type {
   ScenarioAssumptions,
   VarianceRow,
 } from "./types.ts";
+
+function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccount): number {
+  try {
+    return evaluateFormula(formula, ctx);
+  } catch {
+    return evaluateFormula(DEFAULT_FORMULAS[fallback], ctx);
+  }
+}
 
 const forecastAccounts = ["Revenue", "COGS", "Headcount", "OpEx"] as const;
 
@@ -42,10 +52,70 @@ export function buildForecast(
       );
       const baseRevenue = findLatestValue(actuals, department, "Revenue", lastMonth);
       const baseHeadcount = findLatestValue(actuals, department, "Headcount", lastMonth);
-      const revenue = roundCurrency(baseRevenue * (1 + driver.revenueGrowthRate) ** monthIndex);
-      const cogs = roundCurrency(revenue * driver.cogsPctOfRevenue);
-      const headcount = roundMetric(baseHeadcount * (1 + driver.headcountGrowthRate) ** monthIndex);
-      const opex = roundCurrency(headcount * driver.costPerHead);
+      const baseCogs = findLatestValue(actuals, department, "COGS", lastMonth);
+      const baseOpEx = findLatestValue(actuals, department, "OpEx", lastMonth);
+      const formulaFor = (account: CoreAccount) =>
+        assumptions.formulas?.[account] ?? DEFAULT_FORMULAS[account];
+      const revenue = roundCurrency(
+        safeEvaluate(
+          formulaFor("Revenue"),
+          {
+            base: baseRevenue,
+            growthRate: driver.revenueGrowthRate,
+            cogsPct: driver.cogsPctOfRevenue,
+            costPerHead: driver.costPerHead,
+            month: monthIndex,
+            revenue: 0,
+            headcount: 0,
+          },
+          "Revenue",
+        ),
+      );
+      const cogs = roundCurrency(
+        safeEvaluate(
+          formulaFor("COGS"),
+          {
+            base: baseCogs,
+            growthRate: driver.revenueGrowthRate,
+            cogsPct: driver.cogsPctOfRevenue,
+            costPerHead: driver.costPerHead,
+            month: monthIndex,
+            revenue,
+            headcount: 0,
+          },
+          "COGS",
+        ),
+      );
+      const headcount = roundMetric(
+        safeEvaluate(
+          formulaFor("Headcount"),
+          {
+            base: baseHeadcount,
+            growthRate: driver.headcountGrowthRate,
+            cogsPct: driver.cogsPctOfRevenue,
+            costPerHead: driver.costPerHead,
+            month: monthIndex,
+            revenue,
+            headcount: 0,
+          },
+          "Headcount",
+        ),
+      );
+      const opex = roundCurrency(
+        safeEvaluate(
+          formulaFor("OpEx"),
+          {
+            base: baseOpEx,
+            growthRate: driver.headcountGrowthRate,
+            cogsPct: driver.cogsPctOfRevenue,
+            costPerHead: driver.costPerHead,
+            month: monthIndex,
+            revenue,
+            headcount,
+          },
+          "OpEx",
+        ),
+      );
 
       const values: Record<(typeof forecastAccounts)[number], number> = {
         Revenue: revenue,

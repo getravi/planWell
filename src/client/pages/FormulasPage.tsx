@@ -1,0 +1,171 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Save } from "lucide-react";
+import { useState } from "react";
+import { DEFAULT_FORMULAS } from "../../domain/formulaEngine.ts";
+import type { CoreAccount, ScenarioFormulas } from "../../domain/types.ts";
+import { client } from "../api.ts";
+import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "../ui.tsx";
+
+const FORMULA_ACCOUNTS: CoreAccount[] = ["Revenue", "COGS", "Headcount", "OpEx"];
+
+export function FormulasPage() {
+  const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
+  const scenarioList = scenarios.data?.scenarios ?? [];
+  const [selectedName, setSelectedName] = useState<string>("");
+  const selected = scenarioList.find((s) => s.name === (selectedName || scenarioList[0]?.name));
+
+  if (scenarios.isLoading) return null;
+  if (scenarioList.length === 0) {
+    return (
+      <Panel>
+        <EmptyState title="No scenarios" body="Import actuals to create the default scenario set." />
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel>
+      <div className="panel-heading">
+        <h2>Formula overrides</h2>
+      </div>
+      <p className="muted driver-note">
+        Override the forecasting formula for any account in a scenario. Leave blank to use the
+        default. Visit Formula Reference for available variables and examples.
+      </p>
+      <div className="driver-controls">
+        <label>
+          <Label>Scenario</Label>
+          <Select
+            aria-label="Scenario"
+            value={selected?.name ?? ""}
+            onChange={(e) => setSelectedName(e.target.value)}
+          >
+            {scenarioList.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </div>
+      {selected ? (
+        <FormulaEditor key={selected.id} scenario={selected} />
+      ) : null}
+    </Panel>
+  );
+}
+
+function FormulaEditor({
+  scenario,
+}: {
+  scenario: { id: string; name: string; locked: boolean; assumptions: import("../../domain/types.ts").ScenarioAssumptions };
+}) {
+  const queryClient = useQueryClient();
+  const [formulas, setFormulas] = useState<ScenarioFormulas>(scenario.assumptions.formulas ?? {});
+  const [validationState, setValidationState] = useState<
+    Partial<Record<CoreAccount, { ok: boolean; error?: string; pending: boolean }>>
+  >({});
+  const isLocked = scenario.locked;
+  const hasError = Object.values(validationState).some((s) => s && !s.ok && !s.pending);
+  const isDirty =
+    JSON.stringify(formulas) !== JSON.stringify(scenario.assumptions.formulas ?? {});
+
+  const save = useMutation({
+    mutationFn: () =>
+      client.saveScenario({ ...scenario.assumptions, formulas }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+    },
+  });
+
+  const validate = async (account: CoreAccount, formula: string) => {
+    setValidationState((prev) => ({ ...prev, [account]: { ok: false, pending: true } }));
+    try {
+      const result = await client.validateFormula(formula, account);
+      const error = result.ok ? undefined : (result as { ok: false; error: string }).error;
+      setValidationState((prev) => ({ ...prev, [account]: { ok: result.ok, error, pending: false } }));
+    } catch {
+      setValidationState((prev) => ({
+        ...prev,
+        [account]: { ok: false, error: "Validation request failed.", pending: false },
+      }));
+    }
+  };
+
+  return (
+    <div className="formula-rows" style={{ marginTop: 16 }}>
+      {isLocked ? (
+        <p className="muted driver-note">
+          {scenario.name} is locked. Unlock it in Versions to edit formulas.
+        </p>
+      ) : null}
+      {FORMULA_ACCOUNTS.map((account) => {
+        const formula = formulas[account] ?? "";
+        const state = validationState[account];
+        return (
+          <div key={account} className="formula-row">
+            <Label>{account}</Label>
+            <div className="formula-input-group">
+              <Input
+                aria-label={`${account} formula`}
+                placeholder={DEFAULT_FORMULAS[account]}
+                value={formula}
+                disabled={isLocked}
+                onChange={(e) => {
+                  const next = { ...formulas };
+                  if (e.target.value) {
+                    next[account] = e.target.value;
+                  } else {
+                    delete next[account];
+                    setValidationState((prev) => {
+                      const s = { ...prev };
+                      delete s[account];
+                      return s;
+                    });
+                  }
+                  setFormulas(next);
+                }}
+                onBlur={() => {
+                  if (formula) validate(account, formula);
+                }}
+                className={state && !state.ok && !state.pending ? "input-error" : undefined}
+              />
+              <GhostButton
+                type="button"
+                aria-label={`Reset ${account} to default`}
+                disabled={isLocked || !formula}
+                title="Reset to default"
+                onClick={() => {
+                  const next = { ...formulas };
+                  delete next[account];
+                  setFormulas(next);
+                  setValidationState((prev) => {
+                    const s = { ...prev };
+                    delete s[account];
+                    return s;
+                  });
+                }}
+              >
+                ↺
+              </GhostButton>
+            </div>
+            {state && !state.pending && (
+              <p className={state.ok ? "formula-ok" : "formula-error"}>
+                {state.ok ? "✓ Valid" : state.error}
+              </p>
+            )}
+            {state?.pending && <p className="muted">Validating…</p>}
+          </div>
+        );
+      })}
+      <Button
+        disabled={isLocked || !isDirty || hasError || save.isPending}
+        onClick={() => save.mutate()}
+        style={{ marginTop: 8 }}
+      >
+        <Save size={16} /> Save formulas
+      </Button>
+      {save.error ? <p className="error">{save.error.message}</p> : null}
+    </div>
+  );
+}

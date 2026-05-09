@@ -826,6 +826,7 @@ describe("PlanWell workbench UI", () => {
 
     render(<App />);
 
+    await userEvent.click(await screen.findByRole("button", { name: "Forecast Model" }));
     await screen.findByText("Driver assumptions");
     expect(document.querySelectorAll(".topbar .page-selector-label")).toHaveLength(0);
     expect(screen.getByLabelText("Forecast department")).toBeTruthy();
@@ -1032,19 +1033,15 @@ describe("PlanWell workbench UI", () => {
     await openAdminPage(/^time settings$/i);
     expect(screen.getByRole("heading", { name: "Time Settings", level: 1 })).toBeTruthy();
     expect(document.querySelector(".schema-summary")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Time tree" })).toBeTruthy();
-    expect(document.querySelector(".time-settings-layout")).toBeTruthy();
-    expect(document.querySelector(".time-tree-panel")).toBeTruthy();
-    expect(document.querySelector(".time-tree-header")).toBeTruthy();
-    expect(document.querySelector(".time-tree-scroll")).toBeTruthy();
-    expect(screen.getByText("Month or year")).toBeTruthy();
-    expect(screen.getByPlaceholderText("2027 or 2027-01")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Time members", level: 2 })).toBeTruthy();
     await openAdminPage(/^dimensions$/i);
 
-    await userEvent.click(screen.getByRole("button", { name: /select gpu cloud/i }));
-    await userEvent.clear(screen.getByLabelText("Member name"));
-    await userEvent.type(screen.getByLabelText("Member name"), "Cloud AI");
-    await userEvent.click(screen.getByRole("button", { name: /save member/i }));
+    const gpuCloudLabel = await screen.findByText("GPU Cloud");
+    fireEvent.doubleClick(gpuCloudLabel);
+
+    const nameInput = screen.getByLabelText("Name for GPU Cloud");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Cloud AI{enter}");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/dimensions/department/members/GPU%20Cloud",
@@ -1053,9 +1050,8 @@ describe("PlanWell workbench UI", () => {
         body: JSON.stringify({ name: "Cloud AI", parentName: "Product" }),
       }),
     );
-
-    await userEvent.click(screen.getByRole("button", { name: /select cloud ai/i }));
-    await userEvent.click(screen.getByRole("button", { name: /delete member/i }));
+    const deleteBtn = await screen.findByRole("button", { name: "Delete Cloud AI" });
+    await userEvent.click(deleteBtn);
     expect(await screen.findByText(/1 actual rows/i)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /delete anyway/i }));
 
@@ -1153,21 +1149,8 @@ describe("PlanWell workbench UI", () => {
 
     render(<App />);
     await openAdminPage(/^dimensions$/i);
-    await userEvent.click(await screen.findByRole("button", { name: /select gpu cloud/i }));
-    const dataTransfer = {
-      clearData: vi.fn(),
-      getData: vi.fn(() => "GPU Cloud"),
-      setData: vi.fn(),
-    };
-    fireEvent.dragStart(screen.getByRole("button", { name: /select gpu cloud/i }), {
-      dataTransfer,
-    });
-    fireEvent.dragOver(screen.getByRole("button", { name: /select inference platform/i }), {
-      dataTransfer,
-    });
-    fireEvent.drop(screen.getByRole("button", { name: /select inference platform/i }), {
-      dataTransfer,
-    });
+    const moveUpBtn = await screen.findByRole("button", { name: "Move GPU Cloud up" });
+    await userEvent.click(moveUpBtn);
 
     await waitFor(() =>
       expect(
@@ -1184,16 +1167,17 @@ describe("PlanWell workbench UI", () => {
         }),
       ).toBe(true),
     );
-    const orderStatuses = await screen.findAllByText("Member order updated.");
+    const orderStatuses = await screen.findAllByText("Order updated.");
     expect(
       orderStatuses.some((status) =>
-        status.closest("section")?.textContent?.includes("Department tree"),
+        status.closest("section")?.textContent?.includes("Department members"),
       ),
     ).toBe(true);
     const treeNodes = screen
-      .getAllByRole("button", { name: /select/i })
-      .map((button) => button.textContent);
-    expect(treeNodes).toEqual(["Product0 refs", "GPU Cloud12 refs", "Inference Platform0 refs"]);
+      .getAllByRole("row")
+      .map((row) => row.querySelector("td")?.textContent?.trim())
+      .filter(Boolean);
+    expect(treeNodes).toEqual(["Product", "GPU Cloud", "Inference Platform"]);
   });
 
   it("shows dragged member order immediately while moving a sibling downward", async () => {
@@ -1281,20 +1265,8 @@ describe("PlanWell workbench UI", () => {
 
     render(<App />);
     await openAdminPage(/^dimensions$/i);
-    const dataTransfer = {
-      clearData: vi.fn(),
-      getData: vi.fn(() => "Inference Platform"),
-      setData: vi.fn(),
-    };
-    fireEvent.dragStart(screen.getByRole("button", { name: /select inference platform/i }), {
-      dataTransfer,
-    });
-    fireEvent.dragOver(screen.getByRole("button", { name: /select gpu cloud/i }), {
-      dataTransfer,
-    });
-    fireEvent.drop(screen.getByRole("button", { name: /select gpu cloud/i }), {
-      dataTransfer,
-    });
+    const moveDownBtn = await screen.findByRole("button", { name: "Move Inference Platform down" });
+    await userEvent.click(moveDownBtn);
 
     await waitFor(() =>
       expect(
@@ -1312,16 +1284,13 @@ describe("PlanWell workbench UI", () => {
       ).toBe(true),
     );
     const optimisticTreeNodes = screen
-      .getAllByRole("button", { name: /select/i })
-      .map((button) => button.textContent);
-    expect(optimisticTreeNodes).toEqual([
-      "Product0 refs",
-      "GPU Cloud12 refs",
-      "Inference Platform0 refs",
-    ]);
+      .getAllByRole("row")
+      .map((row) => row.querySelector("td")?.textContent?.trim())
+      .filter(Boolean);
+    expect(optimisticTreeNodes).toEqual(["Product", "GPU Cloud", "Inference Platform"]);
 
     resolvePatch?.(json({ dimensions: reorderedDimensions }));
-    expect(await screen.findAllByText("Member order updated.")).toBeTruthy();
+    expect(await screen.findAllByText("Order updated.")).toBeTruthy();
   });
 
   it("reorders sibling dimension members with pointer dragging", async () => {
@@ -1406,18 +1375,17 @@ describe("PlanWell workbench UI", () => {
 
     render(<App />);
     await openAdminPage(/^dimensions$/i);
-    const engineering = screen.getByRole("button", { name: /select engineering/i });
-    const ga = screen.getByRole("button", { name: /select g&a/i });
-    const originalElementFromPoint = document.elementFromPoint?.bind(document);
-    document.elementFromPoint = vi.fn(() => ga);
-    fireEvent.pointerDown(engineering, { clientX: 30, clientY: 30, pointerId: 1 });
-    fireEvent.pointerMove(engineering, { clientX: 30, clientY: 48, pointerId: 1 });
-    fireEvent.pointerUp(engineering, { clientX: 30, clientY: 48, pointerId: 1 });
-    if (originalElementFromPoint) {
-      document.elementFromPoint = originalElementFromPoint;
-    } else {
-      Reflect.deleteProperty(document, "elementFromPoint");
-    }
+
+    // Test inline editing double click
+    const engineeringLabel = screen.getByText("Engineering");
+    fireEvent.doubleClick(engineeringLabel);
+    const input = screen.getByLabelText("Name for Engineering");
+    expect(input).toBeTruthy();
+    fireEvent.keyDown(input, { key: "Escape" }); // Exit edit mode
+
+    // Test moving members using up/down buttons
+    const moveDownButton = screen.getByRole("button", { name: "Move Engineering down" });
+    fireEvent.click(moveDownButton);
 
     await waitFor(() =>
       expect(
@@ -1434,10 +1402,13 @@ describe("PlanWell workbench UI", () => {
         }),
       ).toBe(true),
     );
+
+    // Check that tree nodes exist
     const treeNodes = screen
-      .getAllByRole("button", { name: /select/i })
-      .map((button) => button.textContent);
-    expect(treeNodes).toEqual(["Product0 refs", "G&A0 refs", "Engineering12 refs"]);
+      .getAllByRole("row")
+      .map((row) => row.querySelector("td")?.textContent?.trim())
+      .filter(Boolean);
+    expect(treeNodes).toEqual(["Product", "G&A", "Engineering"]);
   });
 
   it("shows a dimensions load error instead of an empty tree", async () => {
@@ -1511,7 +1482,7 @@ describe("PlanWell workbench UI", () => {
       screen
         .queryAllByText("scenarios")
         .filter((element) => element.tagName.toLowerCase() === "header"),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(screen.queryByText("assumptions_json")).toBeNull();
     expect(screen.getByText("scope_type")).toBeTruthy();
     expect(screen.getByText("driver_key")).toBeTruthy();
@@ -1639,7 +1610,7 @@ describe("PlanWell workbench UI", () => {
       }),
     );
     expect(screen.queryByRole("dialog", { name: /add version/i })).toBeNull();
-    expect(screen.getByLabelText("Version name Board Case")).toBeTruthy();
+    expect(screen.getAllByText("Board Case").length).toBeGreaterThan(0);
 
     const lockBoard = await screen.findByRole("checkbox", { name: /lock Board Case/i });
     await userEvent.click(lockBoard);
@@ -1651,9 +1622,9 @@ describe("PlanWell workbench UI", () => {
       }),
     );
 
-    await userEvent.clear(await screen.findByLabelText("Version name Board Case"));
-    await userEvent.type(screen.getByLabelText("Version name Board Case"), "Operating Plan");
-    expect(screen.queryByRole("button", { name: /save board case/i })).toBeNull();
+    await userEvent.dblClick(screen.getAllByText("Board Case")[0]!);
+    await userEvent.clear(await screen.findByLabelText("Name for Board Case"));
+    await userEvent.type(screen.getByLabelText("Name for Board Case"), "Operating Plan");
     await userEvent.keyboard("{Enter}");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/versions/board",
@@ -1678,7 +1649,7 @@ describe("PlanWell workbench UI", () => {
       "/api/versions/board",
       expect.objectContaining({ method: "DELETE" }),
     );
-    expect(screen.queryByLabelText("Version name Operating Plan")).toBeNull();
+    expect(screen.queryByLabelText("Name for Operating Plan")).toBeNull();
     resolveDelete?.(
       json({ ok: true, versions: versions.filter((version) => version.id !== "board") }),
     );

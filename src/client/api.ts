@@ -1,5 +1,6 @@
 import type {
   ActualRow,
+  CoreAccount,
   DimensionImpact,
   DimensionKind,
   Dimensions,
@@ -23,6 +24,7 @@ export type VersionRecord = {
   name: string;
   kind: "actuals" | "scenario";
   locked: boolean;
+  sortOrder: number;
   canLock: boolean;
   canRename: boolean;
   canDelete: boolean;
@@ -101,7 +103,7 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ name, sourceId }),
     }),
-  updateVersion: (id: string, changes: { name?: string; locked?: boolean }) =>
+  updateVersion: (id: string, changes: { name?: string; locked?: boolean; sortOrder?: number }) =>
     api<{ version: VersionRecord; versions: VersionRecord[] }>(`/api/versions/${id}`, {
       method: "PATCH",
       body: JSON.stringify(changes),
@@ -136,6 +138,11 @@ export const client = {
     api<{ scenario: ScenarioRecord }>("/api/scenarios", {
       method: "POST",
       body: JSON.stringify(scenario),
+    }),
+  validateFormula: (formula: string, account: CoreAccount) =>
+    api<{ ok: true } | { ok: false; error: string }>("/api/scenarios/validate-formula", {
+      method: "POST",
+      body: JSON.stringify({ formula, account }),
     }),
   ask: (question: string, scenario?: string, compareScenario?: string) =>
     api<{

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { parseActualsCsv } from "../domain/importer.ts";
-import type { ScenarioAssumptions } from "../domain/types.ts";
+import { coreAccounts, type ScenarioAssumptions } from "../domain/types.ts";
 import { createAnalyst } from "./analyst.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
 import { sampleLongCsv, sampleWideCsv } from "./sample-data.ts";
@@ -31,6 +31,8 @@ const driverSchema = z.object({
 
 const partialDriverSchema = driverSchema.partial();
 
+const coreAccountEnum = z.enum(coreAccounts);
+
 const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
   name: z.string().min(1),
   global: driverSchema,
@@ -41,6 +43,12 @@ const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
       monthly: z.record(z.string(), partialDriverSchema).optional(),
     }),
   ),
+  formulas: z.record(coreAccountEnum, z.string().min(1)).optional(),
+});
+
+const formulaValidateSchema = z.object({
+  formula: z.string().min(1),
+  account: coreAccountEnum,
 });
 
 const analystSchema = z.object({
@@ -71,10 +79,15 @@ const versionUpdateSchema = z
   .object({
     name: z.string().min(1).optional(),
     locked: z.boolean().optional(),
+    sortOrder: z.number().optional(),
   })
-  .refine((payload) => payload.name !== undefined || payload.locked !== undefined, {
-    message: "Provide a version name or locked setting.",
-  });
+  .refine(
+    (payload) =>
+      payload.name !== undefined || payload.locked !== undefined || payload.sortOrder !== undefined,
+    {
+      message: "Provide a version name, locked setting, or sort order.",
+    },
+  );
 
 export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -254,6 +267,15 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
       if (error instanceof DimensionReferenceError) {
         return context.json({ error: error.message, impact: error.impact }, 409);
       }
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/scenarios/validate-formula", async (context) => {
+    try {
+      const payload = formulaValidateSchema.parse(await context.req.json());
+      return context.json(repo.validateFormulaExpression(payload.formula, payload.account));
+    } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
   });

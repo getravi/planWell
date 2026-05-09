@@ -22,11 +22,14 @@ export type DepartmentDriverOverride = Partial<DriverAssumptions> & {
   monthly?: Record<string, Partial<DriverAssumptions>>;
 };
 
+export type ScenarioFormulas = Partial<Record<CoreAccount, string>>;
+
 export type ScenarioAssumptions = {
   name: string;
   global: DriverAssumptions;
   monthly?: Record<string, Partial<DriverAssumptions>>;
   overrides: Record<string, DepartmentDriverOverride>;
+  formulas?: ScenarioFormulas;
 };
 
 export type ImportDiagnostics = {

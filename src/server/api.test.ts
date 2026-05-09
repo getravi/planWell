@@ -249,6 +249,7 @@ describe("PlanWell API", () => {
       "locked",
       "created_at",
       "updated_at",
+      "sort_order",
     ]);
     expect(
       inspectDb.prepare("select id, name, kind, locked from versions where id = ?").get("actuals"),
