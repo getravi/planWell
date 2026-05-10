@@ -3,9 +3,7 @@ import type {
   ActualRow,
   CoreAccount,
   CustomVariableDef,
-  DepartmentDriverOverride,
   DimensionMember,
-  DriverAssumptions,
   ForecastRow,
   KpiSummary,
   ScenarioAssumptions,
@@ -15,34 +13,36 @@ import type {
 function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccount): number {
   try {
     return evaluateFormula(formula, ctx);
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[planwell] Formula for ${fallback} failed: ${err instanceof Error ? err.message : String(err)}. Using default formula.`,
+    );
     return evaluateFormula(DEFAULT_FORMULAS[fallback], ctx);
   }
 }
 
 const forecastAccounts = ["Revenue", "COGS", "Headcount", "OpEx"] as const;
 
-export function resolveCustomVarValues(
+export function resolveVarValues(
   defs: CustomVariableDef[],
   assumptions: ScenarioAssumptions,
   department: string,
   month: string,
   monthIndex: number,
-  driver: DriverAssumptions,
   ancestorLookup: Map<string, string[]>,
 ): Record<string, number> {
   const resolved: Record<string, number> = {};
 
   for (const def of defs.filter((d) => d.kind === "input")) {
     let value = def.defaultValue ?? 0;
-    value = assumptions.customVarGlobal?.[def.id] ?? value;
-    value = assumptions.customVarMonthly?.[month]?.[def.id] ?? value;
+    value = assumptions.varGlobal?.[def.id] ?? value;
+    value = assumptions.varMonthly?.[month]?.[def.id] ?? value;
     for (const ancestor of ancestorLookup.get(department) ?? []) {
-      value = assumptions.customVarOverrides?.[ancestor]?.global?.[def.id] ?? value;
-      value = assumptions.customVarOverrides?.[ancestor]?.monthly?.[month]?.[def.id] ?? value;
+      value = assumptions.varOverrides?.[ancestor]?.global?.[def.id] ?? value;
+      value = assumptions.varOverrides?.[ancestor]?.monthly?.[month]?.[def.id] ?? value;
     }
-    value = assumptions.customVarOverrides?.[department]?.global?.[def.id] ?? value;
-    value = assumptions.customVarOverrides?.[department]?.monthly?.[month]?.[def.id] ?? value;
+    value = assumptions.varOverrides?.[department]?.global?.[def.id] ?? value;
+    value = assumptions.varOverrides?.[department]?.monthly?.[month]?.[def.id] ?? value;
     resolved[def.id] = value;
   }
 
@@ -55,9 +55,6 @@ export function resolveCustomVarValues(
 
   const baseCtx: FormulaContext = {
     base: 0,
-    growthRate: driver.revenueGrowthRate,
-    cogsPct: driver.cogsPctOfRevenue,
-    costPerHead: driver.costPerHead,
     month: monthIndex,
     revenue: 0,
     headcount: 0,
@@ -84,7 +81,7 @@ export function buildForecast(
   assumptions: ScenarioAssumptions,
   departmentHierarchy: DimensionMember[] = [],
   forecastMonths?: string[],
-  customVarDefs: CustomVariableDef[] = [],
+  varDefs: CustomVariableDef[] = [],
 ): ForecastRow[] {
   if (actuals.length === 0) {
     return [];
@@ -102,24 +99,12 @@ export function buildForecast(
   for (const month of months.filter((month) => month > lastMonth)) {
     const monthIndex = monthsBetween(lastMonth, month);
     for (const department of departments) {
-      const driver = resolveDriverAssumptions(
-        assumptions.global,
-        assumptions.monthly?.[month],
-        assumptions.overrides[department],
-        month,
-        (ancestorsByDepartment.get(department) ?? []).map((name) => assumptions.overrides[name]),
-      );
-      const baseRevenue = findLatestValue(actuals, department, "Revenue", lastMonth);
-      const baseHeadcount = findLatestValue(actuals, department, "Headcount", lastMonth);
-      const baseCogs = findLatestValue(actuals, department, "COGS", lastMonth);
-      const baseOpEx = findLatestValue(actuals, department, "OpEx", lastMonth);
-      const customVars = resolveCustomVarValues(
-        customVarDefs,
+      const vars = resolveVarValues(
+        varDefs,
         assumptions,
         department,
         month,
         monthIndex,
-        driver,
         ancestorsByDepartment,
       );
       const formulaFor = (account: CoreAccount) =>
@@ -127,64 +112,28 @@ export function buildForecast(
       const revenue = roundCurrency(
         safeEvaluate(
           formulaFor("Revenue"),
-          {
-            base: baseRevenue,
-            growthRate: driver.revenueGrowthRate,
-            cogsPct: driver.cogsPctOfRevenue,
-            costPerHead: driver.costPerHead,
-            month: monthIndex,
-            revenue: 0,
-            headcount: 0,
-            ...customVars,
-          },
+          { base: findLatestValue(actuals, department, "Revenue", lastMonth), month: monthIndex, revenue: 0, headcount: 0, ...vars },
           "Revenue",
         ),
       );
       const cogs = roundCurrency(
         safeEvaluate(
           formulaFor("COGS"),
-          {
-            base: baseCogs,
-            growthRate: driver.revenueGrowthRate,
-            cogsPct: driver.cogsPctOfRevenue,
-            costPerHead: driver.costPerHead,
-            month: monthIndex,
-            revenue,
-            headcount: 0,
-            ...customVars,
-          },
+          { base: findLatestValue(actuals, department, "COGS", lastMonth), month: monthIndex, revenue, headcount: 0, ...vars },
           "COGS",
         ),
       );
       const headcount = roundMetric(
         safeEvaluate(
           formulaFor("Headcount"),
-          {
-            base: baseHeadcount,
-            growthRate: driver.headcountGrowthRate,
-            cogsPct: driver.cogsPctOfRevenue,
-            costPerHead: driver.costPerHead,
-            month: monthIndex,
-            revenue,
-            headcount: 0,
-            ...customVars,
-          },
+          { base: findLatestValue(actuals, department, "Headcount", lastMonth), month: monthIndex, revenue, headcount: 0, ...vars },
           "Headcount",
         ),
       );
       const opex = roundCurrency(
         safeEvaluate(
           formulaFor("OpEx"),
-          {
-            base: baseOpEx,
-            growthRate: driver.headcountGrowthRate,
-            cogsPct: driver.cogsPctOfRevenue,
-            costPerHead: driver.costPerHead,
-            month: monthIndex,
-            revenue,
-            headcount,
-            ...customVars,
-          },
+          { base: findLatestValue(actuals, department, "OpEx", lastMonth), month: monthIndex, revenue, headcount, ...vars },
           "OpEx",
         ),
       );
@@ -249,24 +198,6 @@ export function nextMonths(startMonth: string, count: number): string[] {
     months.push(`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`);
   }
   return months;
-}
-
-export function resolveDriverAssumptions(
-  global: DriverAssumptions,
-  monthly: Partial<DriverAssumptions> | undefined,
-  departmentOverride: DepartmentDriverOverride | undefined,
-  month: string,
-  inheritedOverrides: (DepartmentDriverOverride | undefined)[] = [],
-): DriverAssumptions {
-  const drivers = {
-    ...global,
-    ...monthly,
-  };
-  for (const override of [...inheritedOverrides, departmentOverride]) {
-    const { monthly: departmentMonthly, ...departmentDefault } = override ?? {};
-    Object.assign(drivers, departmentDefault, departmentMonthly?.[month]);
-  }
-  return drivers;
 }
 
 function buildAncestorLookup(members: DimensionMember[]): Map<string, string[]> {

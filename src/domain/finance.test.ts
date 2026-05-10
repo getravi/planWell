@@ -285,4 +285,34 @@ describe("driver-based forecasting", () => {
       },
     ]);
   });
+
+  describe("safeEvaluate fallback", () => {
+    it("falls back to default formula when custom formula references undefined variable", () => {
+      const actuals = [
+        { month: "2025-12", department: "Eng", account: "Revenue", value: 1000 },
+        { month: "2025-12", department: "Eng", account: "COGS", value: 400 },
+        { month: "2025-12", department: "Eng", account: "Headcount", value: 10 },
+        { month: "2025-12", department: "Eng", account: "OpEx", value: 5000 },
+      ];
+      const builtinDefs = [
+        { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
+        { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
+        { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+        { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
+      ];
+      const assumptions = {
+        name: "Test",
+        formulas: { Revenue: "nonExistentVariable * base" },
+      };
+
+      // Should not throw
+      const rows = buildForecast(actuals, assumptions, [], undefined, builtinDefs);
+      expect(rows.length).toBeGreaterThan(0);
+
+      const jan = rows.find((r) => r.month === "2026-01" && r.account === "Revenue");
+      // Falls back to DEFAULT_FORMULAS["Revenue"] = "base * pow(1 + revenueGrowthRate, month)"
+      // With revenueGrowthRate=0 (default), month=1: base * pow(1, 1) = 1000
+      expect(jan?.value).toBeCloseTo(1000, 1);
+    });
+  });
 });
