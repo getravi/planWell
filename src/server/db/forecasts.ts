@@ -59,11 +59,25 @@ export function deleteScenarioOverride(db: DatabaseSync, department: string): vo
 }
 
 export function recalculateAll(db: DatabaseSync): void {
+  const errors: { name: string; message: string }[] = [];
   for (const scenario of readScenarios(db)) {
     if (isVersionLocked(db, scenario.id)) {
       continue;
     }
-    recalculateScenario(db, scenario.name);
+    try {
+      recalculateScenario(db, scenario.name);
+    } catch (err) {
+      errors.push({
+        name: scenario.name,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  if (errors.length > 0) {
+    console.error(
+      `recalculateAll: failed for ${errors.length} scenario(s):\n` +
+        errors.map((e) => `  ${e.name}: ${e.message}`).join("\n"),
+    );
   }
 }
 

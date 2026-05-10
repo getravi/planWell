@@ -792,6 +792,23 @@ describe("PlanWell API", () => {
     expect(months[0]).toBe("2025-08");
     expect(months).toHaveLength(12);
   });
+
+  it("recalculateAll continues past a scenario that throws, does not throw itself", () => {
+    const repo = createTestRepository();
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+      { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 100000 },
+    ]);
+
+    // recalculateAllScenarios should not throw even if internal work fails
+    expect(() => repo.recalculateAllScenarios()).not.toThrow();
+
+    // Other scenarios should have forecast rows
+    const forecast = repo.listForecast("Aggressive Growth");
+    expect(forecast.length).toBeGreaterThan(0);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {
