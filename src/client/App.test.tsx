@@ -32,13 +32,13 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {
+                varMonthly: {
                   "2026-01": {
                     revenueGrowthRate: 0.03,
                     cogsPctOfRevenue: 0.44,
@@ -46,7 +46,7 @@ describe("PlanWell workbench UI", () => {
                     costPerHead: 19000,
                   },
                 },
-                overrides: {
+                varOverrides: {
                   Engineering: {
                     monthly: {
                       "2026-01": {
@@ -62,13 +62,13 @@ describe("PlanWell workbench UI", () => {
               name: "Aggressive Growth",
               assumptions: {
                 name: "Aggressive Growth",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.05,
                   cogsPctOfRevenue: 0.42,
                   headcountGrowthRate: 0.02,
                   costPerHead: 19500,
                 },
-                monthly: {
+                varMonthly: {
                   "2026-01": {
                     revenueGrowthRate: 0.05,
                     cogsPctOfRevenue: 0.42,
@@ -76,7 +76,7 @@ describe("PlanWell workbench UI", () => {
                     costPerHead: 19500,
                   },
                 },
-                overrides: {},
+                varOverrides: {},
               },
             },
           ],
@@ -126,7 +126,7 @@ describe("PlanWell workbench UI", () => {
         return json({ rows: [] });
       }
       if (url.includes("/api/custom-variables")) {
-        return json({ customVariables: [] });
+        return json({ customVariables: builtinVars() });
       }
       return json({});
     });
@@ -220,13 +220,13 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {
+                varMonthly: {
                   "2026-01": {
                     revenueGrowthRate: 0.03,
                     cogsPctOfRevenue: 0.44,
@@ -240,7 +240,7 @@ describe("PlanWell workbench UI", () => {
                     costPerHead: 19200,
                   },
                 },
-                overrides: {
+                varOverrides: {
                   Engineering: {
                     monthly: {
                       "2026-01": {
@@ -278,6 +278,9 @@ describe("PlanWell workbench UI", () => {
       if (url.includes("/api/cube/variance")) {
         return json({ rows: [] });
       }
+      if (url.includes("/api/custom-variables")) {
+        return json({ customVariables: builtinVars() });
+      }
       return json({});
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -304,10 +307,10 @@ describe("PlanWell workbench UI", () => {
     expect(screen.queryByRole("option", { name: "Company defaults" })).toBeNull();
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("rowheader", { name: "Revenue growth" })).toBeTruthy();
+    expect(screen.getByRole("rowheader", { name: "Revenue Growth Rate" })).toBeTruthy();
 
-    await userEvent.clear(screen.getByLabelText("Revenue growth 2026-01"));
-    await userEvent.type(screen.getByLabelText("Revenue growth 2026-01"), "9");
+    await userEvent.clear(screen.getByLabelText("Revenue Growth Rate 2026-01"));
+    await userEvent.type(screen.getByLabelText("Revenue Growth Rate 2026-01"), "9");
     await userEvent.click(screen.getByRole("button", { name: /save scenario/i }));
 
     expect(
@@ -322,8 +325,8 @@ describe("PlanWell workbench UI", () => {
         }
         const body = JSON.parse(init.body);
         return (
-          body.overrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09 &&
-          body.monthly?.["2026-01"]?.revenueGrowthRate === 0.03
+          body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09 &&
+          body.varMonthly?.["2026-01"]?.revenueGrowthRate === 0.03
         );
       }),
     ).toBe(true);
@@ -355,14 +358,14 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {},
-                overrides: {},
+                varMonthly: {},
+                varOverrides: {},
               },
             },
           ],
@@ -383,6 +386,9 @@ describe("PlanWell workbench UI", () => {
       if (url.includes("/api/cube/variance")) {
         return json({ rows: [] });
       }
+      if (url.includes("/api/custom-variables")) {
+        return json({ customVariables: builtinVars() });
+      }
       return json({});
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -390,12 +396,12 @@ describe("PlanWell workbench UI", () => {
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: /forecast model/i }));
 
-    fireEvent.paste(await screen.findByLabelText("Revenue growth 2026-01"), {
+    fireEvent.paste(await screen.findByLabelText("Revenue Growth Rate 2026-01"), {
       clipboardData: {
         getData: () => "10%,11%\n45%,46%",
       },
     });
-    fireEvent.paste(await screen.findByLabelText("Headcount growth 2026-01"), {
+    fireEvent.paste(await screen.findByLabelText("Headcount Growth Rate 2026-01"), {
       clipboardData: {
         getData: () => "2\t3\n20000\t21000",
       },
@@ -413,7 +419,7 @@ describe("PlanWell workbench UI", () => {
           return false;
         }
         const body = JSON.parse(init.body);
-        const override = body.overrides["Total Company"]?.monthly;
+        const override = body.varOverrides["Total Company"]?.monthly;
         return (
           override?.["2026-01"]?.revenueGrowthRate === 0.1 &&
           override?.["2026-02"]?.revenueGrowthRate === 0.11 &&
@@ -463,13 +469,13 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {
+                varMonthly: {
                   "2026-01": {
                     revenueGrowthRate: 0.03,
                     cogsPctOfRevenue: 0.44,
@@ -483,7 +489,7 @@ describe("PlanWell workbench UI", () => {
                     costPerHead: 19200,
                   },
                 },
-                overrides: {},
+                varOverrides: {},
               },
             },
           ],
@@ -559,14 +565,14 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {},
-                overrides: {},
+                varMonthly: {},
+                varOverrides: {},
               },
             },
           ],
@@ -650,16 +656,16 @@ describe("PlanWell workbench UI", () => {
             {
               id: "base",
               name: "Base Case",
-              assumptions: { name: "Base Case", global: baseDrivers(), monthly: {}, overrides: {} },
+              assumptions: { name: "Base Case", varGlobal: baseDrivers(), varMonthly: {}, varOverrides: {} },
             },
             {
               id: "upside",
               name: "Aggressive Growth",
               assumptions: {
                 name: "Aggressive Growth",
-                global: baseDrivers(),
-                monthly: {},
-                overrides: {},
+                varGlobal: baseDrivers(),
+                varMonthly: {},
+                varOverrides: {},
               },
             },
           ],
@@ -780,14 +786,14 @@ describe("PlanWell workbench UI", () => {
               name: "Base Case",
               assumptions: {
                 name: "Base Case",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.03,
                   cogsPctOfRevenue: 0.44,
                   headcountGrowthRate: 0.01,
                   costPerHead: 19000,
                 },
-                monthly: {},
-                overrides: {},
+                varMonthly: {},
+                varOverrides: {},
               },
             },
             {
@@ -795,14 +801,14 @@ describe("PlanWell workbench UI", () => {
               name: "Aggressive Growth",
               assumptions: {
                 name: "Aggressive Growth",
-                global: {
+                varGlobal: {
                   revenueGrowthRate: 0.05,
                   cogsPctOfRevenue: 0.42,
                   headcountGrowthRate: 0.02,
                   costPerHead: 19500,
                 },
-                monthly: {},
-                overrides: {},
+                varMonthly: {},
+                varOverrides: {},
               },
             },
           ],
@@ -868,16 +874,16 @@ describe("PlanWell workbench UI", () => {
             {
               id: "base",
               name: "Base Case",
-              assumptions: { name: "Base Case", global: baseDrivers(), monthly: {}, overrides: {} },
+              assumptions: { name: "Base Case", varGlobal: baseDrivers(), varMonthly: {}, varOverrides: {} },
             },
             {
               id: "upside",
               name: "Aggressive Growth",
               assumptions: {
                 name: "Aggressive Growth",
-                global: baseDrivers(),
-                monthly: {},
-                overrides: {},
+                varGlobal: baseDrivers(),
+                varMonthly: {},
+                varOverrides: {},
               },
             },
           ],
@@ -1473,7 +1479,7 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
     expect(screen.getByText("driver_assumptions")).toBeTruthy();
     expect(screen.getAllByText("versions").length).toBeGreaterThan(0);
-    expect(screen.getByText("kind")).toBeTruthy();
+    expect(screen.getAllByText("kind").length).toBeGreaterThan(0);
     expect(screen.getByText("actuals or scenario")).toBeTruthy();
     expect(
       screen
@@ -1497,7 +1503,7 @@ describe("PlanWell workbench UI", () => {
       "Dimensions",
     );
     expect(screen.getAllByText("scenario_id -> versions.id").length).toBeGreaterThan(0);
-    expect(screen.getByText("Hierarchy level assumptions")).toBeTruthy();
+    expect(screen.getByText("Legacy builtin drivers — migrated to custom_variable_values")).toBeTruthy();
     expect(screen.getByText("Driver assumptions")).toBeTruthy();
     expect(screen.getByLabelText("ERD relationship lines")).toBeTruthy();
   });
@@ -1737,4 +1743,13 @@ function baseDrivers() {
     headcountGrowthRate: 0.01,
     costPerHead: 19000,
   };
+}
+
+function builtinVars() {
+  return [
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input", defaultValue: 0 },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input", defaultValue: 0 },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input", defaultValue: 0 },
+    { id: "costPerHead", label: "Cost per Head", kind: "input", defaultValue: 0 },
+  ];
 }

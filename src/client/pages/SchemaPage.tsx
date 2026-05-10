@@ -126,12 +126,48 @@ export function SchemaPage() {
           </div>
           <div className="schema-note-card">
             <strong>Driver assumptions</strong>
-            <span>Hierarchy level assumptions</span>
-            <span>Department members inherit ancestor drivers until overridden</span>
+            <span>Legacy builtin drivers — migrated to custom_variable_values</span>
+            <span>Department members inherit ancestor values until overridden</span>
             <code>revenueGrowthRate</code>
             <code>cogsPctOfRevenue</code>
             <code>headcountGrowthRate</code>
             <code>costPerHead</code>
+          </div>
+        </div>
+
+        <div className="erd-lane custom-vars">
+          <span className="lane-label">Custom variables</span>
+          <SchemaTable
+            name="custom_variables"
+            tone="scenario"
+            fields={[
+              ["PK", "id"],
+              ["", "label"],
+              ["", "kind"],
+              ["", "input or calculated"],
+              ["", "formula"],
+              ["", "sort_order"],
+            ]}
+          />
+          <SchemaRelation label="var values keyed by scenario + variable + scope" />
+          <SchemaTable
+            name="custom_variable_values"
+            tone="scenario"
+            fields={[
+              ["FK", "scenario_id -> versions.id"],
+              ["FK", "var_id -> custom_variables.id"],
+              ["", "scope"],
+              ["", "global | YYYY-MM | dept:Name | dept:Name:YYYY-MM"],
+              ["", "value"],
+              ["PK", "scenario_id + var_id + scope"],
+            ]}
+          />
+          <div className="schema-note-card">
+            <strong>Custom variable resolution</strong>
+            <span>6-level precedence: default → global → monthly → ancestor dept global → ancestor dept monthly → dept global → dept monthly</span>
+            <span>Calculated vars evaluated in topological order after inputs</span>
+            <code>input</code>
+            <code>calculated</code>
           </div>
         </div>
 
