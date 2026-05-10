@@ -106,10 +106,6 @@ export function SchemaPage() {
             <span>Scenarios are versions with kind = scenario</span>
             <span>Locked scenario versions are read-only</span>
             <span>Everything other than Actuals is a scenario version</span>
-            <code>actuals</code>
-            <code>versions</code>
-            <code>forecast_values</code>
-            <code>scenarios</code>
           </div>
         </div>
 
