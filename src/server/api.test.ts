@@ -793,7 +793,7 @@ describe("PlanWell API", () => {
     expect(months).toHaveLength(12);
   });
 
-  it("legacy migration rolls back completely when a row has invalid JSON", async () => {
+  it("legacy migration is atomic — rolls back partial custom_variable_values writes on error", async () => {
     const db = new DatabaseSync(":memory:");
     db.exec(`
       create table scenarios (
@@ -803,7 +803,27 @@ describe("PlanWell API", () => {
         created_at text not null,
         updated_at text not null
       );
+      create table custom_variable_values (
+        scenario_id text not null,
+        var_id text not null,
+        scope text not null,
+        value real not null,
+        primary key (scenario_id, var_id, scope)
+      );
     `);
+
+    // First row: valid JSON → replaceVarValues will write to custom_variable_values
+    db.prepare(
+      "insert into scenarios (id, name, assumptions_json, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    ).run(
+      "good-id",
+      "Good Case",
+      JSON.stringify({ name: "Good Case", global: { revenueGrowthRate: 0.05 } }),
+      "2025-01-01",
+      "2025-01-01",
+    );
+
+    // Second row: invalid JSON → will throw mid-migration
     db.prepare(
       "insert into scenarios (id, name, assumptions_json, created_at, updated_at) values (?, ?, ?, ?, ?)",
     ).run("bad-id", "Bad Case", "NOT_VALID_JSON", "2025-01-01", "2025-01-01");
@@ -812,7 +832,14 @@ describe("PlanWell API", () => {
 
     expect(() => migrateLegacyScenarioAssumptions(db)).toThrow();
 
-    // The scenarios table should still have assumptions_json column (migration rolled back)
+    // Without a transaction, the first row's custom_variable_values writes would persist.
+    // With a transaction, they must be rolled back.
+    const varRows = db
+      .prepare("select count(*) as cnt from custom_variable_values where scenario_id = ?")
+      .get("good-id") as { cnt: number };
+    expect(varRows.cnt).toBe(0);
+
+    // The scenarios table should still have assumptions_json (DDL was rolled back too)
     const columns = db.prepare("pragma table_info(scenarios)").all() as { name: string }[];
     expect(columns.map((c) => c.name)).toContain("assumptions_json");
   });
