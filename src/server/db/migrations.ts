@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { defaultScenarios } from "../sample-data.ts";
 import { hashPassword } from "../security.ts";
-import { ensureColumn, actualsVersionId } from "./utils.ts";
+import { ensureColumn, actualsVersionId, withTransaction } from "./utils.ts";
 import type { ScenarioRow, LegacyScenarioRow } from "./utils.ts";
 import { backfillDimensionOrder } from "./dimensions.ts";
 import { backfillVersionOrder } from "./versions.ts";
@@ -116,39 +116,41 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
     return;
   }
 
-  const legacyRows = db.prepare("select * from scenarios").all() as LegacyScenarioRow[];
-  for (const row of legacyRows) {
-    const old = JSON.parse(row.assumptions_json) as {
-      name: string;
-      global?: Record<string, number>;
-      monthly?: Record<string, Record<string, number>>;
-      overrides?: Record<string, { monthly?: Record<string, Record<string, number>>; [k: string]: unknown }>;
-    };
-    replaceVarValues(db, row.id, {
-      name: old.name,
-      varGlobal: old.global ?? {},
-      varMonthly: old.monthly,
-      varOverrides: Object.fromEntries(
-        Object.entries(old.overrides ?? {}).map(([dept, ov]) => {
-          const { monthly, ...rest } = ov;
-          return [dept, { global: rest as Record<string, number>, monthly: monthly as Record<string, Record<string, number>> | undefined }];
-        }),
-      ),
-    });
-  }
+  withTransaction(db, () => {
+    const legacyRows = db.prepare("select * from scenarios").all() as LegacyScenarioRow[];
+    for (const row of legacyRows) {
+      const old = JSON.parse(row.assumptions_json) as {
+        name: string;
+        global?: Record<string, number>;
+        monthly?: Record<string, Record<string, number>>;
+        overrides?: Record<string, { monthly?: Record<string, Record<string, number>>; [k: string]: unknown }>;
+      };
+      replaceVarValues(db, row.id, {
+        name: old.name,
+        varGlobal: old.global ?? {},
+        varMonthly: old.monthly,
+        varOverrides: Object.fromEntries(
+          Object.entries(old.overrides ?? {}).map(([dept, ov]) => {
+            const { monthly, ...rest } = ov;
+            return [dept, { global: rest as Record<string, number>, monthly: monthly as Record<string, Record<string, number>> | undefined }];
+          }),
+        ),
+      });
+    }
 
-  db.exec(`
-    alter table scenarios rename to scenarios_legacy;
-    create table scenarios (
-      id text primary key,
-      name text not null unique,
-      created_at text not null,
-      updated_at text not null
-    );
-    insert into scenarios (id, name, created_at, updated_at)
-    select id, name, created_at, updated_at from scenarios_legacy;
-    drop table scenarios_legacy;
-  `);
+    db.exec(`
+      alter table scenarios rename to scenarios_legacy;
+      create table scenarios (
+        id text primary key,
+        name text not null unique,
+        created_at text not null,
+        updated_at text not null
+      );
+      insert into scenarios (id, name, created_at, updated_at)
+      select id, name, created_at, updated_at from scenarios_legacy;
+      drop table scenarios_legacy;
+    `);
+  });
 }
 
 function seedBuiltinVars(db: DatabaseSync): void {

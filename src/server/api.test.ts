@@ -793,6 +793,30 @@ describe("PlanWell API", () => {
     expect(months).toHaveLength(12);
   });
 
+  it("legacy migration rolls back completely when a row has invalid JSON", async () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec(`
+      create table scenarios (
+        id text primary key,
+        name text not null unique,
+        assumptions_json text not null,
+        created_at text not null,
+        updated_at text not null
+      );
+    `);
+    db.prepare(
+      "insert into scenarios (id, name, assumptions_json, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    ).run("bad-id", "Bad Case", "NOT_VALID_JSON", "2025-01-01", "2025-01-01");
+
+    const { migrateLegacyScenarioAssumptions } = await import("./db/migrations.ts");
+
+    expect(() => migrateLegacyScenarioAssumptions(db)).toThrow();
+
+    // The scenarios table should still have assumptions_json column (migration rolled back)
+    const columns = db.prepare("pragma table_info(scenarios)").all() as { name: string }[];
+    expect(columns.map((c) => c.name)).toContain("assumptions_json");
+  });
+
   it("recalculateAll continues past a scenario that throws, does not throw itself", () => {
     const repo = createTestRepository();
     repo.replaceActuals([
