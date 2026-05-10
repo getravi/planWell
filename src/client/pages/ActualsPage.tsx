@@ -16,7 +16,6 @@ import { client, type MetricSummary } from "../api.ts";
 import type { ActualRow, DimensionMember } from "../../domain/types.ts";
 import { RevenueChart } from "../components/RevenueChart.tsx";
 import {
-  aggregateByMonth,
   buildActualGridMatrix,
   buildActualGridTsv,
   copyGrid,

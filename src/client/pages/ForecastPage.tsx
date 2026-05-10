@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Save, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
-  ActualRow,
   CustomVariableDef,
   DimensionMember,
   ForecastRow,
