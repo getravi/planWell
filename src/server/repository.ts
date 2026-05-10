@@ -6,6 +6,7 @@ import { validateFormula } from "../domain/formulaEngine.ts";
 import type {
   ActualRow,
   CoreAccount,
+  CustomVariableDef,
   DimensionImpact,
   DimensionKind,
   Dimensions,
@@ -39,6 +40,13 @@ import { recalculateScenario, recalculateAll } from "./db/forecasts.ts";
 import { withTransaction } from "./db/utils.ts";
 import type { UserRow } from "./db/utils.ts";
 import { DimensionReferenceError } from "./db/dimensions.ts";
+import {
+  listCustomVariables as dbListCustomVariables,
+  createCustomVariable as dbCreateCustomVariable,
+  updateCustomVariable as dbUpdateCustomVariable,
+  deleteCustomVariable as dbDeleteCustomVariable,
+  validateCustomVariableFormula,
+} from "./db/customVariables.ts";
 
 export type { ScenarioRecord, VersionRecord };
 export { DimensionReferenceError };
@@ -95,6 +103,17 @@ export type Repository = {
   validateFormulaExpression(
     formula: string,
     account: CoreAccount,
+  ): { ok: true } | { ok: false; error: string };
+  listCustomVariables(): CustomVariableDef[];
+  createCustomVariable(def: CustomVariableDef): CustomVariableDef;
+  updateCustomVariable(
+    id: string,
+    patch: { label?: string; formula?: string; sortOrder?: number },
+  ): CustomVariableDef;
+  deleteCustomVariable(id: string): void;
+  validateCustomVariableFormula(
+    formula: string,
+    availableIds: string[],
   ): { ok: true } | { ok: false; error: string };
 };
 
@@ -229,6 +248,21 @@ function createRepository(db: DatabaseSync): Repository {
     },
     validateFormulaExpression(formula, account) {
       return validateFormula(formula, account);
+    },
+    listCustomVariables() {
+      return dbListCustomVariables(db);
+    },
+    createCustomVariable(def) {
+      return dbCreateCustomVariable(db, def);
+    },
+    updateCustomVariable(id, patch) {
+      return dbUpdateCustomVariable(db, id, patch);
+    },
+    deleteCustomVariable(id) {
+      dbDeleteCustomVariable(db, id);
+    },
+    validateCustomVariableFormula(formula, availableIds) {
+      return validateCustomVariableFormula(formula, availableIds);
     },
     getMetricSummary(scenarioName) {
       const rows = scenarioName ? this.listForecast(scenarioName) : this.listActuals();

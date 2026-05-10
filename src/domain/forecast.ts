@@ -1,7 +1,8 @@
-import { DEFAULT_FORMULAS, evaluateFormula, type FormulaContext } from "./formulaEngine.ts";
+import { DEFAULT_FORMULAS, evaluateFormula, topoSortCustomVars, type FormulaContext } from "./formulaEngine.ts";
 import type {
   ActualRow,
   CoreAccount,
+  CustomVariableDef,
   DepartmentDriverOverride,
   DimensionMember,
   DriverAssumptions,
@@ -21,11 +22,69 @@ function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccoun
 
 const forecastAccounts = ["Revenue", "COGS", "Headcount", "OpEx"] as const;
 
+export function resolveCustomVarValues(
+  defs: CustomVariableDef[],
+  assumptions: ScenarioAssumptions,
+  department: string,
+  month: string,
+  monthIndex: number,
+  driver: DriverAssumptions,
+  ancestorLookup: Map<string, string[]>,
+): Record<string, number> {
+  const resolved: Record<string, number> = {};
+
+  for (const def of defs.filter((d) => d.kind === "input")) {
+    let value = def.defaultValue ?? 0;
+    value = assumptions.customVarGlobal?.[def.id] ?? value;
+    value = assumptions.customVarMonthly?.[month]?.[def.id] ?? value;
+    for (const ancestor of ancestorLookup.get(department) ?? []) {
+      value = assumptions.customVarOverrides?.[ancestor]?.global?.[def.id] ?? value;
+      value = assumptions.customVarOverrides?.[ancestor]?.monthly?.[month]?.[def.id] ?? value;
+    }
+    value = assumptions.customVarOverrides?.[department]?.global?.[def.id] ?? value;
+    value = assumptions.customVarOverrides?.[department]?.monthly?.[month]?.[def.id] ?? value;
+    resolved[def.id] = value;
+  }
+
+  let sortedCalc: CustomVariableDef[];
+  try {
+    sortedCalc = topoSortCustomVars(defs.filter((d) => d.kind === "calculated"));
+  } catch {
+    sortedCalc = defs.filter((d) => d.kind === "calculated");
+  }
+
+  const baseCtx: FormulaContext = {
+    base: 0,
+    growthRate: driver.revenueGrowthRate,
+    cogsPct: driver.cogsPctOfRevenue,
+    costPerHead: driver.costPerHead,
+    month: monthIndex,
+    revenue: 0,
+    headcount: 0,
+    ...resolved,
+  };
+
+  for (const def of sortedCalc) {
+    if (!def.formula) {
+      resolved[def.id] = 0;
+      continue;
+    }
+    try {
+      resolved[def.id] = evaluateFormula(def.formula, { ...baseCtx, ...resolved });
+    } catch {
+      resolved[def.id] = 0;
+    }
+  }
+
+  return resolved;
+}
+
 export function buildForecast(
   actuals: ActualRow[],
   assumptions: ScenarioAssumptions,
   departmentHierarchy: DimensionMember[] = [],
   forecastMonths?: string[],
+  customVarDefs: CustomVariableDef[] = [],
 ): ForecastRow[] {
   if (actuals.length === 0) {
     return [];
@@ -54,6 +113,15 @@ export function buildForecast(
       const baseHeadcount = findLatestValue(actuals, department, "Headcount", lastMonth);
       const baseCogs = findLatestValue(actuals, department, "COGS", lastMonth);
       const baseOpEx = findLatestValue(actuals, department, "OpEx", lastMonth);
+      const customVars = resolveCustomVarValues(
+        customVarDefs,
+        assumptions,
+        department,
+        month,
+        monthIndex,
+        driver,
+        ancestorsByDepartment,
+      );
       const formulaFor = (account: CoreAccount) =>
         assumptions.formulas?.[account] ?? DEFAULT_FORMULAS[account];
       const revenue = roundCurrency(
@@ -67,6 +135,7 @@ export function buildForecast(
             month: monthIndex,
             revenue: 0,
             headcount: 0,
+            ...customVars,
           },
           "Revenue",
         ),
@@ -82,6 +151,7 @@ export function buildForecast(
             month: monthIndex,
             revenue,
             headcount: 0,
+            ...customVars,
           },
           "COGS",
         ),
@@ -97,6 +167,7 @@ export function buildForecast(
             month: monthIndex,
             revenue,
             headcount: 0,
+            ...customVars,
           },
           "Headcount",
         ),
@@ -112,6 +183,7 @@ export function buildForecast(
             month: monthIndex,
             revenue,
             headcount,
+            ...customVars,
           },
           "OpEx",
         ),

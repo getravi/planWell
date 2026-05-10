@@ -3,6 +3,7 @@ import { Copy, Save, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   ActualRow,
+  CustomVariableDef,
   DimensionMember,
   DriverAssumptions,
   ForecastRow,
@@ -39,6 +40,7 @@ export function ForecastPage({
   departments,
   departmentHierarchy,
   accountHierarchy,
+  customVarDefs = [],
 }: {
   scenarios: ScenarioRecord[];
   selected: string;
@@ -47,6 +49,7 @@ export function ForecastPage({
   departments: string[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  customVarDefs?: CustomVariableDef[];
 }) {
   const scenario = scenarios.find((item) => item.name === selected);
   const months = [
@@ -72,6 +75,7 @@ export function ForecastPage({
         departments={modelDepartments}
         departmentHierarchy={departmentHierarchy}
         departmentFilter={departmentFilter}
+        customVarDefs={customVarDefs}
       />
       <Panel className="span-two">
         <div className="panel-heading">
@@ -101,12 +105,14 @@ function ScenarioEditor({
   departments,
   departmentHierarchy,
   departmentFilter,
+  customVarDefs,
 }: {
   scenario?: ScenarioRecord;
   months: string[];
   departments: string[];
   departmentHierarchy: DimensionMember[];
   departmentFilter: string;
+  customVarDefs: CustomVariableDef[];
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
@@ -227,6 +233,35 @@ function ScenarioEditor({
     });
   };
 
+  const updateCustomVar = (month: string, varId: string, value: number) => {
+    const deptOverride = active.customVarOverrides?.[selectedDepartment] ?? {};
+    setDraft({
+      ...active,
+      customVarOverrides: {
+        ...active.customVarOverrides,
+        [selectedDepartment]: {
+          ...deptOverride,
+          monthly: {
+            ...deptOverride.monthly,
+            [month]: { ...deptOverride.monthly?.[month], [varId]: value },
+          },
+        },
+      },
+    });
+  };
+
+  const resolveCustomVarDisplay = (varId: string, month: string, defaultValue = 0): number => {
+    let value = active.customVarGlobal?.[varId] ?? defaultValue;
+    value = active.customVarMonthly?.[month]?.[varId] ?? value;
+    for (const ancestor of ancestorLookup.get(selectedDepartment) ?? []) {
+      value = active.customVarOverrides?.[ancestor]?.global?.[varId] ?? value;
+      value = active.customVarOverrides?.[ancestor]?.monthly?.[month]?.[varId] ?? value;
+    }
+    value = active.customVarOverrides?.[selectedDepartment]?.global?.[varId] ?? value;
+    value = active.customVarOverrides?.[selectedDepartment]?.monthly?.[month]?.[varId] ?? value;
+    return value;
+  };
+
   return (
     <Panel className="span-two">
       <div className="panel-heading">
@@ -318,6 +353,34 @@ function ScenarioEditor({
                     </td>
                   );
                 })}
+              </tr>
+            ))}
+            {customVarDefs.map((def) => (
+              <tr key={def.id}>
+                <th scope="row">
+                  {def.label}
+                  {def.kind === "calculated" ? (
+                    <span className="formula-badge">formula</span>
+                  ) : null}
+                </th>
+                {monthOptions.map((month) => (
+                  <td key={`${def.id}-${month}`}>
+                    {def.kind === "calculated" ? (
+                      <span className="muted calculated-cell">—</span>
+                    ) : (
+                      <Input
+                        aria-label={`${def.label} ${month}`}
+                        disabled={isLocked}
+                        type="number"
+                        step="any"
+                        value={resolveCustomVarDisplay(def.id, month, def.defaultValue ?? 0)}
+                        onChange={(event) =>
+                          updateCustomVar(month, def.id, Number(event.target.value))
+                        }
+                      />
+                    )}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

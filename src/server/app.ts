@@ -33,6 +33,9 @@ const partialDriverSchema = driverSchema.partial();
 
 const coreAccountEnum = z.enum(coreAccounts);
 
+const customVarValuesSchema = z.record(z.string(), z.number());
+const partialCustomVarValuesSchema = z.record(z.string(), z.number().optional());
+
 const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
   name: z.string().min(1),
   global: driverSchema,
@@ -44,6 +47,36 @@ const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
     }),
   ),
   formulas: z.record(coreAccountEnum, z.string().min(1)).optional(),
+  customVarGlobal: customVarValuesSchema.optional(),
+  customVarMonthly: z.record(z.string(), partialCustomVarValuesSchema).optional(),
+  customVarOverrides: z
+    .record(
+      z.string(),
+      z.object({
+        global: partialCustomVarValuesSchema.optional(),
+        monthly: z.record(z.string(), partialCustomVarValuesSchema).optional(),
+      }),
+    )
+    .optional(),
+});
+
+const customVarCreateSchema = z.object({
+  id: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Must be a valid identifier"),
+  label: z.string().min(1),
+  kind: z.enum(["input", "calculated"]),
+  formula: z.string().optional(),
+  defaultValue: z.number().optional(),
+});
+
+const customVarUpdateSchema = z.object({
+  label: z.string().min(1).optional(),
+  formula: z.string().optional(),
+  sortOrder: z.number().optional(),
+});
+
+const customVarValidateSchema = z.object({
+  formula: z.string().min(1),
+  availableIds: z.array(z.string()),
 });
 
 const formulaValidateSchema = z.object({
@@ -275,6 +308,48 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     try {
       const payload = formulaValidateSchema.parse(await context.req.json());
       return context.json(repo.validateFormulaExpression(payload.formula, payload.account));
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.get("/api/custom-variables", (context) => {
+    return context.json({ customVariables: repo.listCustomVariables() });
+  });
+
+  app.post("/api/custom-variables/validate-formula", async (context) => {
+    try {
+      const payload = customVarValidateSchema.parse(await context.req.json());
+      return context.json(repo.validateCustomVariableFormula(payload.formula, payload.availableIds));
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/custom-variables", async (context) => {
+    try {
+      const payload = customVarCreateSchema.parse(await context.req.json());
+      const def = repo.createCustomVariable(payload);
+      return context.json({ customVariable: def, customVariables: repo.listCustomVariables() }, 201);
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.put("/api/custom-variables/:id", async (context) => {
+    try {
+      const payload = customVarUpdateSchema.parse(await context.req.json());
+      const def = repo.updateCustomVariable(context.req.param("id"), payload);
+      return context.json({ customVariable: def, customVariables: repo.listCustomVariables() });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.delete("/api/custom-variables/:id", (context) => {
+    try {
+      repo.deleteCustomVariable(context.req.param("id"));
+      return context.json({ ok: true, customVariables: repo.listCustomVariables() });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }

@@ -125,6 +125,9 @@ describe("PlanWell workbench UI", () => {
       if (url.includes("/api/cube/variance")) {
         return json({ rows: [] });
       }
+      if (url.includes("/api/custom-variables")) {
+        return json({ customVariables: [] });
+      }
       return json({});
     });
     vi.stubGlobal("fetch", fetchMock);

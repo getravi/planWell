@@ -12,6 +12,7 @@ import {
   Settings,
   Settings2,
   SquareFunction,
+  Variable,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { client, type MetricSummary } from "./api.ts";
@@ -43,6 +44,7 @@ import { currency, number, percent } from "./format.ts";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { ActualsPage } from "./pages/ActualsPage.tsx";
 import { AnalystPage } from "./pages/AnalystPage.tsx";
+import { CustomVariablesPage } from "./pages/CustomVariablesPage.tsx";
 import { DimensionsPage } from "./pages/DimensionsPage.tsx";
 import { ForecastPage } from "./pages/ForecastPage.tsx";
 import { FormulaReferencePage } from "./pages/FormulaReferencePage.tsx";
@@ -87,6 +89,7 @@ const VIEWS = [
   "Time Settings",
   "Versions",
   "Formulas",
+  "Custom Variables",
   "Schema",
   "Formula Reference",
 ];
@@ -130,6 +133,11 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [actualsDepartment, setActualsDepartment] = useState("__all__");
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
   const actuals = useQuery({ queryKey: ["actuals"], queryFn: client.actuals });
+  const customVariables = useQuery({
+    queryKey: ["custom-variables"],
+    queryFn: () => client.listCustomVariables().then((r) => r.customVariables ?? []),
+    enabled: view === "Forecast Model" || view === "Custom Variables",
+  });
   const dimensions = useQuery({
     queryKey: ["dimensions"],
     queryFn: client.dimensions,
@@ -217,6 +225,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
     view === "Time Settings" ||
     view === "Versions" ||
     view === "Formulas" ||
+    view === "Custom Variables" ||
     view === "Schema" ||
     view === "Formula Reference";
 
@@ -303,6 +312,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                     ["Time Settings", CalendarDays],
                     ["Versions", Copy],
                     ["Formulas", SquareFunction],
+                    ["Custom Variables", Variable],
                     ["Schema", Database],
                   ].map(([label, Icon]) => (
                     <SidebarMenuItem key={label as string}>
@@ -416,6 +426,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
         view !== "Time Settings" &&
         view !== "Versions" &&
         view !== "Formulas" &&
+        view !== "Custom Variables" &&
         view !== "Formula Reference" ? (
           <KpiStrip
             summary={currentSummary}
@@ -439,6 +450,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             departments={forecastDepartments}
             departmentHierarchy={dimensions.data?.department ?? []}
             accountHierarchy={dimensions.data?.account ?? []}
+            customVarDefs={customVariables.data ?? []}
           />
         ) : null}
         {view === "Scenario Comparison" ? (
@@ -478,6 +490,9 @@ function Workbench({ userEmail }: { userEmail: string }) {
           />
         ) : null}
         {view === "Formulas" ? <FormulasPage /> : null}
+        {view === "Custom Variables" ? (
+          <CustomVariablesPage customVariables={customVariables.data ?? []} />
+        ) : null}
         {view === "Schema" ? <SchemaPage /> : null}
         {view === "Formula Reference" ? <FormulaReferencePage /> : null}
       </SidebarInset>

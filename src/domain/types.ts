@@ -24,12 +24,30 @@ export type DepartmentDriverOverride = Partial<DriverAssumptions> & {
 
 export type ScenarioFormulas = Partial<Record<CoreAccount, string>>;
 
+export type CustomVariableKind = "input" | "calculated";
+
+export type CustomVariableDef = {
+  id: string;
+  label: string;
+  kind: CustomVariableKind;
+  formula?: string;
+  defaultValue?: number;
+};
+
+export type CustomVarValues = Record<string, number>;
+
 export type ScenarioAssumptions = {
   name: string;
   global: DriverAssumptions;
   monthly?: Record<string, Partial<DriverAssumptions>>;
   overrides: Record<string, DepartmentDriverOverride>;
   formulas?: ScenarioFormulas;
+  customVarGlobal?: CustomVarValues;
+  customVarMonthly?: Record<string, Partial<CustomVarValues>>;
+  customVarOverrides?: Record<
+    string,
+    { global?: Partial<CustomVarValues>; monthly?: Record<string, Partial<CustomVarValues>> }
+  >;
 };
 
 export type ImportDiagnostics = {

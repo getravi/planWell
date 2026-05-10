@@ -57,6 +57,20 @@ export function migrate(db: DatabaseSync): void {
       formula text not null,
       primary key (scenario_id, account)
     );
+    create table if not exists custom_variables (
+      id text primary key,
+      label text not null,
+      kind text not null check(kind in ('input','calculated')),
+      formula text,
+      sort_order integer not null default 0
+    );
+    create table if not exists custom_variable_values (
+      scenario_id text not null,
+      var_id text not null,
+      scope text not null,
+      value real not null,
+      primary key (scenario_id, var_id, scope)
+    );
     create index if not exists actuals_cube_idx on actuals (month, department, account);
     create index if not exists driver_assumptions_lookup_idx on driver_assumptions (scenario_id, scope_type, scope_key, month);
     create index if not exists forecast_cube_idx on forecast_values (scenario_id, month, department, account);

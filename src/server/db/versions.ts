@@ -17,6 +17,11 @@ import { selectCubeRows } from "./actuals.ts";
 import { insertForecastRows, selectForecastRowsByScenarioId } from "./forecasts.ts";
 import { validateFormula } from "../../domain/formulaEngine.ts";
 import { recalculateScenario } from "./forecasts.ts";
+import {
+  readCustomVarValues,
+  replaceCustomVarValues,
+  deleteCustomVariableValuesByScenario,
+} from "./customVariables.ts";
 
 export type ScenarioRecord = {
   id: string;
@@ -74,6 +79,7 @@ export function createVersion(db: DatabaseSync, rawName: string, sourceId: strin
     );
     replaceDriverAssumptions(db, id, assumptions);
     replaceScenarioFormulas(db, id, assumptions.formulas);
+    replaceCustomVarValues(db, id, assumptions);
     const sourceRows =
       sourceId === actualsVersionId
         ? selectCubeRows(db, "actuals")
@@ -133,6 +139,7 @@ export function deleteVersion(db: DatabaseSync, id: string): void {
     db.prepare("delete from forecast_values where scenario_id = ?").run(id);
     db.prepare("delete from driver_assumptions where scenario_id = ?").run(id);
     db.prepare("delete from scenario_formulas where scenario_id = ?").run(id);
+    deleteCustomVariableValuesByScenario(db, id);
     db.prepare("delete from scenarios where id = ?").run(id);
     db.prepare("delete from versions where id = ?").run(id);
   });
@@ -339,6 +346,16 @@ export function readScenarios(db: DatabaseSync): ScenarioRecord[] {
       if (Object.keys(formulas).length > 0) {
         assumptions.formulas = formulas;
       }
+      const customVarData = readCustomVarValues(db, row.id);
+      if (Object.keys(customVarData.customVarGlobal).length > 0) {
+        assumptions.customVarGlobal = customVarData.customVarGlobal;
+      }
+      if (Object.keys(customVarData.customVarMonthly).length > 0) {
+        assumptions.customVarMonthly = customVarData.customVarMonthly;
+      }
+      if (Object.keys(customVarData.customVarOverrides).length > 0) {
+        assumptions.customVarOverrides = customVarData.customVarOverrides;
+      }
       return {
         id: row.id,
         name: row.name,
@@ -417,6 +434,7 @@ export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumption
     `).run(id, assumptions.name, now, now);
     replaceDriverAssumptions(db, id, assumptions);
     replaceScenarioFormulas(db, id, assumptions.formulas);
+    replaceCustomVarValues(db, id, assumptions);
   });
   recalculateScenario(db, assumptions.name);
   return readScenarios(db).find((scenario) => scenario.name === assumptions.name)!;

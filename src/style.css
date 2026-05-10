@@ -1534,6 +1534,53 @@ details[open] .export-menu-chevron {
   outline-offset: -2px;
   background: white;
 }
+.formula-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--surface-muted);
+  color: var(--muted);
+  vertical-align: middle;
+}
+.calculated-cell {
+  display: block;
+  text-align: right;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.ref-table-wrap {
+  overflow-x: auto;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.radio-group {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
 
 @media (max-width: 920px) {
   .login-shell,

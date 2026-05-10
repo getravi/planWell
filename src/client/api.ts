@@ -1,6 +1,7 @@
 import type {
   ActualRow,
   CoreAccount,
+  CustomVariableDef,
   DimensionImpact,
   DimensionKind,
   Dimensions,
@@ -143,6 +144,30 @@ export const client = {
     api<{ ok: true } | { ok: false; error: string }>("/api/scenarios/validate-formula", {
       method: "POST",
       body: JSON.stringify({ formula, account }),
+    }),
+  listCustomVariables: () =>
+    api<{ customVariables: CustomVariableDef[] }>("/api/custom-variables"),
+  createCustomVariable: (def: CustomVariableDef) =>
+    api<{ customVariable: CustomVariableDef; customVariables: CustomVariableDef[] }>(
+      "/api/custom-variables",
+      { method: "POST", body: JSON.stringify(def) },
+    ),
+  updateCustomVariable: (
+    id: string,
+    patch: { label?: string; formula?: string; sortOrder?: number },
+  ) =>
+    api<{ customVariable: CustomVariableDef; customVariables: CustomVariableDef[] }>(
+      `/api/custom-variables/${id}`,
+      { method: "PUT", body: JSON.stringify(patch) },
+    ),
+  deleteCustomVariable: (id: string) =>
+    api<{ ok: true; customVariables: CustomVariableDef[] }>(`/api/custom-variables/${id}`, {
+      method: "DELETE",
+    }),
+  validateCustomFormula: (formula: string, availableIds: string[]) =>
+    api<{ ok: true } | { ok: false; error: string }>("/api/custom-variables/validate-formula", {
+      method: "POST",
+      body: JSON.stringify({ formula, availableIds }),
     }),
   ask: (question: string, scenario?: string, compareScenario?: string) =>
     api<{

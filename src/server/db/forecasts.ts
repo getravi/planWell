@@ -5,6 +5,7 @@ import { readScenarios, replaceDriverAssumptions, isVersionLocked } from "./vers
 import { listNamedDimension } from "./dimensions.ts";
 import { withTransaction } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
+import { listCustomVariables } from "./customVariables.ts";
 
 export function countDriverAssumptionRows(db: DatabaseSync, scenarioId: string): number {
   const row = db
@@ -86,6 +87,7 @@ export function recalculateScenario(db: DatabaseSync, name: string): void {
     scenario.assumptions,
     listNamedDimension(db, "department"),
     listPlanningForecastMonths(db),
+    listCustomVariables(db),
   );
   withTransaction(db, () => {
     db.prepare("delete from forecast_values where scenario_id = ?").run(scenario.id);
