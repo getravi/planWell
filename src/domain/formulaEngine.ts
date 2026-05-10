@@ -3,11 +3,16 @@ import type { CoreAccount, CustomVariableDef } from "./types.ts";
 
 const math = create(all);
 
+math.import(
+  {
+    import: () => { throw new Error("import is not allowed in formulas"); },
+    createUnit: () => { throw new Error("createUnit is not allowed in formulas"); },
+  },
+  { override: true },
+);
+
 export type FormulaContext = {
   base: number;
-  growthRate: number;
-  cogsPct: number;
-  costPerHead: number;
   month: number;
   revenue: number;
   headcount: number;
@@ -15,11 +20,20 @@ export type FormulaContext = {
 };
 
 export const DEFAULT_FORMULAS: Record<CoreAccount, string> = {
-  Revenue: "base * pow(1 + growthRate, month)",
-  COGS: "revenue * cogsPct",
-  Headcount: "base * pow(1 + growthRate, month)",
+  Revenue: "base * pow(1 + revenueGrowthRate, month)",
+  COGS: "revenue * cogsPctOfRevenue",
+  Headcount: "base * pow(1 + headcountGrowthRate, month)",
   OpEx: "headcount * costPerHead",
 };
+
+export const BUILTIN_VAR_IDS = [
+  "revenueGrowthRate",
+  "cogsPctOfRevenue",
+  "headcountGrowthRate",
+  "costPerHead",
+] as const;
+
+export type BuiltinVarId = (typeof BUILTIN_VAR_IDS)[number];
 
 export function evaluateFormula(formula: string, context: FormulaContext): number {
   const result = math.evaluate(formula, { ...context });
@@ -109,9 +123,6 @@ export function validateCustomFormula(
   }
   const dryRunContext: FormulaContext = {
     base: 1000,
-    growthRate: 0.05,
-    cogsPct: 0.4,
-    costPerHead: 15000,
     month: 1,
     revenue: 1000,
     headcount: 20,
@@ -131,7 +142,11 @@ export function validateCustomFormula(
   return { ok: true };
 }
 
-export function validateFormula(formula: string, account: CoreAccount): FormulaValidationResult {
+export function validateFormula(
+  formula: string,
+  account: CoreAccount,
+  extraVars?: Record<string, number>,
+): FormulaValidationResult {
   try {
     math.parse(formula);
   } catch (err) {
@@ -142,12 +157,10 @@ export function validateFormula(formula: string, account: CoreAccount): FormulaV
   }
   const dryRunContext: FormulaContext = {
     base: 1000,
-    growthRate: 0.05,
-    cogsPct: 0.4,
-    costPerHead: 15000,
     month: 1,
     revenue: account === "COGS" || account === "OpEx" ? 1000 : 0,
     headcount: account === "OpEx" ? 20 : 0,
+    ...extraVars,
   };
   try {
     const value = evaluateFormula(formula, dryRunContext);

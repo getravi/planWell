@@ -1,6 +1,25 @@
 import { describe, expect, it } from "vite-plus/test";
 import { buildForecast, compareSeries } from "./forecast.ts";
 import { parseActualsCsv } from "./importer.ts";
+import { evaluateFormula } from "./formulaEngine.ts";
+
+describe("formulaEngine sandbox", () => {
+  it("blocks mathjs import() in a formula", () => {
+    const ctx = { base: 1000, month: 1, revenue: 1000, headcount: 20 };
+    expect(() => evaluateFormula('import("mathjs")', ctx)).toThrow();
+  });
+
+  it("blocks createUnit in a formula", () => {
+    const ctx = { base: 1000, month: 1, revenue: 1000, headcount: 20 };
+    expect(() => evaluateFormula("createUnit('widget', '1 kg')", ctx)).toThrow();
+  });
+
+  it("allows normal arithmetic formulas", () => {
+    const ctx = { base: 1000, month: 1, revenue: 1000, headcount: 20, revenueGrowthRate: 0.1 };
+    const result = evaluateFormula("base * pow(1 + revenueGrowthRate, month)", ctx);
+    expect(result).toBeCloseTo(1100, 2);
+  });
+});
 
 describe("CSV actuals importer", () => {
   it("normalizes long/tidy CSV rows and aggregates duplicates", () => {
@@ -58,19 +77,26 @@ describe("driver-based forecasting", () => {
 2025-12,Engineering,OpEx,300000
 `).rows;
 
+  const builtinDefs = [
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+    { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
+  ];
+
   it("builds a 12-month forward forecast from global defaults and department overrides", () => {
     const forecast = buildForecast(actuals, {
       name: "Base Case",
-      global: {
+      varGlobal: {
         revenueGrowthRate: 0.1,
         cogsPctOfRevenue: 0.42,
         headcountGrowthRate: 0.05,
         costPerHead: 15000,
       },
-      overrides: {
-        Engineering: { headcountGrowthRate: 0.1, costPerHead: 18000 },
+      varOverrides: {
+        Engineering: { global: { headcountGrowthRate: 0.1, costPerHead: 18000 } },
       },
-    });
+    }, [], undefined, builtinDefs);
 
     expect(forecast).toHaveLength(96);
     expect(
@@ -104,13 +130,13 @@ describe("driver-based forecasting", () => {
   it("uses month-level drivers and department month overrides", () => {
     const forecast = buildForecast(actuals, {
       name: "Monthly Plan",
-      global: {
+      varGlobal: {
         revenueGrowthRate: 0.01,
         cogsPctOfRevenue: 0.5,
         headcountGrowthRate: 0.01,
         costPerHead: 15000,
       },
-      monthly: {
+      varMonthly: {
         "2026-01": {
           revenueGrowthRate: 0.1,
           cogsPctOfRevenue: 0.4,
@@ -124,7 +150,7 @@ describe("driver-based forecasting", () => {
           costPerHead: 16000,
         },
       },
-      overrides: {
+      varOverrides: {
         "GPU Cloud": {
           monthly: {
             "2026-02": {
@@ -142,7 +168,7 @@ describe("driver-based forecasting", () => {
           },
         },
       },
-    });
+    }, [], undefined, builtinDefs);
 
     expect(
       forecast.find(
@@ -175,14 +201,14 @@ describe("driver-based forecasting", () => {
       actuals,
       {
         name: "Hierarchy Plan",
-        global: {
+        varGlobal: {
           revenueGrowthRate: 0,
           cogsPctOfRevenue: 0.5,
           headcountGrowthRate: 0,
           costPerHead: 10000,
         },
-        monthly: {},
-        overrides: {
+        varMonthly: {},
+        varOverrides: {
           "Total Company": {
             monthly: {
               "2026-01": { revenueGrowthRate: 0.1, costPerHead: 12000 },
@@ -218,6 +244,8 @@ describe("driver-based forecasting", () => {
           ],
         },
       ],
+      undefined,
+      builtinDefs,
     );
 
     expect(
