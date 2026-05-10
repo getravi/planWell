@@ -5,9 +5,9 @@ Financial planning and forecasting tool for growing teams. Import actuals, model
 ## Features
 
 - **Actuals import** — paste long or wide CSV; auto-detects shape, aggregates duplicates
-- **Scenario forecasting** — multiple named scenarios with per-department, per-month driver overrides
-- **Custom variables** — user-defined input and calculated variables with mathjs formulas
-- **Formula engine** — per-account formula overrides (Revenue, COGS, OpEx, Headcount)
+- **Scenario forecasting** — multiple named scenarios; lock versions for audit trail
+- **Custom variables** — user-defined input and calculated variables with mathjs formulas; values override per-department per-month, with ancestor dept inheritance
+- **Formula engine** — per-scenario, per-account formula overrides (Revenue, COGS, OpEx, Headcount); falls back to shared defaults
 - **Variance analysis** — side-by-side scenario comparison with % and absolute delta
 - **AI analyst** — natural language questions answered from live forecast data (Google Gemini)
 - **Dimension management** — hierarchical departments and accounts with drag-to-reorder
