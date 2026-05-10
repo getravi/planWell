@@ -860,6 +860,65 @@ describe("PlanWell API", () => {
     const forecast = repo.listForecast("Aggressive Growth");
     expect(forecast.length).toBeGreaterThan(0);
   });
+
+  it("blocks deleting a custom variable that is referenced in a formula", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const createA = await app.request("/api/custom-variables", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ id: "myRate", label: "My Rate", kind: "input" }),
+    });
+    expect(createA.status).toBe(201);
+
+    const createB = await app.request("/api/custom-variables", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ id: "myCalc", label: "My Calc", kind: "calculated", formula: "myRate * 2" }),
+    });
+    expect(createB.status).toBe(201);
+
+    const del = await app.request("/api/custom-variables/myRate", {
+      method: "DELETE",
+      headers: { cookie },
+    });
+    expect(del.status).toBe(400);
+    const body = await del.json();
+    expect(body.error).toContain("myRate");
+  });
+
+  it("rejects mathjs import() in formula validation", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const result = await app.request("/api/scenarios/validate-formula", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ formula: 'import("mathjs")', account: "Revenue" }),
+    });
+    expect(result.status).toBe(200);
+    const body = await result.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/undefined function import/i);
+  });
+
+  it("rejects createUnit in custom variable formula validation", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const result = await app.request("/api/custom-variables/validate-formula", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ formula: "createUnit('widget', '1')", availableIds: [] }),
+    });
+    expect(result.status).toBe(200);
+    const body = await result.json();
+    expect(body.ok).toBe(false);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {
