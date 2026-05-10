@@ -1477,7 +1477,6 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByText("time_month")).toBeTruthy();
     expect(screen.getAllByText("actuals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("forecast_values").length).toBeGreaterThan(0);
-    expect(screen.getByText("driver_assumptions")).toBeTruthy();
     expect(screen.getAllByText("versions").length).toBeGreaterThan(0);
     expect(screen.getAllByText("kind").length).toBeGreaterThan(0);
     expect(screen.getByText("actuals or scenario")).toBeTruthy();
@@ -1487,8 +1486,8 @@ describe("PlanWell workbench UI", () => {
         .filter((element) => element.tagName.toLowerCase() === "header"),
     ).toHaveLength(1);
     expect(screen.queryByText("assumptions_json")).toBeNull();
-    expect(screen.getByText("scope_type")).toBeTruthy();
-    expect(screen.getByText("driver_key")).toBeTruthy();
+    expect(screen.queryByText("driver_assumptions")).toBeNull();
+    expect(screen.queryByText("scope_type")).toBeNull();
     expect(screen.getAllByText("parent_name").length).toBeGreaterThan(0);
     expect(screen.getAllByText("sort_order").length).toBeGreaterThan(0);
     expect(screen.getByText("Derived time hierarchy")).toBeTruthy();
@@ -1503,8 +1502,10 @@ describe("PlanWell workbench UI", () => {
       "Dimensions",
     );
     expect(screen.getAllByText("scenario_id -> versions.id").length).toBeGreaterThan(0);
-    expect(screen.getByText("Legacy builtin drivers — migrated to custom_variable_values")).toBeTruthy();
-    expect(screen.getByText("Driver assumptions")).toBeTruthy();
+    expect(screen.getByText("custom_variables")).toBeTruthy();
+    expect(screen.getByText("custom_variable_values")).toBeTruthy();
+    expect(screen.getByText("var_id -> custom_variables.id")).toBeTruthy();
+    expect(screen.getByText("input or calculated")).toBeTruthy();
     expect(screen.getByLabelText("ERD relationship lines")).toBeTruthy();
   });
 

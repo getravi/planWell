@@ -91,19 +91,6 @@ export function SchemaPage() {
           />
           <SchemaRelation label="scenario rows use scenarios.id / versions.id" />
           <SchemaTable
-            name="driver_assumptions"
-            tone="scenario"
-            fields={[
-              ["FK", "scenario_id -> versions.id"],
-              ["", "scope_type"],
-              ["", "scope_key"],
-              ["", "month"],
-              ["", "driver_key"],
-              ["", "value"],
-              ["PK", "scenario_id + scope_type + scope_key + month + driver_key"],
-            ]}
-          />
-          <SchemaTable
             name="scenario_formulas"
             tone="scenario"
             fields={[
@@ -113,7 +100,7 @@ export function SchemaPage() {
               ["PK", "scenario_id + account"],
             ]}
           />
-          <SchemaRelation label="Driver assumptions generate forecast cells" />
+          <SchemaRelation label="var values + formulas drive forecast calculation" />
           <div className="schema-note-card">
             <strong>Versions & Scenarios</strong>
             <span>Scenarios are versions with kind = scenario</span>
@@ -123,15 +110,6 @@ export function SchemaPage() {
             <code>versions</code>
             <code>forecast_values</code>
             <code>scenarios</code>
-          </div>
-          <div className="schema-note-card">
-            <strong>Driver assumptions</strong>
-            <span>Legacy builtin drivers — migrated to custom_variable_values</span>
-            <span>Department members inherit ancestor values until overridden</span>
-            <code>revenueGrowthRate</code>
-            <code>cogsPctOfRevenue</code>
-            <code>headcountGrowthRate</code>
-            <code>costPerHead</code>
           </div>
         </div>
 
