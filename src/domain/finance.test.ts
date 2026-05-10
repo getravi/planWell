@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildForecast, compareSeries } from "./forecast.ts";
+import { buildForecast, compareSeries, nextMonths } from "./forecast.ts";
 import { parseActualsCsv } from "./importer.ts";
 import { evaluateFormula } from "./formulaEngine.ts";
 
@@ -340,5 +340,30 @@ describe("driver-based forecasting", () => {
       // With revenueGrowthRate=0 (default), month=1: base * pow(1, 1) = 1000
       expect(jan?.value).toBeCloseTo(1000, 1);
     });
+  });
+});
+
+describe("nextMonths", () => {
+  it("returns empty array for empty string input", () => {
+    expect(nextMonths("", 12)).toEqual([]);
+  });
+
+  it("returns empty array for invalid month format", () => {
+    expect(nextMonths("not-a-month", 12)).toEqual([]);
+  });
+
+  it("returns empty array for out-of-range month (month 13)", () => {
+    expect(nextMonths("2025-13", 12)).toEqual([]);
+  });
+
+  it("returns 12 valid months for valid input", () => {
+    const months = nextMonths("2025-12", 12);
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe("2026-01");
+    expect(months[11]).toBe("2026-12");
+  });
+
+  it("handles December to January rollover", () => {
+    expect(nextMonths("2025-11", 2)).toEqual(["2025-12", "2026-01"]);
   });
 });

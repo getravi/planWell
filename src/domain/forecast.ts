@@ -193,7 +193,18 @@ export function summarizeKpis(rows: ActualRow[]): KpiSummary {
 }
 
 export function nextMonths(startMonth: string, count: number): string[] {
-  const [yearRaw, monthRaw] = startMonth.split("-").map(Number);
+  const parts = startMonth.split("-");
+  const yearRaw = Number(parts[0]);
+  const monthRaw = Number(parts[1]);
+  if (
+    parts.length !== 2 ||
+    !Number.isFinite(yearRaw) ||
+    !Number.isFinite(monthRaw) ||
+    monthRaw < 1 ||
+    monthRaw > 12
+  ) {
+    return [];
+  }
   const months: string[] = [];
   for (let index = 1; index <= count; index += 1) {
     const date = new Date(Date.UTC(yearRaw, monthRaw - 1 + index, 1));
