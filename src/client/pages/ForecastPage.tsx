@@ -5,7 +5,6 @@ import type {
   ActualRow,
   CustomVariableDef,
   DimensionMember,
-  DriverAssumptions,
   ForecastRow,
   ScenarioAssumptions,
 } from "../../domain/types.ts";
@@ -13,7 +12,6 @@ import { client, type ScenarioRecord } from "../api.ts";
 import {
   buildActualGridMatrix,
   buildActualGridTsv,
-  buildDriverGridTsv,
   copyGrid,
   formatHorizonLabel,
   getMonths,
@@ -31,6 +29,12 @@ import { formatCell } from "../format.ts";
 import { Button, EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui.tsx";
 import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 import { RevenueChart } from "./ActualsPage.tsx";
+
+const PERCENT_VAR_IDS = new Set([
+  "revenueGrowthRate",
+  "cogsPctOfRevenue",
+  "headcountGrowthRate",
+]);
 
 export function ForecastPage({
   scenarios,
@@ -55,8 +59,8 @@ export function ForecastPage({
   const months = [
     ...new Set([
       ...rows.map((row) => row.month),
-      ...Object.keys(scenario?.assumptions.monthly ?? {}),
-      ...Object.values(scenario?.assumptions.overrides ?? {}).flatMap((override) =>
+      ...Object.keys(scenario?.assumptions.varMonthly ?? {}),
+      ...Object.values(scenario?.assumptions.varOverrides ?? {}).flatMap((override) =>
         Object.keys(override.monthly ?? {}),
       ),
     ]),
@@ -65,7 +69,7 @@ export function ForecastPage({
   const modelDepartments = orderedNamesFromMembers(flattenMembers(departmentHierarchy), [
     ...departments,
     ...rows.map((row) => row.department),
-    ...(departmentFilter === "__all__" ? Object.keys(scenario?.assumptions.overrides ?? {}) : []),
+    ...(departmentFilter === "__all__" ? Object.keys(scenario?.assumptions.varOverrides ?? {}) : []),
   ]);
   return (
     <div className="grid two">
@@ -75,7 +79,7 @@ export function ForecastPage({
         departments={modelDepartments}
         departmentHierarchy={departmentHierarchy}
         departmentFilter={departmentFilter}
-        customVarDefs={customVarDefs}
+        varDefs={customVarDefs}
       />
       <Panel className="span-two">
         <div className="panel-heading">
@@ -105,14 +109,14 @@ function ScenarioEditor({
   departments,
   departmentHierarchy,
   departmentFilter,
-  customVarDefs,
+  varDefs,
 }: {
   scenario?: ScenarioRecord;
   months: string[];
   departments: string[];
   departmentHierarchy: DimensionMember[];
   departmentFilter: string;
-  customVarDefs: CustomVariableDef[];
+  varDefs: CustomVariableDef[];
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
@@ -124,8 +128,8 @@ function ScenarioEditor({
   );
   const monthOptions = useMemo(() => {
     const scenarioMonths = [
-      ...Object.keys(active?.monthly ?? {}),
-      ...Object.values(active?.overrides ?? {}).flatMap((override) =>
+      ...Object.keys(active?.varMonthly ?? {}),
+      ...Object.values(active?.varOverrides ?? {}).flatMap((override) =>
         Object.keys(override.monthly ?? {}),
       ),
     ];
@@ -137,7 +141,7 @@ function ScenarioEditor({
     () =>
       orderedOptionsFromMembers(departmentHierarchy, [
         ...departments,
-        ...Object.keys(active?.overrides ?? {}),
+        ...Object.keys(active?.varOverrides ?? {}),
       ]).map((d) => d.name),
     [active, departmentHierarchy, departments],
   );
@@ -174,40 +178,32 @@ function ScenarioEditor({
     );
   }
 
-  const applyDriverPaste = (text: string, startRow: number, startColumn: number) => {
+  const inputVarDefs = varDefs.filter((d) => d.kind === "input");
+
+  const applyVarPaste = (text: string, startRow: number, startColumn: number) => {
     const next = structuredClone(active);
     const lines = parsePastedGrid(text);
 
     for (let rowIndex = 0; rowIndex < lines.length; rowIndex += 1) {
-      const driver = driverRows[startRow + rowIndex];
-      if (!driver) {
-        continue;
-      }
+      const def = inputVarDefs[startRow + rowIndex];
+      if (!def) continue;
+      const isPercent = PERCENT_VAR_IDS.has(def.id);
       for (let columnIndex = 0; columnIndex < lines[rowIndex].length; columnIndex += 1) {
         const month = monthOptions[startColumn + columnIndex];
-        if (!month) {
-          continue;
-        }
+        if (!month) continue;
         const rawValue = lines[rowIndex][columnIndex].trim().replace(/[$,%]/g, "");
-        if (!rawValue) {
-          continue;
-        }
+        if (!rawValue) continue;
         const parsed = Number(rawValue);
-        if (!Number.isFinite(parsed)) {
-          continue;
-        }
-        const value = parsed / (driver.percent ? 100 : 1);
-        const departmentOverride = next.overrides[selectedDepartment] ?? {};
-        next.overrides = {
-          ...next.overrides,
+        if (!Number.isFinite(parsed)) continue;
+        const value = parsed / (isPercent ? 100 : 1);
+        const deptOverride = next.varOverrides?.[selectedDepartment] ?? {};
+        next.varOverrides = {
+          ...next.varOverrides,
           [selectedDepartment]: {
-            ...departmentOverride,
+            ...deptOverride,
             monthly: {
-              ...departmentOverride.monthly,
-              [month]: {
-                ...departmentOverride.monthly?.[month],
-                [driver.field]: value,
-              },
+              ...deptOverride.monthly,
+              [month]: { ...deptOverride.monthly?.[month], [def.id]: value },
             },
           },
         };
@@ -215,30 +211,13 @@ function ScenarioEditor({
     }
     setDraft(next);
   };
-  const updateDriver = (month: string, field: keyof DriverAssumptions, value: number) => {
-    const departmentOverride = active.overrides[selectedDepartment] ?? {};
-    const currentMonthOverride = departmentOverride.monthly?.[month] ?? {};
-    setDraft({
-      ...active,
-      overrides: {
-        ...active.overrides,
-        [selectedDepartment]: {
-          ...departmentOverride,
-          monthly: {
-            ...departmentOverride.monthly,
-            [month]: { ...currentMonthOverride, [field]: value },
-          },
-        },
-      },
-    });
-  };
 
-  const updateCustomVar = (month: string, varId: string, value: number) => {
-    const deptOverride = active.customVarOverrides?.[selectedDepartment] ?? {};
+  const updateVar = (month: string, varId: string, value: number) => {
+    const deptOverride = active.varOverrides?.[selectedDepartment] ?? {};
     setDraft({
       ...active,
-      customVarOverrides: {
-        ...active.customVarOverrides,
+      varOverrides: {
+        ...active.varOverrides,
         [selectedDepartment]: {
           ...deptOverride,
           monthly: {
@@ -250,15 +229,15 @@ function ScenarioEditor({
     });
   };
 
-  const resolveCustomVarDisplay = (varId: string, month: string, defaultValue = 0): number => {
-    let value = active.customVarGlobal?.[varId] ?? defaultValue;
-    value = active.customVarMonthly?.[month]?.[varId] ?? value;
+  const resolveVarDisplay = (varId: string, month: string, defaultValue = 0): number => {
+    let value = active.varGlobal?.[varId] ?? defaultValue;
+    value = active.varMonthly?.[month]?.[varId] ?? value;
     for (const ancestor of ancestorLookup.get(selectedDepartment) ?? []) {
-      value = active.customVarOverrides?.[ancestor]?.global?.[varId] ?? value;
-      value = active.customVarOverrides?.[ancestor]?.monthly?.[month]?.[varId] ?? value;
+      value = active.varOverrides?.[ancestor]?.global?.[varId] ?? value;
+      value = active.varOverrides?.[ancestor]?.monthly?.[month]?.[varId] ?? value;
     }
-    value = active.customVarOverrides?.[selectedDepartment]?.global?.[varId] ?? value;
-    value = active.customVarOverrides?.[selectedDepartment]?.monthly?.[month]?.[varId] ?? value;
+    value = active.varOverrides?.[selectedDepartment]?.global?.[varId] ?? value;
+    value = active.varOverrides?.[selectedDepartment]?.monthly?.[month]?.[varId] ?? value;
     return value;
   };
 
@@ -277,21 +256,18 @@ function ScenarioEditor({
         <GhostButton
           type="button"
           aria-label="Copy grid"
-          onClick={() =>
-            copyGrid(
-              buildDriverGridTsv(
-                monthOptions,
-                driverRows,
-                (month) =>
-                  getDisplayDrivers(
-                    active,
-                    month,
-                    selectedDepartment,
-                    ancestorLookup,
-                  ) as unknown as Record<string, number>,
-              ),
-            )
-          }
+          onClick={() => {
+            const header = ["Driver", ...monthOptions].join("\t");
+            const dataRows = inputVarDefs.map((def) => {
+              const isPercent = PERCENT_VAR_IDS.has(def.id);
+              const cells = monthOptions.map((month) => {
+                const v = resolveVarDisplay(def.id, month, def.defaultValue ?? 0);
+                return isPercent ? (v * 100).toFixed(1) : String(v);
+              });
+              return [def.label, ...cells].join("\t");
+            });
+            copyGrid([header, ...dataRows].join("\n"));
+          }}
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
@@ -307,82 +283,56 @@ function ScenarioEditor({
             </tr>
           </thead>
           <tbody>
-            {driverRows.map((driver) => (
-              <tr key={driver.field}>
-                <th scope="row">{driver.label}</th>
-                {monthOptions.map((month) => {
-                  const displayDrivers = getDisplayDrivers(
-                    active,
-                    month,
-                    selectedDepartment,
-                    ancestorLookup,
-                  );
-                  return (
-                    <td key={`${driver.field}-${month}`}>
-                      <Input
-                        aria-label={`${driver.label} ${month}`}
-                        data-column-index={monthOptions.indexOf(month)}
-                        data-row-index={driverRows.indexOf(driver)}
-                        disabled={isLocked}
-                        type="number"
-                        step={driver.percent ? 0.1 : 100}
-                        value={
-                          driver.percent
-                            ? displayDrivers[driver.field] * 100
-                            : displayDrivers[driver.field]
-                        }
-                        onChange={(event) =>
-                          updateDriver(
-                            month,
-                            driver.field,
-                            Number(event.target.value) / (driver.percent ? 100 : 1),
-                          )
-                        }
-                        onPaste={(event) => {
-                          const rowIndex = Number(event.currentTarget.dataset.rowIndex ?? 0);
-                          const columnIndex = Number(event.currentTarget.dataset.columnIndex ?? 0);
-                          const text = event.clipboardData.getData("text");
-                          const lines = parsePastedGrid(text);
-                          if (!isMultiCellGrid(lines)) {
-                            return;
-                          }
-                          event.preventDefault();
-                          applyDriverPaste(text, rowIndex, columnIndex);
-                        }}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-            {customVarDefs.map((def) => (
-              <tr key={def.id}>
-                <th scope="row">
-                  {def.label}
-                  {def.kind === "calculated" ? (
-                    <span className="formula-badge">formula</span>
-                  ) : null}
-                </th>
-                {monthOptions.map((month) => (
-                  <td key={`${def.id}-${month}`}>
+            {varDefs.map((def) => {
+              const isPercent = PERCENT_VAR_IDS.has(def.id);
+              return (
+                <tr key={def.id}>
+                  <th scope="row">
+                    {def.label}
                     {def.kind === "calculated" ? (
-                      <span className="muted calculated-cell">—</span>
-                    ) : (
-                      <Input
-                        aria-label={`${def.label} ${month}`}
-                        disabled={isLocked}
-                        type="number"
-                        step="any"
-                        value={resolveCustomVarDisplay(def.id, month, def.defaultValue ?? 0)}
-                        onChange={(event) =>
-                          updateCustomVar(month, def.id, Number(event.target.value))
-                        }
-                      />
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
+                      <span className="formula-badge">formula</span>
+                    ) : null}
+                  </th>
+                  {monthOptions.map((month, colIndex) => (
+                    <td key={`${def.id}-${month}`}>
+                      {def.kind === "calculated" ? (
+                        <span className="muted calculated-cell">—</span>
+                      ) : (
+                        <Input
+                          aria-label={`${def.label} ${month}`}
+                          data-column-index={colIndex}
+                          data-row-index={inputVarDefs.indexOf(def)}
+                          disabled={isLocked}
+                          type="number"
+                          step={isPercent ? 0.1 : 100}
+                          value={
+                            isPercent
+                              ? resolveVarDisplay(def.id, month, def.defaultValue ?? 0) * 100
+                              : resolveVarDisplay(def.id, month, def.defaultValue ?? 0)
+                          }
+                          onChange={(event) =>
+                            updateVar(
+                              month,
+                              def.id,
+                              Number(event.target.value) / (isPercent ? 100 : 1),
+                            )
+                          }
+                          onPaste={(event) => {
+                            const rowIndex = Number(event.currentTarget.dataset.rowIndex ?? 0);
+                            const columnIndex = Number(event.currentTarget.dataset.columnIndex ?? 0);
+                            const text = event.clipboardData.getData("text");
+                            const lines = parsePastedGrid(text);
+                            if (!isMultiCellGrid(lines)) return;
+                            event.preventDefault();
+                            applyVarPaste(text, rowIndex, columnIndex);
+                          }}
+                        />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -397,42 +347,12 @@ function ScenarioEditor({
   );
 }
 
-function getCompanyMonthDrivers(scenario: ScenarioAssumptions, month: string): DriverAssumptions {
-  return { ...scenario.global, ...scenario.monthly?.[month] };
-}
-
-function getDisplayDrivers(
-  scenario: ScenarioAssumptions,
-  month: string,
-  department: string,
-  ancestorLookup: Map<string, string[]>,
-): DriverAssumptions {
-  const drivers = getCompanyMonthDrivers(scenario, month);
-  const levels = [...(ancestorLookup.get(department) ?? []), department];
-  for (const level of levels) {
-    const { monthly, ...levelDefault } = scenario.overrides[level] ?? {};
-    Object.assign(drivers, levelDefault, monthly?.[month]);
-  }
-  return drivers;
-}
-
-const driverRows: {
-  field: keyof DriverAssumptions;
-  label: string;
-  percent?: boolean;
-}[] = [
-  { field: "revenueGrowthRate", label: "Revenue growth", percent: true },
-  { field: "cogsPctOfRevenue", label: "COGS % revenue", percent: true },
-  { field: "headcountGrowthRate", label: "Headcount growth", percent: true },
-  { field: "costPerHead", label: "Cost per head" },
-];
-
 function ForecastGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
 }: {
-  rows: ActualRow[];
+  rows: ForecastRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
@@ -493,4 +413,3 @@ function ForecastGrid({
     </>
   );
 }
-
