@@ -40,7 +40,7 @@ const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
       }),
     )
     .optional(),
-  formulas: z.record(z.string(), z.string().min(1)).optional(),
+  formulas: z.record(coreAccountEnum, z.string().min(1)).optional(),
 });
 
 const customVarCreateSchema = z.object({

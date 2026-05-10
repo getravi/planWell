@@ -11,6 +11,7 @@ import type {
   DimensionKind,
   Dimensions,
   ForecastRow,
+  KpiSummary,
   ScenarioAssumptions,
   VarianceRow,
 } from "../domain/types.ts";
@@ -62,7 +63,7 @@ export type MetricCitation = {
 };
 
 export type MetricSummary = {
-  kpis: any;
+  kpis: KpiSummary;
   accounts: {
     account: string;
     value: number;

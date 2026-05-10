@@ -33,6 +33,7 @@ export type VersionRecord = {
   name: string;
   kind: "actuals" | "scenario";
   locked: boolean;
+  sortOrder: number;
   canLock: boolean;
   canRename: boolean;
   canDelete: boolean;
