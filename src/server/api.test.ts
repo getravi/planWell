@@ -780,6 +780,18 @@ describe("PlanWell API", () => {
       "Conservative",
     ]);
   });
+
+  it("listPlanningForecastMonths returns 12 months after last actual month", async () => {
+    const repo = createTestRepository();
+    repo.replaceActuals([
+      { month: "2025-06", department: "GPU Cloud", account: "Revenue", value: 500 },
+      { month: "2025-07", department: "GPU Cloud", account: "Revenue", value: 600 },
+    ]);
+    const forecast = repo.listForecast("Base Case");
+    const months = [...new Set(forecast.map((r) => r.month))].sort();
+    expect(months[0]).toBe("2025-08");
+    expect(months).toHaveLength(12);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {

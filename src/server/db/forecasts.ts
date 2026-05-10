@@ -1,18 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import type { ForecastRow, ScenarioAssumptions } from "../../domain/types.ts";
 import { buildForecast, nextMonths } from "../../domain/forecast.ts";
-import { readScenarios, replaceDriverAssumptions, isVersionLocked } from "./versions.ts";
+import { readScenarios, isVersionLocked } from "./versions.ts";
 import { listNamedDimension } from "./dimensions.ts";
 import { withTransaction } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
-import { listCustomVariables } from "./customVariables.ts";
-
-export function countDriverAssumptionRows(db: DatabaseSync, scenarioId: string): number {
-  const row = db
-    .prepare("select count(*) as count from driver_assumptions where scenario_id = ?")
-    .get(scenarioId) as { count: number };
-  return row.count;
-}
+import { listCustomVariables, replaceVarValues } from "./customVariables.ts";
 
 export function updateScenarioAssumptions(
   db: DatabaseSync,
@@ -22,11 +15,11 @@ export function updateScenarioAssumptions(
   const now = new Date().toISOString();
   db.prepare("update scenarios set updated_at = ? where id = ?").run(now, scenarioId);
   db.prepare("update versions set updated_at = ? where id = ?").run(now, scenarioId);
-  replaceDriverAssumptions(db, scenarioId, assumptions);
+  replaceVarValues(db, scenarioId, assumptions);
 }
 
 export function countScenarioOverrides(db: DatabaseSync, department: string): number {
-  return readScenarios(db).filter((scenario) => scenario.assumptions.overrides[department]).length;
+  return readScenarios(db).filter((scenario) => scenario.assumptions.varOverrides?.[department]).length;
 }
 
 export function renameScenarioOverride(db: DatabaseSync, from: string, to: string): void {
@@ -34,16 +27,16 @@ export function renameScenarioOverride(db: DatabaseSync, from: string, to: strin
     if (isVersionLocked(db, scenario.id)) {
       continue;
     }
-    const override = scenario.assumptions.overrides[from];
+    const override = scenario.assumptions.varOverrides?.[from];
     if (!override) {
       continue;
     }
-    const nextOverrides = { ...scenario.assumptions.overrides };
+    const nextOverrides = { ...scenario.assumptions.varOverrides };
     delete nextOverrides[from];
     nextOverrides[to] = override;
     updateScenarioAssumptions(db, scenario.id, {
       ...scenario.assumptions,
-      overrides: nextOverrides,
+      varOverrides: nextOverrides,
     });
   }
 }
@@ -53,14 +46,14 @@ export function deleteScenarioOverride(db: DatabaseSync, department: string): vo
     if (isVersionLocked(db, scenario.id)) {
       continue;
     }
-    if (!scenario.assumptions.overrides[department]) {
+    if (!scenario.assumptions.varOverrides?.[department]) {
       continue;
     }
-    const nextOverrides = { ...scenario.assumptions.overrides };
+    const nextOverrides = { ...scenario.assumptions.varOverrides };
     delete nextOverrides[department];
     updateScenarioAssumptions(db, scenario.id, {
       ...scenario.assumptions,
-      overrides: nextOverrides,
+      varOverrides: nextOverrides,
     });
   }
 }
@@ -120,8 +113,10 @@ export function insertForecastRows(
 }
 
 export function listPlanningForecastMonths(db: DatabaseSync): string[] {
-  const actualMonths = [...new Set(selectCubeRows(db, "actuals").map((row) => row.month))].sort();
-  const lastActualMonth = actualMonths.at(-1);
+  const monthRows = db
+    .prepare("select distinct month from actuals order by month")
+    .all() as { month: string }[];
+  const lastActualMonth = monthRows.at(-1)?.month;
   if (!lastActualMonth) {
     return [];
   }
