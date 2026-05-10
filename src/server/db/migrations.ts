@@ -1,12 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
-import type { ScenarioAssumptions } from "../../domain/types.ts";
 import { defaultScenarios } from "../sample-data.ts";
 import { hashPassword } from "../security.ts";
 import { ensureColumn, actualsVersionId } from "./utils.ts";
 import type { ScenarioRow, LegacyScenarioRow } from "./utils.ts";
 import { backfillDimensionOrder } from "./dimensions.ts";
-import { replaceDriverAssumptions, backfillVersionOrder } from "./versions.ts";
-import { countDriverAssumptionRows } from "./forecasts.ts";
+import { backfillVersionOrder } from "./versions.ts";
+import { replaceVarValues } from "./customVariables.ts";
 
 export function migrate(db: DatabaseSync): void {
   db.exec(`
@@ -86,6 +85,8 @@ export function migrate(db: DatabaseSync): void {
   backfillDimensionOrder(db, "department");
   backfillDimensionOrder(db, "account");
   backfillVersionOrder(db);
+  seedBuiltinVars(db);
+  migrateDriverAssumptionsToVarValues(db);
 }
 
 export function migrateVersions(db: DatabaseSync): void {
@@ -117,7 +118,23 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
 
   const legacyRows = db.prepare("select * from scenarios").all() as LegacyScenarioRow[];
   for (const row of legacyRows) {
-    replaceDriverAssumptions(db, row.id, JSON.parse(row.assumptions_json) as ScenarioAssumptions);
+    const old = JSON.parse(row.assumptions_json) as {
+      name: string;
+      global?: Record<string, number>;
+      monthly?: Record<string, Record<string, number>>;
+      overrides?: Record<string, { monthly?: Record<string, Record<string, number>>; [k: string]: unknown }>;
+    };
+    replaceVarValues(db, row.id, {
+      name: old.name,
+      varGlobal: old.global ?? {},
+      varMonthly: old.monthly,
+      varOverrides: Object.fromEntries(
+        Object.entries(old.overrides ?? {}).map(([dept, ov]) => {
+          const { monthly, ...rest } = ov;
+          return [dept, { global: rest as Record<string, number>, monthly: monthly as Record<string, Record<string, number>> | undefined }];
+        }),
+      ),
+    });
   }
 
   db.exec(`
@@ -134,7 +151,52 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
   `);
 }
 
+function seedBuiltinVars(db: DatabaseSync): void {
+  const builtins = [
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", sort_order: 10 },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", sort_order: 20 },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", sort_order: 30 },
+    { id: "costPerHead", label: "Cost per Head", sort_order: 40 },
+  ];
+  const insert = db.prepare(
+    "insert or ignore into custom_variables (id, label, kind, formula, sort_order) values (?, ?, 'input', null, ?)",
+  );
+  for (const v of builtins) {
+    insert.run(v.id, v.label, v.sort_order);
+  }
+}
+
+function migrateDriverAssumptionsToVarValues(db: DatabaseSync): void {
+  const driverRows = db.prepare(`
+    select scenario_id, scope_type, scope_key, month, driver_key, value
+    from driver_assumptions
+    where driver_key in ('revenueGrowthRate', 'cogsPctOfRevenue', 'headcountGrowthRate', 'costPerHead')
+  `).all() as { scenario_id: string; scope_type: string; scope_key: string; month: string; driver_key: string; value: number }[];
+
+  const insert = db.prepare(`
+    insert or ignore into custom_variable_values (scenario_id, var_id, scope, value)
+    values (?, ?, ?, ?)
+  `);
+
+  for (const row of driverRows) {
+    let scope: string;
+    if (row.scope_type === "global" && row.month === "__all__") {
+      scope = "global";
+    } else if (row.scope_type === "global") {
+      scope = `monthly:${row.month}`;
+    } else if (row.scope_type === "department" && row.month === "__all__") {
+      scope = `dept:${row.scope_key}`;
+    } else {
+      scope = `dept:${row.scope_key}:monthly:${row.month}`;
+    }
+    insert.run(row.scenario_id, row.driver_key, scope, row.value);
+  }
+}
+
 export function seedDemoUser(db: DatabaseSync): void {
+  if (process.env.PLANWELL_SKIP_SEED === "1") {
+    return;
+  }
   const exists = db.prepare("select id from users where email = ?").get("director@planwell.local");
   if (exists) {
     return;
@@ -169,8 +231,9 @@ export function ensureDefaultScenarios(db: DatabaseSync): void {
     const row = db.prepare("select id from scenarios where name = ?").get(scenario.name) as {
       id: string;
     };
-    if (countDriverAssumptionRows(db, row.id) === 0) {
-      replaceDriverAssumptions(db, row.id, scenario);
+    const hasValues = (db.prepare("select count(*) as cnt from custom_variable_values where scenario_id = ?").get(row.id) as { cnt: number }).cnt > 0;
+    if (!hasValues) {
+      replaceVarValues(db, row.id, scenario);
     }
   }
   backfillVersionOrder(db);

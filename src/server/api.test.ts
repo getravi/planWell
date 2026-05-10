@@ -755,6 +755,18 @@ describe("PlanWell API", () => {
       ),
     ).toHaveLength(12);
   });
+
+  it("skips demo user seeding when PLANWELL_SKIP_SEED=1", () => {
+    const original = process.env.PLANWELL_SKIP_SEED;
+    process.env.PLANWELL_SKIP_SEED = "1";
+    try {
+      const repo = createTestRepository();
+      const user = repo.verifyUser("director@planwell.local", "planwell-demo");
+      expect(user).toBeNull();
+    } finally {
+      process.env.PLANWELL_SKIP_SEED = original;
+    }
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {
