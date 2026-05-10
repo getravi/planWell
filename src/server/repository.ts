@@ -37,6 +37,7 @@ import {
   updateVersion,
   deleteVersion,
   readScenarios,
+  readScenarioById,
   upsertScenario,
 } from "./db/versions.ts";
 import type { ScenarioRecord, VersionRecord } from "./db/versions.ts";
@@ -96,6 +97,7 @@ export type Repository = {
   getDimensionImpact(kind: DimensionKind, name: string): DimensionImpact;
   deleteDimensionMember(kind: DimensionKind, name: string, force: boolean): DimensionImpact;
   listScenarios(): ScenarioRecord[];
+  getScenarioById(id: string): ScenarioRecord;
   upsertScenario(assumptions: ScenarioAssumptions): ScenarioRecord;
   listVersions(): VersionRecord[];
   createVersion(name: string, sourceId: string): VersionRecord;
@@ -227,6 +229,9 @@ function createRepository(db: DatabaseSync): Repository {
     },
     listScenarios() {
       return readScenarios(db);
+    },
+    getScenarioById(id) {
+      return readScenarioById(db, id);
     },
     upsertScenario(assumptions) {
       return upsertScenario(db, assumptions);

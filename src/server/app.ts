@@ -362,16 +362,13 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   });
 
   app.post("/api/scenarios/:id/recalculate", (context) => {
-    const scenario = repo.listScenarios().find((item) => item.id === context.req.param("id"));
-    if (!scenario) {
-      return context.json({ error: "Scenario not found." }, 404);
-    }
     try {
+      const scenario = repo.getScenarioById(context.req.param("id"));
       repo.recalculateScenario(scenario.name);
+      return context.json({ ok: true });
     } catch (error) {
-      return context.json({ error: errorMessage(error) }, 400);
+      return context.json({ error: errorMessage(error) }, 404);
     }
-    return context.json({ ok: true });
   });
 
   app.post("/api/analyst/ask", async (context) => {
