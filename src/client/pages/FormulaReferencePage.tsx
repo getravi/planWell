@@ -135,6 +135,51 @@ const EXAMPLES = [
   },
 ];
 
+const PRECEDENCE_LEVELS = [
+  {
+    level: 1,
+    scope: "Variable default",
+    when: "Always — fallback when nothing else is set",
+    example: "revenueGrowthRate = 0.03",
+  },
+  {
+    level: 2,
+    scope: "Scenario global",
+    when: "Set once for the whole scenario, all months, all departments",
+    example: "varGlobal.revenueGrowthRate = 0.05",
+  },
+  {
+    level: 3,
+    scope: "Scenario monthly",
+    when: "Set for one specific month, all departments",
+    example: "varMonthly['2025-06'].revenueGrowthRate = 0.08",
+  },
+  {
+    level: 4,
+    scope: "Ancestor dept global",
+    when: "Set on a parent/grandparent department, all months — closer ancestors beat distant ones",
+    example: "varOverrides.Engineering.global.revenueGrowthRate = 0.07",
+  },
+  {
+    level: 5,
+    scope: "Ancestor dept monthly",
+    when: "Set on a parent/grandparent department, specific month",
+    example: "varOverrides.Engineering.monthly['2025-06'].revenueGrowthRate = 0.10",
+  },
+  {
+    level: 6,
+    scope: "This dept global",
+    when: "Set on the exact department being forecast, all months",
+    example: "varOverrides['GPU Cloud'].global.revenueGrowthRate = 0.12",
+  },
+  {
+    level: 7,
+    scope: "This dept monthly",
+    when: "Set on the exact department, specific month — highest priority",
+    example: "varOverrides['GPU Cloud'].monthly['2025-06'].revenueGrowthRate = 0.15",
+  },
+];
+
 export function FormulaReferencePage() {
   return (
     <div className="formula-reference-page">
@@ -254,6 +299,90 @@ export function FormulaReferencePage() {
             </div>
           ))}
         </div>
+      </Panel>
+
+      <Panel>
+        <div className="panel-heading">
+          <h2>Custom variables</h2>
+        </div>
+        <p className="muted">
+          Custom variables let you define reusable drivers that feed into forecast formulas. There
+          are two kinds: <strong>input</strong> variables hold numeric values you set per scenario,
+          and <strong>calculated</strong> variables derive their value from a mathjs formula that can
+          reference other custom variables.
+        </p>
+
+        <h3>Input vs. calculated</h3>
+        <table className="ref-table">
+          <thead>
+            <tr>
+              <th>Kind</th>
+              <th>Value comes from</th>
+              <th>Can reference</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>input</strong></td>
+              <td>Numbers you enter per scenario / department / month</td>
+              <td>—</td>
+              <td><code>revenueGrowthRate = 0.05</code></td>
+            </tr>
+            <tr>
+              <td><strong>calculated</strong></td>
+              <td>A mathjs formula evaluated at forecast time</td>
+              <td>Other custom variables (inputs first)</td>
+              <td><code>adjustedRate = revenueGrowthRate * seasonalFactor</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Value precedence for input variables</h3>
+        <p className="muted">
+          When planWell resolves a variable for a given department and month, it walks through up to
+          seven override slots in order. Each slot only takes effect if a value was explicitly set —
+          unset slots are skipped. The last slot that has a value wins.
+        </p>
+        <table className="ref-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Scope</th>
+              <th>When it applies</th>
+              <th>Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PRECEDENCE_LEVELS.map((row) => (
+              <tr key={row.level}>
+                <td className="muted">{row.level}</td>
+                <td><strong>{row.scope}</strong></td>
+                <td>{row.when}</td>
+                <td><code>{row.example}</code></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="muted">
+          Ancestor overrides inherit down the department tree — a value set on{" "}
+          <em>Engineering</em> applies to <em>Frontend</em> and <em>Backend</em> unless those
+          departments set their own value. Closer ancestors (parent) beat more distant ones
+          (grandparent).
+        </p>
+
+        <h3>Calculated variable evaluation order</h3>
+        <p className="muted">
+          Calculated variables are sorted into dependency order (topological sort) before evaluation,
+          so a variable that references another is always evaluated after its dependency. If you
+          create a cycle (<code>a</code> depends on <code>b</code>, <code>b</code> depends on{" "}
+          <code>a</code>), planWell will reject it at save time.
+        </p>
+        <p className="muted">
+          Calculated variables see all resolved input values, but they cannot reference forecast
+          outputs like Revenue or COGS — only other custom variables and the built-in driver
+          variables listed in the Variables table above.
+        </p>
       </Panel>
     </div>
   );
