@@ -13,6 +13,7 @@ dist-ssr
 *.local
 data/*.sqlite
 .superpowers/
+docs/superpowers
 
 # Editor directories and files
 .vscode/*
