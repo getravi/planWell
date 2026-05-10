@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildForecast, compareSeries, nextMonths } from "./forecast.ts";
+import { buildForecast, compareSeries, nextMonths, resolveVarValues } from "./forecast.ts";
 import { parseActualsCsv } from "./importer.ts";
-import { evaluateFormula } from "./formulaEngine.ts";
+import { evaluateFormula, topoSortCustomVars, CycleError } from "./formulaEngine.ts";
+import type { CustomVariableDef, ScenarioAssumptions } from "./types.ts";
 
 describe("formulaEngine sandbox", () => {
   it("blocks mathjs import() in a formula (blocked by mathjs unsafe list)", () => {
@@ -365,5 +366,90 @@ describe("nextMonths", () => {
 
   it("handles December to January rollover", () => {
     expect(nextMonths("2025-11", 2)).toEqual(["2025-12", "2026-01"]);
+  });
+});
+
+describe("resolveVarValues precedence", () => {
+  const defs: CustomVariableDef[] = [
+    { id: "rate", label: "Rate", kind: "input", defaultValue: 0.01 },
+  ];
+  const ancestorLookup = new Map([
+    ["Child", ["Parent"]],
+    ["Parent", []],
+  ]);
+
+  it("uses defaultValue when no overrides", () => {
+    const result = resolveVarValues(defs, { name: "Test" }, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.01);
+  });
+
+  it("varGlobal overrides defaultValue", () => {
+    const assumptions: ScenarioAssumptions = { name: "Test", varGlobal: { rate: 0.05 } };
+    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.05);
+  });
+
+  it("varMonthly overrides varGlobal", () => {
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varGlobal: { rate: 0.05 },
+      varMonthly: { "2025-01": { rate: 0.1 } },
+    };
+    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.1);
+  });
+
+  it("ancestor dept global overrides varMonthly", () => {
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varGlobal: { rate: 0.05 },
+      varOverrides: { Parent: { global: { rate: 0.2 } } },
+    };
+    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.2);
+  });
+
+  it("dept global overrides ancestor dept global", () => {
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varOverrides: {
+        Parent: { global: { rate: 0.2 } },
+        Child: { global: { rate: 0.3 } },
+      },
+    };
+    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.3);
+  });
+
+  it("dept monthly overrides everything", () => {
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varGlobal: { rate: 0.05 },
+      varOverrides: {
+        Parent: { global: { rate: 0.2 }, monthly: { "2025-01": { rate: 0.25 } } },
+        Child: { global: { rate: 0.3 }, monthly: { "2025-01": { rate: 0.99 } } },
+      },
+    };
+    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
+    expect(result.rate).toBe(0.99);
+  });
+});
+
+describe("topoSortCustomVars", () => {
+  it("sorts independent calculated vars in dependency order", () => {
+    const defs: CustomVariableDef[] = [
+      { id: "b", label: "B", kind: "calculated", formula: "a * 2" },
+      { id: "a", label: "A", kind: "calculated", formula: "1" },
+    ];
+    const sorted = topoSortCustomVars(defs);
+    expect(sorted.map((d) => d.id)).toEqual(["a", "b"]);
+  });
+
+  it("throws CycleError for a → b → a cycle", () => {
+    const defs: CustomVariableDef[] = [
+      { id: "a", label: "A", kind: "calculated", formula: "b + 1" },
+      { id: "b", label: "B", kind: "calculated", formula: "a + 1" },
+    ];
+    expect(() => topoSortCustomVars(defs)).toThrow(CycleError);
   });
 });
