@@ -433,6 +433,37 @@ describe("resolveVarValues precedence", () => {
     const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
     expect(result.rate).toBe(0.99);
   });
+
+  it("evaluates calculated vars after input vars are resolved", () => {
+    const calcDefs: CustomVariableDef[] = [
+      { id: "rate", label: "Rate", kind: "input", defaultValue: 0.05 },
+      { id: "adjustedRate", label: "Adjusted Rate", kind: "calculated", formula: "rate * 2" },
+    ];
+    const noAncestors = new Map<string, string[]>([["Eng", []]]);
+    const result = resolveVarValues(calcDefs, { name: "Test" }, "Eng", "2025-01", 1, noAncestors);
+    expect(result.adjustedRate).toBeCloseTo(0.1, 5);
+  });
+
+  it("multi-level ancestors: grandparent < parent < child overrides", () => {
+    const multiDefs: CustomVariableDef[] = [
+      { id: "rate", label: "Rate", kind: "input", defaultValue: 0.01 },
+    ];
+    const multiAncestors = new Map<string, string[]>([
+      ["GrandParent", []],
+      ["Parent", ["GrandParent"]],
+      ["Child", ["Parent", "GrandParent"]],
+    ]);
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varOverrides: {
+        GrandParent: { global: { rate: 0.1 } },
+        Parent: { global: { rate: 0.2 } },
+        Child: { global: { rate: 0.3 } },
+      },
+    };
+    const result = resolveVarValues(multiDefs, assumptions, "Child", "2025-01", 1, multiAncestors);
+    expect(result.rate).toBe(0.3);
+  });
 });
 
 describe("topoSortCustomVars", () => {
