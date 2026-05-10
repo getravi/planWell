@@ -17,6 +17,10 @@ import type {
 import { hashPassword } from "./security.ts";
 
 import { migrate, seedDemoUser, ensureDefaultScenarios } from "./db/migrations.ts";
+
+export function pruneExpiredSessions(db: DatabaseSync): void {
+  db.prepare("delete from sessions where expires_at < ?").run(new Date().toISOString());
+}
 import {
   listNamedDimension,
   listTimeDimension,
@@ -129,6 +133,7 @@ export function createTestRepository(): Repository {
 function createRepository(db: DatabaseSync): Repository {
   migrate(db);
   seedDemoUser(db);
+  pruneExpiredSessions(db);
 
   return {
     verifyUser(email, password) {
@@ -247,7 +252,8 @@ function createRepository(db: DatabaseSync): Repository {
       return compareSeries(this.listForecast(leftName), this.listForecast(rightName));
     },
     validateFormulaExpression(formula, account) {
-      return validateFormula(formula, account);
+      const extraVars = Object.fromEntries(dbListCustomVariables(db).map((v) => [v.id, 1]));
+      return validateFormula(formula, account, extraVars);
     },
     listCustomVariables() {
       return dbListCustomVariables(db);
@@ -262,7 +268,8 @@ function createRepository(db: DatabaseSync): Repository {
       dbDeleteCustomVariable(db, id);
     },
     validateCustomVariableFormula(formula, availableIds) {
-      return validateCustomVariableFormula(formula, availableIds);
+      const allIds = [...new Set([...availableIds, ...dbListCustomVariables(db).map((v) => v.id)])];
+      return validateCustomVariableFormula(formula, allIds);
     },
     getMetricSummary(scenarioName) {
       const rows = scenarioName ? this.listForecast(scenarioName) : this.listActuals();

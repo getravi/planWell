@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 import { createApp } from "./app.ts";
-import { createFileRepository, createTestRepository } from "./repository.ts";
+import { createFileRepository, createTestRepository, pruneExpiredSessions } from "./repository.ts";
 
 describe("PlanWell API", () => {
   it("logs in, imports long CSV actuals, creates forecasts, and returns variance", async () => {
@@ -58,6 +58,22 @@ describe("PlanWell API", () => {
           row.account === "Revenue" && row.variance > 0,
       ),
     ).toBe(true);
+  });
+
+  it("pruneExpiredSessions removes rows with past expires_at", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec(`
+      create table sessions (id text primary key, user_id text not null, expires_at text not null);
+    `);
+    const past = new Date(Date.now() - 1000).toISOString();
+    const future = new Date(Date.now() + 9999999).toISOString();
+    db.prepare("insert into sessions values (?, ?, ?)").run("old", "u1", past);
+    db.prepare("insert into sessions values (?, ?, ?)").run("new", "u2", future);
+
+    pruneExpiredSessions(db);
+
+    const rows = db.prepare("select id from sessions").all() as { id: string }[];
+    expect(rows.map((r) => r.id)).toEqual(["new"]);
   });
 
   it("migrates legacy scenario JSON into driver assumption rows", () => {
