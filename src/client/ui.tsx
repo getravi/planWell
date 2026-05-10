@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Download } from "lucide-react";
 import {
   Children,
   isValidElement,
@@ -461,6 +461,31 @@ export function SiteHeader({ className, ...props }: HTMLAttributes<HTMLElement>)
 
 export function Label({ children }: PropsWithChildren) {
   return <span className="label">{children}</span>;
+}
+
+export function ExportMenu({
+  onCsv,
+  onXlsx,
+  onPdf,
+}: {
+  onCsv: () => void;
+  onXlsx: () => void;
+  onPdf: () => void;
+}) {
+  return (
+    <details className="export-menu">
+      <summary className="btn ghost-btn export-menu-trigger">
+        <Download size={13} />
+        Export
+        <ChevronDown size={12} className="export-menu-chevron" />
+      </summary>
+      <div className="export-menu-popup">
+        <button className="export-menu-item" onClick={onCsv}>CSV</button>
+        <button className="export-menu-item" onClick={onXlsx}>Excel</button>
+        <button className="export-menu-item" onClick={onPdf}>PDF</button>
+      </div>
+    </details>
+  );
 }
 
 export function EmptyState({ title, body }: { title: string; body: string }) {

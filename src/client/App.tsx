@@ -127,12 +127,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [leftScenario, setLeftScenario] = useState("Base Case");
   const [rightScenario, setRightScenario] = useState("Aggressive Growth");
   const [forecastDepartment, setForecastDepartment] = useState("__all__");
+  const [actualsDepartment, setActualsDepartment] = useState("__all__");
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
   const actuals = useQuery({ queryKey: ["actuals"], queryFn: client.actuals });
   const dimensions = useQuery({
     queryKey: ["dimensions"],
     queryFn: client.dimensions,
     enabled:
+      view === "Actuals" ||
       view === "Dimensions" ||
       view === "Time Settings" ||
       view === "Forecast Model" ||
@@ -180,6 +182,23 @@ function Workbench({ userEmail }: { userEmail: string }) {
     ];
     return forecastRows.filter((row) => allowedDepartments.includes(row.department));
   }, [departmentDescendants, forecastDepartment, forecastRows]);
+  const actualRows = actuals.data?.rows ?? [];
+  const actualsDepartmentOptions = useMemo(
+    () =>
+      orderedOptionsFromMembers(dimensions.data?.department ?? [], [
+        ...actualRows.map((row) => row.department),
+      ]),
+    [dimensions.data?.department, actualRows],
+  );
+  const actualsDepartments = useMemo(
+    () => actualsDepartmentOptions.map((d) => d.name),
+    [actualsDepartmentOptions],
+  );
+  const filteredActualRows = useMemo(() => {
+    if (actualsDepartment === "__all__") return actualRows;
+    const allowed = departmentDescendants.get(actualsDepartment) ?? [actualsDepartment];
+    return actualRows.filter((row) => allowed.includes(row.department));
+  }, [departmentDescendants, actualsDepartment, actualRows]);
   const varianceSummary = useMemo(
     () => summarizeVarianceRows(variance.data?.rows ?? []),
     [variance.data?.rows],
@@ -213,6 +232,17 @@ function Workbench({ userEmail }: { userEmail: string }) {
       setForecastDepartment(defaultDepartment);
     }
   }, [dimensions.isSuccess, forecastDepartment, forecastDepartments]);
+
+  useEffect(() => {
+    if (!dimensions.isSuccess) return;
+    const defaultDepartment = actualsDepartments[0];
+    if (
+      defaultDepartment &&
+      (actualsDepartment === "__all__" || !actualsDepartments.includes(actualsDepartment))
+    ) {
+      setActualsDepartment(defaultDepartment);
+    }
+  }, [dimensions.isSuccess, actualsDepartment, actualsDepartments]);
 
   return (
     <SidebarProvider className="app-shell">
@@ -308,6 +338,25 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <h1>{view}</h1>
           </div>
           <div className="scenario-pickers">
+            {view === "Actuals" ? (
+              <label className="page-selector">
+                <Select
+                  aria-label="Actuals department"
+                  value={actualsDepartment}
+                  onChange={(event) => setActualsDepartment(event.target.value)}
+                >
+                  {actualsDepartmentOptions.map((department) => (
+                    <option
+                      data-depth={department.depth}
+                      key={department.name}
+                      value={department.name}
+                    >
+                      {department.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
             {view === "Forecast Model" ? (
               <label className="page-selector">
                 <Select
@@ -375,7 +424,11 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
 
         {view === "Actuals" ? (
-          <ActualsPage actuals={actuals.data?.rows ?? []} summary={actuals.data?.summary} />
+          <ActualsPage
+            actuals={filteredActualRows}
+            departmentHierarchy={dimensions.data?.department ?? []}
+            accountHierarchy={dimensions.data?.account ?? []}
+          />
         ) : null}
         {view === "Forecast Model" ? (
           <ForecastPage

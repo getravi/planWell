@@ -13,6 +13,7 @@ import {
 import type { DimensionMember, VarianceRow } from "../../domain/types.ts";
 import {
   aggregateVarianceByMonth,
+  buildVarianceGridMatrix,
   buildVarianceGridTsv,
   buildVarianceInsights,
   copyGrid,
@@ -22,7 +23,8 @@ import {
   type VarianceInsight,
 } from "../pivot.ts";
 import { compactCurrency, currency, formatCell } from "../format.ts";
-import { EmptyState, GhostButton, Panel } from "../ui.tsx";
+import { EmptyState, ExportMenu, GhostButton, Panel } from "../ui.tsx";
+import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 
 export function ScenarioComparisonPage({
   rows,
@@ -148,7 +150,7 @@ function VarianceGrid({
     return <EmptyState title="No variance rows" body="Select scenarios with forecast values." />;
   }
   return (
-    <div className="spreadsheet-wrap">
+    <>
       <div className="grid-toolbar">
         <GhostButton
           type="button"
@@ -157,7 +159,13 @@ function VarianceGrid({
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
+        <ExportMenu
+          onCsv={() => { const m = buildVarianceGridMatrix(months, pivotRows); exportCsv("variance.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildVarianceGridMatrix(months, pivotRows); void exportXlsx("variance.xlsx", "Variance", m.headers, m.rows); }}
+          onPdf={() => { const m = buildVarianceGridMatrix(months, pivotRows); exportPdf("variance.pdf", "Scenario Variance", m.headers, m.rows); }}
+        />
       </div>
+      <div className="spreadsheet-wrap">
       <table className="spreadsheet-grid">
         <thead>
           <tr>
@@ -193,6 +201,7 @@ function VarianceGrid({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

@@ -93,75 +93,91 @@ function FormulaEditor({
   };
 
   return (
-    <div className="formula-rows" style={{ marginTop: 16 }}>
+    <div style={{ marginTop: 16 }}>
       {isLocked ? (
         <p className="muted driver-note">
           {scenario.name} is locked. Unlock it in Versions to edit formulas.
         </p>
       ) : null}
-      {FORMULA_ACCOUNTS.map((account) => {
-        const formula = formulas[account] ?? "";
-        const state = validationState[account];
-        return (
-          <div key={account} className="formula-row">
-            <Label>{account}</Label>
-            <div className="formula-input-group">
-              <Input
-                aria-label={`${account} formula`}
-                placeholder={DEFAULT_FORMULAS[account]}
-                value={formula}
-                disabled={isLocked}
-                onChange={(e) => {
-                  const next = { ...formulas };
-                  if (e.target.value) {
-                    next[account] = e.target.value;
-                  } else {
-                    delete next[account];
-                    setValidationState((prev) => {
-                      const s = { ...prev };
-                      delete s[account];
-                      return s;
-                    });
-                  }
-                  setFormulas(next);
-                }}
-                onBlur={() => {
-                  if (formula) validate(account, formula);
-                }}
-                className={state && !state.ok && !state.pending ? "input-error" : undefined}
-              />
-              <GhostButton
-                type="button"
-                aria-label={`Reset ${account} to default`}
-                disabled={isLocked || !formula}
-                title="Reset to default"
-                onClick={() => {
-                  const next = { ...formulas };
-                  delete next[account];
-                  setFormulas(next);
-                  setValidationState((prev) => {
-                    const s = { ...prev };
-                    delete s[account];
-                    return s;
-                  });
-                }}
-              >
-                ↺
-              </GhostButton>
-            </div>
-            {state && !state.pending && (
-              <p className={state.ok ? "formula-ok" : "formula-error"}>
-                {state.ok ? "✓ Valid" : state.error}
-              </p>
-            )}
-            {state?.pending && <p className="muted">Validating…</p>}
-          </div>
-        );
-      })}
+      <div className="formulas-table-wrap">
+      <table className="formulas-table">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Formula</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {FORMULA_ACCOUNTS.map((account) => {
+            const formula = formulas[account] ?? "";
+            const state = validationState[account];
+            return (
+              <tr key={account}>
+                <td className="formulas-table-label">{account}</td>
+                <td>
+                  <Input
+                    aria-label={`${account} formula`}
+                    placeholder={DEFAULT_FORMULAS[account]}
+                    value={formula}
+                    disabled={isLocked}
+                    onChange={(e) => {
+                      const next = { ...formulas };
+                      if (e.target.value) {
+                        next[account] = e.target.value;
+                      } else {
+                        delete next[account];
+                        setValidationState((prev) => {
+                          const s = { ...prev };
+                          delete s[account];
+                          return s;
+                        });
+                      }
+                      setFormulas(next);
+                    }}
+                    onBlur={() => {
+                      if (formula) validate(account, formula);
+                    }}
+                    className={state && !state.ok && !state.pending ? "input-error" : undefined}
+                    style={{ fontFamily: "monospace", width: "100%" }}
+                  />
+                  {state && !state.pending && (
+                    <span className={state.ok ? "formula-ok" : "formula-error"} style={{ fontSize: 12 }}>
+                      {state.ok ? "✓ Valid" : state.error}
+                    </span>
+                  )}
+                  {state?.pending && <span className="muted" style={{ fontSize: 12 }}>Validating…</span>}
+                </td>
+                <td className="formulas-table-reset">
+                  <GhostButton
+                    type="button"
+                    aria-label={`Reset ${account} to default`}
+                    disabled={isLocked || !formula}
+                    title="Reset to default"
+                    onClick={() => {
+                      const next = { ...formulas };
+                      delete next[account];
+                      setFormulas(next);
+                      setValidationState((prev) => {
+                        const s = { ...prev };
+                        delete s[account];
+                        return s;
+                      });
+                    }}
+                  >
+                    ↺
+                  </GhostButton>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      </div>
       <Button
         disabled={isLocked || !isDirty || hasError || save.isPending}
         onClick={() => save.mutate()}
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 12 }}
       >
         <Save size={16} /> Save formulas
       </Button>

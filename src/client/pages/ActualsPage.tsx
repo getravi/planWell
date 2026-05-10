@@ -13,29 +13,42 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Copy } from "lucide-react";
 import { client, type MetricSummary } from "../api.ts";
-import type { ActualRow } from "../../domain/types.ts";
-import { aggregateByMonth } from "../pivot.ts";
-import { compactCurrency, currency } from "../format.ts";
-import { EmptyState, Input, Panel } from "../ui.tsx";
+import type { ActualRow, DimensionMember } from "../../domain/types.ts";
+import {
+  aggregateByMonth,
+  buildActualGridMatrix,
+  buildActualGridTsv,
+  copyGrid,
+  getMonths,
+  pivotActualRows,
+  summarizeRows,
+} from "../pivot.ts";
+import { compactCurrency, currency, formatCell } from "../format.ts";
+import { EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui.tsx";
+import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 
 export function ActualsPage({
   actuals,
-  summary,
+  departmentHierarchy,
+  accountHierarchy,
 }: {
   actuals: ActualRow[];
-  summary?: MetricSummary;
+  departmentHierarchy: DimensionMember[];
+  accountHierarchy: DimensionMember[];
 }) {
+  const filteredSummary = summarizeRows(actuals);
   return (
     <div className="grid two">
       <ImportPanel />
       <Panel>
         <div className="panel-heading">
           <h2>Department cost breakdown</h2>
-          <span>{summary?.months.length ?? 0} months imported</span>
+          <span>{filteredSummary.months.length} months</span>
         </div>
-        {summary?.departments.length ? (
-          <CostBreakdown departments={summary.departments} />
+        {filteredSummary.departments.length ? (
+          <CostBreakdown departments={filteredSummary.departments} />
         ) : (
           <EmptyState
             title="No actuals imported"
@@ -46,9 +59,18 @@ export function ActualsPage({
       <Panel className="span-two">
         <div className="panel-heading">
           <h2>Historical revenue</h2>
-          <span>12 month actuals</span>
         </div>
         <RevenueChart rows={actuals} />
+      </Panel>
+      <Panel className="span-two">
+        <div className="panel-heading">
+          <h2>Actuals by department and account</h2>
+        </div>
+        <ActualsGrid
+          rows={actuals}
+          departmentHierarchy={departmentHierarchy}
+          accountHierarchy={accountHierarchy}
+        />
       </Panel>
     </div>
   );
@@ -123,6 +145,71 @@ export function RevenueChart({ rows }: { rows: ActualRow[] }) {
         <Area dataKey="value" stroke="#166534" fill="url(#revenue-fill)" strokeWidth={2} />
       </AreaChart>
     </ResponsiveContainer>
+  );
+}
+
+function ActualsGrid({
+  rows,
+  departmentHierarchy,
+  accountHierarchy,
+}: {
+  rows: ActualRow[];
+  departmentHierarchy: DimensionMember[];
+  accountHierarchy: DimensionMember[];
+}) {
+  const months = getMonths(rows);
+  const pivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
+  if (pivotRows.length === 0) {
+    return <EmptyState title="No actuals" body="Import actuals to populate the table." />;
+  }
+  return (
+    <>
+      <div className="grid-toolbar">
+        <GhostButton
+          type="button"
+          aria-label="Copy grid"
+          onClick={() => copyGrid(buildActualGridTsv(months, pivotRows))}
+        >
+          <Copy size={15} /> Copy grid
+        </GhostButton>
+        <ExportMenu
+          onCsv={() => { const m = buildActualGridMatrix(months, pivotRows); exportCsv("actuals.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildActualGridMatrix(months, pivotRows); void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows); }}
+          onPdf={() => { const m = buildActualGridMatrix(months, pivotRows); exportPdf("actuals.pdf", "Actuals", m.headers, m.rows); }}
+        />
+      </div>
+      <div className="spreadsheet-wrap">
+      <table className="spreadsheet-grid">
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th>Account</th>
+            {months.map((month) => (
+              <th key={month}>{month}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pivotRows.map((row) => (
+            <tr
+              key={`${row.department}-${row.account}`}
+              className={row.isParent ? "department-rollup-row" : undefined}
+            >
+              <th scope="row" style={{ paddingLeft: `${8 + row.hierarchyLevel * 16}px` }}>
+                {row.department}
+              </th>
+              <td>{row.account}</td>
+              {months.map((month) => (
+                <td key={month} className="numeric-cell">
+                  {formatCell(row.account, row.values[month] ?? 0)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      </div>
+    </>
   );
 }
 

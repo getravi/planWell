@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Save, Settings2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   ActualRow,
   DimensionMember,
@@ -10,6 +10,7 @@ import type {
 } from "../../domain/types.ts";
 import { client, type ScenarioRecord } from "../api.ts";
 import {
+  buildActualGridMatrix,
   buildActualGridTsv,
   buildDriverGridTsv,
   copyGrid,
@@ -26,7 +27,8 @@ import {
   orderedOptionsFromMembers,
 } from "../dimension-utils.ts";
 import { formatCell } from "../format.ts";
-import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "../ui.tsx";
+import { Button, EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui.tsx";
+import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 import { RevenueChart } from "./ActualsPage.tsx";
 
 export function ForecastPage({
@@ -108,8 +110,6 @@ function ScenarioEditor({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
-  const [selectedDepartment, setSelectedDepartment] = useState("");
-  const [hasManualAssumptionLevel, setHasManualAssumptionLevel] = useState(false);
   const active = draft ?? scenario?.assumptions;
   const isLocked = Boolean(scenario?.locked);
   const ancestorLookup = useMemo(
@@ -127,18 +127,17 @@ function ScenarioEditor({
       left.localeCompare(right),
     );
   }, [active, months]);
-  const departmentSelectOptions = useMemo(
+  const departmentOptions = useMemo(
     () =>
       orderedOptionsFromMembers(departmentHierarchy, [
         ...departments,
         ...Object.keys(active?.overrides ?? {}),
-      ]),
+      ]).map((d) => d.name),
     [active, departmentHierarchy, departments],
   );
-  const departmentOptions = useMemo(
-    () => departmentSelectOptions.map((department) => department.name),
-    [departmentSelectOptions],
-  );
+  const selectedDepartment = departmentOptions.includes(departmentFilter)
+    ? departmentFilter
+    : (departmentOptions[0] ?? "");
   const save = useMutation({
     mutationFn: client.saveScenario,
     onSuccess: async () => {
@@ -146,28 +145,6 @@ function ScenarioEditor({
       await queryClient.invalidateQueries();
     },
   });
-
-  useEffect(() => {
-    if (departmentFilter !== "__all__") {
-      if (departmentOptions.includes(departmentFilter)) {
-        setSelectedDepartment(departmentFilter);
-        setHasManualAssumptionLevel(false);
-      }
-      return;
-    }
-    if (
-      !hasManualAssumptionLevel &&
-      departmentOptions[0] &&
-      selectedDepartment !== departmentOptions[0]
-    ) {
-      setSelectedDepartment(departmentOptions[0]);
-      return;
-    }
-    if (!selectedDepartment || !departmentOptions.includes(selectedDepartment)) {
-      setSelectedDepartment(departmentOptions[0] ?? "");
-      setHasManualAssumptionLevel(false);
-    }
-  }, [departmentFilter, departmentOptions, hasManualAssumptionLevel, selectedDepartment]);
 
   if (!active) {
     return (
@@ -256,54 +233,35 @@ function ScenarioEditor({
         <h2>Driver assumptions</h2>
         <Settings2 size={18} />
       </div>
-      <div className="driver-controls">
-        <label>
-          <Label>Assumption level</Label>
-          <Select
-            aria-label="Assumption level"
-            value={selectedDepartment}
-            onChange={(event) => {
-              setSelectedDepartment(event.target.value);
-              setHasManualAssumptionLevel(true);
-            }}
-          >
-            {departmentSelectOptions.map((department) => (
-              <option data-depth={department.depth} key={department.name} value={department.name}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
       <p className="muted driver-note">
         {isLocked
           ? `${scenario?.name} is locked. Driver assumptions are read-only until it is unlocked in Versions.`
           : `Editing ${selectedDepartment} assumptions by month. Child departments inherit these values until they set their own values.`}
       </p>
+      <div className="grid-toolbar">
+        <GhostButton
+          type="button"
+          aria-label="Copy grid"
+          onClick={() =>
+            copyGrid(
+              buildDriverGridTsv(
+                monthOptions,
+                driverRows,
+                (month) =>
+                  getDisplayDrivers(
+                    active,
+                    month,
+                    selectedDepartment,
+                    ancestorLookup,
+                  ) as unknown as Record<string, number>,
+              ),
+            )
+          }
+        >
+          <Copy size={15} /> Copy grid
+        </GhostButton>
+      </div>
       <div className="driver-matrix-wrap">
-        <div className="grid-toolbar">
-          <GhostButton
-            type="button"
-            aria-label="Copy grid"
-            onClick={() =>
-              copyGrid(
-                buildDriverGridTsv(
-                  monthOptions,
-                  driverRows,
-                  (month) =>
-                    getDisplayDrivers(
-                      active,
-                      month,
-                      selectedDepartment,
-                      ancestorLookup,
-                    ) as unknown as Record<string, number>,
-                ),
-              )
-            }
-          >
-            <Copy size={15} /> Copy grid
-          </GhostButton>
-        </div>
         <table className="driver-matrix spreadsheet-grid">
           <thead>
             <tr>
@@ -423,7 +381,7 @@ function ForecastGrid({
     );
   }
   return (
-    <div className="spreadsheet-wrap">
+    <>
       <div className="grid-toolbar">
         <GhostButton
           type="button"
@@ -432,7 +390,13 @@ function ForecastGrid({
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
+        <ExportMenu
+          onCsv={() => { const m = buildActualGridMatrix(months, pivotRows); exportCsv("forecast.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildActualGridMatrix(months, pivotRows); void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows); }}
+          onPdf={() => { const m = buildActualGridMatrix(months, pivotRows); exportPdf("forecast.pdf", "Forecast", m.headers, m.rows); }}
+        />
       </div>
+      <div className="spreadsheet-wrap">
       <table className="spreadsheet-grid">
         <thead>
           <tr>
@@ -462,7 +426,8 @@ function ForecastGrid({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

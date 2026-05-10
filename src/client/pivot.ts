@@ -394,6 +394,34 @@ export function describeVarianceInsight(row: VarianceInsight): string {
 // Grid TSV export
 // ---------------------------------------------------------------------------
 
+export function buildActualGridMatrix(
+  months: string[],
+  rows: PivotActualRow[],
+): { headers: string[]; rows: (string | number)[][] } {
+  return {
+    headers: ["Department", "Account", ...months],
+    rows: rows.map((row) => [
+      row.department,
+      row.account,
+      ...months.map((m) => Math.round(row.values[m] ?? 0)),
+    ]),
+  };
+}
+
+export function buildVarianceGridMatrix(
+  months: string[],
+  rows: PivotVarianceRow[],
+): { headers: string[]; rows: (string | number)[][] } {
+  return {
+    headers: ["Department", "Account", ...months],
+    rows: rows.map((row) => [
+      row.department,
+      row.account,
+      ...months.map((m) => Math.round(row.values[m]?.variance ?? 0)),
+    ]),
+  };
+}
+
 /**
  * Serializes a pivoted actuals/forecast grid to a TSV string suitable for
  * pasting into spreadsheet applications.

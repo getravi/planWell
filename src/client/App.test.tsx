@@ -288,23 +288,17 @@ describe("PlanWell workbench UI", () => {
         .closest("section")
         ?.classList.contains("span-two"),
     ).toBe(true);
-    const assumptionOptions = await getSelectOptions(/assumption level/i);
-    expect(assumptionOptions.filter((option) => option.label === "Total Company")).toHaveLength(1);
-    expect(assumptionOptions.find((option) => option.value === "__company__")).toBeUndefined();
-    expect(assumptionOptions.map((option) => option.label)).toEqual([
+    const departmentOptions = await getSelectOptions(/forecast department/i);
+    expect(departmentOptions.map((option) => option.label)).toEqual([
       "Total Company",
       "Product",
       "GPU Cloud",
       "Engineering",
     ]);
-    expect(assumptionOptions.find((option) => option.label === "Total Company")?.depth).toBe("0");
-    expect(assumptionOptions.find((option) => option.label === "Product")?.depth).toBe("1");
-    expect(assumptionOptions.find((option) => option.label === "GPU Cloud")?.depth).toBe("2");
-    expect(assumptionOptions.find((option) => option.label === "GPU Cloud")?.paddingLeft).toBe(
-      "40px",
-    );
+    expect(departmentOptions.find((option) => option.label === "Total Company")?.depth).toBe("0");
+    expect(departmentOptions.find((option) => option.label === "Product")?.depth).toBe("1");
+    expect(departmentOptions.find((option) => option.label === "GPU Cloud")?.depth).toBe("2");
     expect(screen.queryByRole("option", { name: "Company defaults" })).toBeNull();
-    expect(assumptionOptions.some((option) => option.label === "Engineering")).toBe(true);
     expect(screen.getAllByRole("columnheader", { name: "2026-01" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("rowheader", { name: "Revenue growth" })).toBeTruthy();
