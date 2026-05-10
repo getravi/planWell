@@ -4,8 +4,9 @@ import { parseActualsCsv } from "./importer.ts";
 import { evaluateFormula } from "./formulaEngine.ts";
 
 describe("formulaEngine sandbox", () => {
-  it("blocks mathjs import() in a formula", () => {
+  it("blocks mathjs import() in a formula (blocked by mathjs unsafe list)", () => {
     const ctx = { base: 1000, month: 1, revenue: 1000, headcount: 20 };
+    // mathjs blocks import() natively via its unsafe list — no override needed
     expect(() => evaluateFormula('import("mathjs")', ctx)).toThrow();
   });
 

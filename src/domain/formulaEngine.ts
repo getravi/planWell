@@ -3,9 +3,11 @@ import type { CoreAccount, CustomVariableDef } from "./types.ts";
 
 const math = create(all);
 
+// createUnit is not on mathjs's unsafe list so must be explicitly blocked.
+// import is already blocked by mathjs internally (unsafe list) — do not add it here,
+// as doing so with { override: true } would make it reachable as a symbol.
 math.import(
   {
-    import: () => { throw new Error("import is not allowed in formulas"); },
     createUnit: () => { throw new Error("createUnit is not allowed in formulas"); },
   },
   { override: true },
