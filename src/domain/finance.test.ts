@@ -80,23 +80,22 @@ describe("driver-based forecasting", () => {
 `).rows;
 
   const builtinDefs = [
-    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
-    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
-    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
-    { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const },
+    { id: "costPerHead", label: "Cost per Head", kind: "input" as const },
   ];
 
-  it("builds a 12-month forward forecast from global defaults and department overrides", () => {
+  it("builds a 12-month forward forecast with dept monthly overrides", () => {
     const forecast = buildForecast(actuals, {
       name: "Base Case",
-      varGlobal: {
-        revenueGrowthRate: 0.1,
-        cogsPctOfRevenue: 0.42,
-        headcountGrowthRate: 0.05,
-        costPerHead: 15000,
-      },
       varOverrides: {
-        Engineering: { global: { headcountGrowthRate: 0.1, costPerHead: 18000 } },
+        "GPU Cloud": {
+          monthly: { "2026-01": { revenueGrowthRate: 0.1, cogsPctOfRevenue: 0.42, headcountGrowthRate: 0.05, costPerHead: 15000 } },
+        },
+        Engineering: {
+          monthly: { "2026-01": { headcountGrowthRate: 0.1, costPerHead: 18000 } },
+        },
       },
     }, [], undefined, builtinDefs);
 
@@ -129,44 +128,19 @@ describe("driver-based forecasting", () => {
     ).toBeCloseTo(396000);
   });
 
-  it("uses month-level drivers and department month overrides", () => {
+  it("uses per-dept monthly overrides for different months", () => {
     const forecast = buildForecast(actuals, {
       name: "Monthly Plan",
-      varGlobal: {
-        revenueGrowthRate: 0.01,
-        cogsPctOfRevenue: 0.5,
-        headcountGrowthRate: 0.01,
-        costPerHead: 15000,
-      },
-      varMonthly: {
-        "2026-01": {
-          revenueGrowthRate: 0.1,
-          cogsPctOfRevenue: 0.4,
-          headcountGrowthRate: 0.05,
-          costPerHead: 15000,
-        },
-        "2026-02": {
-          revenueGrowthRate: 0.2,
-          cogsPctOfRevenue: 0.35,
-          headcountGrowthRate: 0.08,
-          costPerHead: 16000,
-        },
-      },
       varOverrides: {
         "GPU Cloud": {
           monthly: {
-            "2026-02": {
-              revenueGrowthRate: 0.5,
-              cogsPctOfRevenue: 0.3,
-            },
+            "2026-01": { revenueGrowthRate: 0.1, cogsPctOfRevenue: 0.4, headcountGrowthRate: 0.05, costPerHead: 15000 },
+            "2026-02": { revenueGrowthRate: 0.5, cogsPctOfRevenue: 0.3, headcountGrowthRate: 0.08, costPerHead: 16000 },
           },
         },
         Engineering: {
           monthly: {
-            "2026-01": {
-              headcountGrowthRate: 0.2,
-              costPerHead: 20000,
-            },
+            "2026-01": { headcountGrowthRate: 0.2, costPerHead: 20000 },
           },
         },
       },
@@ -203,13 +177,6 @@ describe("driver-based forecasting", () => {
       actuals,
       {
         name: "Hierarchy Plan",
-        varGlobal: {
-          revenueGrowthRate: 0,
-          cogsPctOfRevenue: 0.5,
-          headcountGrowthRate: 0,
-          costPerHead: 10000,
-        },
-        varMonthly: {},
         varOverrides: {
           "Total Company": {
             monthly: {
@@ -322,10 +289,10 @@ describe("driver-based forecasting", () => {
         { month: "2025-12", department: "Eng", account: "OpEx", value: 5000 },
       ];
       const builtinDefs = [
-        { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
-        { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
-        { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
-        { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
+        { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const },
+        { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const },
+        { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const },
+        { id: "costPerHead", label: "Cost per Head", kind: "input" as const },
       ];
       const assumptions = {
         name: "Test",
@@ -371,63 +338,33 @@ describe("nextMonths", () => {
 
 describe("resolveVarValues precedence", () => {
   const defs: CustomVariableDef[] = [
-    { id: "rate", label: "Rate", kind: "input", defaultValue: 0.01 },
+    { id: "rate", label: "Rate", kind: "input" },
   ];
   const ancestorLookup = new Map([
     ["Child", ["Parent"]],
     ["Parent", []],
   ]);
 
-  it("uses defaultValue when no overrides", () => {
+  it("returns 0 when no overrides are set", () => {
     const result = resolveVarValues(defs, { name: "Test" }, "Child", "2025-01", 1, ancestorLookup);
-    expect(result.rate).toBe(0.01);
+    expect(result.rate).toBe(0);
   });
 
-  it("varGlobal overrides defaultValue", () => {
-    const assumptions: ScenarioAssumptions = { name: "Test", varGlobal: { rate: 0.05 } };
-    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
-    expect(result.rate).toBe(0.05);
-  });
-
-  it("varMonthly overrides varGlobal", () => {
+  it("ancestor dept monthly sets value for child dept", () => {
     const assumptions: ScenarioAssumptions = {
       name: "Test",
-      varGlobal: { rate: 0.05 },
-      varMonthly: { "2025-01": { rate: 0.1 } },
-    };
-    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
-    expect(result.rate).toBe(0.1);
-  });
-
-  it("ancestor dept global overrides varMonthly", () => {
-    const assumptions: ScenarioAssumptions = {
-      name: "Test",
-      varGlobal: { rate: 0.05 },
-      varOverrides: { Parent: { global: { rate: 0.2 } } },
+      varOverrides: { Parent: { monthly: { "2025-01": { rate: 0.2 } } } },
     };
     const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
     expect(result.rate).toBe(0.2);
   });
 
-  it("dept global overrides ancestor dept global", () => {
+  it("dept monthly overrides ancestor dept monthly", () => {
     const assumptions: ScenarioAssumptions = {
       name: "Test",
       varOverrides: {
-        Parent: { global: { rate: 0.2 } },
-        Child: { global: { rate: 0.3 } },
-      },
-    };
-    const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
-    expect(result.rate).toBe(0.3);
-  });
-
-  it("dept monthly overrides everything", () => {
-    const assumptions: ScenarioAssumptions = {
-      name: "Test",
-      varGlobal: { rate: 0.05 },
-      varOverrides: {
-        Parent: { global: { rate: 0.2 }, monthly: { "2025-01": { rate: 0.25 } } },
-        Child: { global: { rate: 0.3 }, monthly: { "2025-01": { rate: 0.99 } } },
+        Parent: { monthly: { "2025-01": { rate: 0.2 } } },
+        Child: { monthly: { "2025-01": { rate: 0.99 } } },
       },
     };
     const result = resolveVarValues(defs, assumptions, "Child", "2025-01", 1, ancestorLookup);
@@ -436,17 +373,21 @@ describe("resolveVarValues precedence", () => {
 
   it("evaluates calculated vars after input vars are resolved", () => {
     const calcDefs: CustomVariableDef[] = [
-      { id: "rate", label: "Rate", kind: "input", defaultValue: 0.05 },
+      { id: "rate", label: "Rate", kind: "input" },
       { id: "adjustedRate", label: "Adjusted Rate", kind: "calculated", formula: "rate * 2" },
     ];
     const noAncestors = new Map<string, string[]>([["Eng", []]]);
-    const result = resolveVarValues(calcDefs, { name: "Test" }, "Eng", "2025-01", 1, noAncestors);
+    const assumptions: ScenarioAssumptions = {
+      name: "Test",
+      varOverrides: { Eng: { monthly: { "2025-01": { rate: 0.05 } } } },
+    };
+    const result = resolveVarValues(calcDefs, assumptions, "Eng", "2025-01", 1, noAncestors);
     expect(result.adjustedRate).toBeCloseTo(0.1, 5);
   });
 
-  it("multi-level ancestors: grandparent < parent < child overrides", () => {
+  it("multi-level ancestors: grandparent < parent < child (monthly)", () => {
     const multiDefs: CustomVariableDef[] = [
-      { id: "rate", label: "Rate", kind: "input", defaultValue: 0.01 },
+      { id: "rate", label: "Rate", kind: "input" },
     ];
     const multiAncestors = new Map<string, string[]>([
       ["GrandParent", []],
@@ -456,9 +397,9 @@ describe("resolveVarValues precedence", () => {
     const assumptions: ScenarioAssumptions = {
       name: "Test",
       varOverrides: {
-        GrandParent: { global: { rate: 0.1 } },
-        Parent: { global: { rate: 0.2 } },
-        Child: { global: { rate: 0.3 } },
+        GrandParent: { monthly: { "2025-01": { rate: 0.1 } } },
+        Parent: { monthly: { "2025-01": { rate: 0.2 } } },
+        Child: { monthly: { "2025-01": { rate: 0.3 } } },
       },
     };
     const result = resolveVarValues(multiDefs, assumptions, "Child", "2025-01", 1, multiAncestors);

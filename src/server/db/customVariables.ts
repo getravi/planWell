@@ -1,11 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
-import type { CustomVariableDef, CustomVarValues, ScenarioAssumptions } from "../../domain/types.ts";
+import type { CustomVariableDef, ScenarioAssumptions } from "../../domain/types.ts";
 import { topoSortCustomVars, validateCustomFormula, CycleError } from "../../domain/formulaEngine.ts";
 
 const RESERVED_IDS = new Set([
-  "base", "growthRate", "cogsPct", "costPerHead", "month", "revenue", "headcount",
+  "base", "month", "revenue", "headcount",
   "pow", "sqrt", "abs", "max", "min", "round", "pi", "e", "true", "false", "NaN", "Infinity",
-  "revenueGrowthRate", "cogsPctOfRevenue", "headcountGrowthRate",
 ]);
 
 const ID_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -114,14 +113,29 @@ export function deleteCustomVariable(db: DatabaseSync, id: string): void {
   if (!existing) {
     throw new Error(`Variable "${id}" not found.`);
   }
-  const inUse = db
-    .prepare("select count(*) as cnt from custom_variable_values where var_id = ?")
-    .get(id) as { cnt: number };
-  if (inUse.cnt > 0) {
-    throw new Error(
-      `Variable "${id}" has values saved in scenarios. Clear scenario values first.`,
-    );
+
+  const pattern = new RegExp(`\\b${id}\\b`);
+
+  const calcVarRefs = (
+    db.prepare("select id, label, formula from custom_variables where kind = 'calculated' and id != ? and formula is not null").all(id) as
+      { id: string; label: string; formula: string }[]
+  ).filter((v) => pattern.test(v.formula));
+  if (calcVarRefs.length > 0) {
+    const names = calcVarRefs.map((v) => v.label).join(", ");
+    throw new Error(`Variable "${id}" is used in the formula of: ${names}. Remove it from those formulas first.`);
   }
+
+  const scenarioFormulaRows = (
+    db.prepare("select account, formula from scenario_formulas").all() as
+      { account: string; formula: string }[]
+  ).filter((r) => pattern.test(r.formula));
+
+  if (scenarioFormulaRows.length > 0) {
+    const accounts = [...new Set(scenarioFormulaRows.map((r) => r.account))].join(", ");
+    throw new Error(`Variable "${id}" is used in scenario formula overrides for: ${accounts}. Remove it from those formulas first.`);
+  }
+
+  db.prepare("delete from custom_variable_values where var_id = ?").run(id);
   db.prepare("delete from custom_variables where id = ?").run(id);
 }
 
@@ -129,56 +143,33 @@ export function deleteCustomVariableValuesByScenario(db: DatabaseSync, scenarioI
   db.prepare("delete from custom_variable_values where scenario_id = ?").run(scenarioId);
 }
 
-export function readCustomVarValues(
+export function readVarValues(
   db: DatabaseSync,
   scenarioId: string,
-): {
-  customVarGlobal: CustomVarValues;
-  customVarMonthly: Record<string, Partial<CustomVarValues>>;
-  customVarOverrides: Record<
-    string,
-    { global?: Partial<CustomVarValues>; monthly?: Record<string, Partial<CustomVarValues>> }
-  >;
-} {
+): Record<string, { monthly?: Record<string, Partial<Record<string, number>>> }> {
   const rows = db
     .prepare(
-      "select var_id, scope, value from custom_variable_values where scenario_id = ?",
+      "select var_id, scope, value from custom_variable_values where scenario_id = ? and scope like 'dept:%:monthly:%'",
     )
     .all(scenarioId) as { var_id: string; scope: string; value: number }[];
 
-  const customVarGlobal: CustomVarValues = {};
-  const customVarMonthly: Record<string, Partial<CustomVarValues>> = {};
-  const customVarOverrides: Record<
-    string,
-    { global?: Partial<CustomVarValues>; monthly?: Record<string, Partial<CustomVarValues>> }
-  > = {};
+  const varOverrides: Record<string, { monthly?: Record<string, Partial<Record<string, number>>> }> = {};
+  const monthlyMarker = ":monthly:";
 
   for (const row of rows) {
-    if (row.scope === "global") {
-      customVarGlobal[row.var_id] = row.value;
-    } else if (row.scope.startsWith("monthly:")) {
-      const month = row.scope.slice("monthly:".length);
-      (customVarMonthly[month] ??= {})[row.var_id] = row.value;
-    } else if (row.scope.startsWith("dept:")) {
-      const rest = row.scope.slice("dept:".length);
-      const monthlyMarker = ":monthly:";
-      const mi = rest.indexOf(monthlyMarker);
-      if (mi === -1) {
-        const override = (customVarOverrides[rest] ??= {});
-        (override.global ??= {})[row.var_id] = row.value;
-      } else {
-        const dept = rest.slice(0, mi);
-        const month = rest.slice(mi + monthlyMarker.length);
-        const override = (customVarOverrides[dept] ??= {});
-        ((override.monthly ??= {})[month] ??= {})[row.var_id] = row.value;
-      }
-    }
+    const rest = row.scope.slice("dept:".length);
+    const mi = rest.indexOf(monthlyMarker);
+    if (mi === -1) continue;
+    const dept = rest.slice(0, mi);
+    const month = rest.slice(mi + monthlyMarker.length);
+    const override = (varOverrides[dept] ??= {});
+    ((override.monthly ??= {})[month] ??= {})[row.var_id] = row.value;
   }
 
-  return { customVarGlobal, customVarMonthly, customVarOverrides };
+  return varOverrides;
 }
 
-export function replaceCustomVarValues(
+export function replaceVarValues(
   db: DatabaseSync,
   scenarioId: string,
   assumptions: ScenarioAssumptions,
@@ -188,18 +179,7 @@ export function replaceCustomVarValues(
     "insert into custom_variable_values (scenario_id, var_id, scope, value) values (?, ?, ?, ?)",
   );
 
-  for (const [varId, value] of Object.entries(assumptions.customVarGlobal ?? {})) {
-    insert.run(scenarioId, varId, "global", value);
-  }
-  for (const [month, vars] of Object.entries(assumptions.customVarMonthly ?? {})) {
-    for (const [varId, value] of Object.entries(vars)) {
-      if (value !== undefined) insert.run(scenarioId, varId, `monthly:${month}`, value);
-    }
-  }
-  for (const [dept, override] of Object.entries(assumptions.customVarOverrides ?? {})) {
-    for (const [varId, value] of Object.entries(override.global ?? {})) {
-      if (value !== undefined) insert.run(scenarioId, varId, `dept:${dept}`, value);
-    }
+  for (const [dept, override] of Object.entries(assumptions.varOverrides ?? {})) {
     for (const [month, vars] of Object.entries(override.monthly ?? {})) {
       for (const [varId, value] of Object.entries(vars)) {
         if (value !== undefined) insert.run(scenarioId, varId, `dept:${dept}:monthly:${month}`, value);

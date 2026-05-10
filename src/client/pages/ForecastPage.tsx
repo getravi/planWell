@@ -58,7 +58,6 @@ export function ForecastPage({
   const months = [
     ...new Set([
       ...rows.map((row) => row.month),
-      ...Object.keys(scenario?.assumptions.varMonthly ?? {}),
       ...Object.values(scenario?.assumptions.varOverrides ?? {}).flatMap((override) =>
         Object.keys(override.monthly ?? {}),
       ),
@@ -126,12 +125,9 @@ function ScenarioEditor({
     [departmentHierarchy],
   );
   const monthOptions = useMemo(() => {
-    const scenarioMonths = [
-      ...Object.keys(active?.varMonthly ?? {}),
-      ...Object.values(active?.varOverrides ?? {}).flatMap((override) =>
-        Object.keys(override.monthly ?? {}),
-      ),
-    ];
+    const scenarioMonths = Object.values(active?.varOverrides ?? {}).flatMap((override) =>
+      Object.keys(override.monthly ?? {}),
+    );
     return [...new Set([...months, ...scenarioMonths])].sort((left, right) =>
       left.localeCompare(right),
     );
@@ -228,14 +224,11 @@ function ScenarioEditor({
     });
   };
 
-  const resolveVarDisplay = (varId: string, month: string, defaultValue = 0): number => {
-    let value = active.varGlobal?.[varId] ?? defaultValue;
-    value = active.varMonthly?.[month]?.[varId] ?? value;
+  const resolveVarDisplay = (varId: string, month: string): number => {
+    let value = 0;
     for (const ancestor of ancestorLookup.get(selectedDepartment) ?? []) {
-      value = active.varOverrides?.[ancestor]?.global?.[varId] ?? value;
       value = active.varOverrides?.[ancestor]?.monthly?.[month]?.[varId] ?? value;
     }
-    value = active.varOverrides?.[selectedDepartment]?.global?.[varId] ?? value;
     value = active.varOverrides?.[selectedDepartment]?.monthly?.[month]?.[varId] ?? value;
     return value;
   };
@@ -260,7 +253,7 @@ function ScenarioEditor({
             const dataRows = inputVarDefs.map((def) => {
               const isPercent = PERCENT_VAR_IDS.has(def.id);
               const cells = monthOptions.map((month) => {
-                const v = resolveVarDisplay(def.id, month, def.defaultValue ?? 0);
+                const v = resolveVarDisplay(def.id, month);
                 return isPercent ? (v * 100).toFixed(1) : String(v);
               });
               return [def.label, ...cells].join("\t");
@@ -306,8 +299,8 @@ function ScenarioEditor({
                           step={isPercent ? 0.1 : 100}
                           value={
                             isPercent
-                              ? resolveVarDisplay(def.id, month, def.defaultValue ?? 0) * 100
-                              : resolveVarDisplay(def.id, month, def.defaultValue ?? 0)
+                              ? resolveVarDisplay(def.id, month) * 100
+                              : resolveVarDisplay(def.id, month)
                           }
                           onChange={(event) =>
                             updateVar(

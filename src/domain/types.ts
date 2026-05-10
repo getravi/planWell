@@ -11,17 +11,6 @@ export type ActualRow = {
 
 export type ForecastRow = ActualRow;
 
-export type DriverAssumptions = {
-  revenueGrowthRate: number;
-  cogsPctOfRevenue: number;
-  headcountGrowthRate: number;
-  costPerHead: number;
-};
-
-export type DepartmentDriverOverride = Partial<DriverAssumptions> & {
-  monthly?: Record<string, Partial<DriverAssumptions>>;
-};
-
 export type ScenarioFormulas = Partial<Record<CoreAccount, string>>;
 
 export type CustomVariableKind = "input" | "calculated";
@@ -31,23 +20,14 @@ export type CustomVariableDef = {
   label: string;
   kind: CustomVariableKind;
   formula?: string;
-  defaultValue?: number;
 };
 
-export type CustomVarValues = Record<string, number>;
+export type VarValues = Record<string, number>;
 
 export type ScenarioAssumptions = {
   name: string;
-  global: DriverAssumptions;
-  monthly?: Record<string, Partial<DriverAssumptions>>;
-  overrides: Record<string, DepartmentDriverOverride>;
+  varOverrides?: Record<string, { monthly?: Record<string, Partial<VarValues>> }>;
   formulas?: ScenarioFormulas;
-  customVarGlobal?: CustomVarValues;
-  customVarMonthly?: Record<string, Partial<CustomVarValues>>;
-  customVarOverrides?: Record<
-    string,
-    { global?: Partial<CustomVarValues>; monthly?: Record<string, Partial<CustomVarValues>> }
-  >;
 };
 
 export type ImportDiagnostics = {

@@ -34,14 +34,10 @@ export function resolveVarValues(
   const resolved: Record<string, number> = {};
 
   for (const def of defs.filter((d) => d.kind === "input")) {
-    let value = def.defaultValue ?? 0;
-    value = assumptions.varGlobal?.[def.id] ?? value;
-    value = assumptions.varMonthly?.[month]?.[def.id] ?? value;
+    let value = 0;
     for (const ancestor of ancestorLookup.get(department) ?? []) {
-      value = assumptions.varOverrides?.[ancestor]?.global?.[def.id] ?? value;
       value = assumptions.varOverrides?.[ancestor]?.monthly?.[month]?.[def.id] ?? value;
     }
-    value = assumptions.varOverrides?.[department]?.global?.[def.id] ?? value;
     value = assumptions.varOverrides?.[department]?.monthly?.[month]?.[def.id] ?? value;
     resolved[def.id] = value;
   }

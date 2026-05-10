@@ -1,4 +1,4 @@
-import type { DriverAssumptions, ScenarioAssumptions } from "../domain/types.ts";
+import type { ScenarioAssumptions } from "../domain/types.ts";
 
 export const sampleLongCsv = `month,department,account,value
 2025-01,GPU Cloud,Revenue,4200000
@@ -210,17 +210,15 @@ const forecastMonths = [
   "2026-12",
 ];
 
-function monthlyDrivers(
-  base: DriverAssumptions,
-  tweaks: Record<string, Partial<DriverAssumptions>> = {},
-): Record<string, DriverAssumptions> {
-  return Object.fromEntries(forecastMonths.map((month) => [month, { ...base, ...tweaks[month] }]));
-}
-
-function monthlyOverrides(
-  base: Partial<DriverAssumptions>,
-): Record<string, Partial<DriverAssumptions>> {
-  return Object.fromEntries(forecastMonths.map((month) => [month, base]));
+function deptMonthly(
+  base: Record<string, number>,
+  tweaks: Record<string, Record<string, number>> = {},
+): { monthly: Record<string, Record<string, number>> } {
+  return {
+    monthly: Object.fromEntries(
+      forecastMonths.map((month) => [month, { ...base, ...tweaks[month] }]),
+    ),
+  };
 }
 
 export const sampleWideCsv = `department,account,2025-01,2025-02,2025-03,2025-04,2025-05,2025-06,2025-07,2025-08,2025-09,2025-10,2025-11,2025-12
@@ -241,89 +239,46 @@ Sales,OpEx,612000,629000,646000,663000,680000,697000,714000,731000,748000,765000
 export const defaultScenarios: ScenarioAssumptions[] = [
   {
     name: "Base Case",
-    global: {
-      revenueGrowthRate: 0.035,
-      cogsPctOfRevenue: 0.44,
-      headcountGrowthRate: 0.015,
-      costPerHead: 19000,
-    },
-    monthly: monthlyDrivers(
-      {
-        revenueGrowthRate: 0.035,
-        cogsPctOfRevenue: 0.44,
-        headcountGrowthRate: 0.015,
-        costPerHead: 19000,
-      },
-      {
-        "2026-07": { revenueGrowthRate: 0.04 },
-        "2026-10": { cogsPctOfRevenue: 0.43 },
-      },
-    ),
-    overrides: {
-      Engineering: {
-        monthly: monthlyOverrides({ headcountGrowthRate: 0.018, costPerHead: 22500 }),
-      },
-      Sales: {
-        monthly: monthlyOverrides({ headcountGrowthRate: 0.02, costPerHead: 18000 }),
-      },
+    varOverrides: {
+      "GPU Cloud": deptMonthly(
+        { revenueGrowthRate: 0.035, cogsPctOfRevenue: 0.44, headcountGrowthRate: 0.015, costPerHead: 19000 },
+        { "2026-07": { revenueGrowthRate: 0.04 }, "2026-10": { cogsPctOfRevenue: 0.43 } },
+      ),
+      "Inference Platform": deptMonthly(
+        { revenueGrowthRate: 0.035, cogsPctOfRevenue: 0.44, headcountGrowthRate: 0.015, costPerHead: 19000 },
+        { "2026-07": { revenueGrowthRate: 0.04 }, "2026-10": { cogsPctOfRevenue: 0.43 } },
+      ),
+      Engineering: deptMonthly({ headcountGrowthRate: 0.018, costPerHead: 22500 }),
+      Sales: deptMonthly({ headcountGrowthRate: 0.02, costPerHead: 18000 }),
     },
   },
   {
     name: "Aggressive Growth",
-    global: {
-      revenueGrowthRate: 0.055,
-      cogsPctOfRevenue: 0.42,
-      headcountGrowthRate: 0.025,
-      costPerHead: 19500,
-    },
-    monthly: monthlyDrivers(
-      {
-        revenueGrowthRate: 0.055,
-        cogsPctOfRevenue: 0.42,
-        headcountGrowthRate: 0.025,
-        costPerHead: 19500,
-      },
-      {
-        "2026-03": { revenueGrowthRate: 0.06 },
-        "2026-06": { revenueGrowthRate: 0.062 },
-        "2026-09": { cogsPctOfRevenue: 0.41 },
-      },
-    ),
-    overrides: {
-      "GPU Cloud": {
-        monthly: monthlyOverrides({ revenueGrowthRate: 0.065, cogsPctOfRevenue: 0.41 }),
-      },
-      Engineering: {
-        monthly: monthlyOverrides({ headcountGrowthRate: 0.03, costPerHead: 23250 }),
-      },
-      Sales: { monthly: monthlyOverrides({ headcountGrowthRate: 0.035 }) },
+    varOverrides: {
+      "GPU Cloud": deptMonthly(
+        { revenueGrowthRate: 0.065, cogsPctOfRevenue: 0.41, headcountGrowthRate: 0.025, costPerHead: 19500 },
+      ),
+      "Inference Platform": deptMonthly(
+        { revenueGrowthRate: 0.055, cogsPctOfRevenue: 0.42, headcountGrowthRate: 0.025, costPerHead: 19500 },
+        { "2026-03": { revenueGrowthRate: 0.06 }, "2026-06": { revenueGrowthRate: 0.062 }, "2026-09": { cogsPctOfRevenue: 0.41 } },
+      ),
+      Engineering: deptMonthly({ headcountGrowthRate: 0.03, costPerHead: 23250 }),
+      Sales: deptMonthly({ headcountGrowthRate: 0.035, costPerHead: 19500 }),
     },
   },
   {
     name: "Conservative",
-    global: {
-      revenueGrowthRate: 0.018,
-      cogsPctOfRevenue: 0.47,
-      headcountGrowthRate: 0.006,
-      costPerHead: 18500,
-    },
-    monthly: monthlyDrivers(
-      {
-        revenueGrowthRate: 0.018,
-        cogsPctOfRevenue: 0.47,
-        headcountGrowthRate: 0.006,
-        costPerHead: 18500,
-      },
-      {
-        "2026-04": { revenueGrowthRate: 0.012 },
-        "2026-08": { headcountGrowthRate: 0.002 },
-      },
-    ),
-    overrides: {
-      Engineering: {
-        monthly: monthlyOverrides({ headcountGrowthRate: 0.004, costPerHead: 21800 }),
-      },
-      Sales: { monthly: monthlyOverrides({ headcountGrowthRate: 0.005 }) },
+    varOverrides: {
+      "GPU Cloud": deptMonthly(
+        { revenueGrowthRate: 0.018, cogsPctOfRevenue: 0.47, headcountGrowthRate: 0.006, costPerHead: 18500 },
+        { "2026-04": { revenueGrowthRate: 0.012 }, "2026-08": { headcountGrowthRate: 0.002 } },
+      ),
+      "Inference Platform": deptMonthly(
+        { revenueGrowthRate: 0.018, cogsPctOfRevenue: 0.47, headcountGrowthRate: 0.006, costPerHead: 18500 },
+        { "2026-04": { revenueGrowthRate: 0.012 }, "2026-08": { headcountGrowthRate: 0.002 } },
+      ),
+      Engineering: deptMonthly({ headcountGrowthRate: 0.004, costPerHead: 21800 }),
+      Sales: deptMonthly({ headcountGrowthRate: 0.005, costPerHead: 18500 }),
     },
   },
 ];

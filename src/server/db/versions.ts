@@ -188,15 +188,7 @@ export function isVersionLocked(db: DatabaseSync, id: string): boolean {
 }
 
 export function emptyScenarioAssumptions(name: string): ScenarioAssumptions {
-  return {
-    name,
-    varGlobal: {
-      revenueGrowthRate: 0,
-      cogsPctOfRevenue: 0,
-      headcountGrowthRate: 0,
-      costPerHead: 0,
-    },
-  };
+  return { name };
 }
 
 export function replaceScenarioFormulas(
@@ -237,11 +229,9 @@ export function readScenarios(db: DatabaseSync): ScenarioRecord[] {
     .all() as (ScenarioRow & { locked: number; sort_order: number | null })[];
 
   return rows.map((row) => {
-    const { varGlobal, varMonthly, varOverrides } = readVarValues(db, row.id);
+    const varOverrides = readVarValues(db, row.id);
     const formulas = readScenarioFormulas(db, row.id);
     const assumptions: ScenarioAssumptions = { name: row.name };
-    if (Object.keys(varGlobal).length > 0) assumptions.varGlobal = varGlobal;
-    if (Object.keys(varMonthly).length > 0) assumptions.varMonthly = varMonthly;
     if (Object.keys(varOverrides).length > 0) assumptions.varOverrides = varOverrides;
     if (Object.keys(formulas).length > 0) assumptions.formulas = formulas;
     return {

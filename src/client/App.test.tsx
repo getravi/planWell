@@ -325,8 +325,7 @@ describe("PlanWell workbench UI", () => {
         }
         const body = JSON.parse(init.body);
         return (
-          body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09 &&
-          body.varMonthly?.["2026-01"]?.revenueGrowthRate === 0.03
+          body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09
         );
       }),
     ).toBe(true);
@@ -1748,9 +1747,9 @@ function baseDrivers() {
 
 function builtinVars() {
   return [
-    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input", defaultValue: 0 },
-    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input", defaultValue: 0 },
-    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input", defaultValue: 0 },
-    { id: "costPerHead", label: "Cost per Head", kind: "input", defaultValue: 0 },
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" },
+    { id: "costPerHead", label: "Cost per Head", kind: "input" },
   ];
 }

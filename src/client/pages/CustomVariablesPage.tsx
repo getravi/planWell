@@ -89,7 +89,6 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<"input" | "calculated">("input");
   const [formula, setFormula] = useState("");
-  const [defaultValue, setDefaultValue] = useState("");
   const [formulaStatus, setFormulaStatus] = useState<{ ok: boolean; error?: string } | null>(null);
 
   const createMutation = useMutation({
@@ -99,7 +98,6 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
       setLabel("");
       setKind("input");
       setFormula("");
-      setDefaultValue("");
       setFormulaStatus(null);
       await queryClient.invalidateQueries();
     },
@@ -177,20 +175,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
           </label>
         </div>
       </div>
-      {kind === "input" ? (
-        <div className="form-field">
-          <label className="form-label">
-            Default value
-            <Input
-              type="number"
-              step="any"
-              placeholder="0"
-              value={defaultValue}
-              onChange={(e) => setDefaultValue(e.target.value)}
-            />
-          </label>
-        </div>
-      ) : (
+      {kind === "calculated" ? (
         <div className="form-field">
           <label className="form-label">
             Formula
@@ -216,7 +201,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
             )
           ) : null}
         </div>
-      )}
+      ) : null}
       <Button
         disabled={!canSubmit || createMutation.isPending}
         onClick={() =>
@@ -225,7 +210,6 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
             label: label.trim(),
             kind,
             formula: kind === "calculated" ? formula.trim() : undefined,
-            defaultValue: kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
           })
         }
       >

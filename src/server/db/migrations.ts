@@ -87,6 +87,7 @@ export function migrate(db: DatabaseSync): void {
   backfillVersionOrder(db);
   seedBuiltinVars(db);
   migrateDriverAssumptionsToVarValues(db);
+  deleteStaleVarScopes(db);
 }
 
 export function migrateVersions(db: DatabaseSync): void {
@@ -121,19 +122,15 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
     for (const row of legacyRows) {
       const old = JSON.parse(row.assumptions_json) as {
         name: string;
-        global?: Record<string, number>;
-        monthly?: Record<string, Record<string, number>>;
-        overrides?: Record<string, { monthly?: Record<string, Record<string, number>>; [k: string]: unknown }>;
+        overrides?: Record<string, { monthly?: Record<string, Record<string, number>> }>;
       };
       replaceVarValues(db, row.id, {
         name: old.name,
-        varGlobal: old.global ?? {},
-        varMonthly: old.monthly,
         varOverrides: Object.fromEntries(
-          Object.entries(old.overrides ?? {}).map(([dept, ov]) => {
-            const { monthly, ...rest } = ov;
-            return [dept, { global: rest as Record<string, number>, monthly: monthly as Record<string, Record<string, number>> | undefined }];
-          }),
+          Object.entries(old.overrides ?? {}).map(([dept, ov]) => [
+            dept,
+            { monthly: ov.monthly },
+          ]),
         ),
       });
     }
@@ -193,6 +190,13 @@ function migrateDriverAssumptionsToVarValues(db: DatabaseSync): void {
     }
     insert.run(row.scenario_id, row.driver_key, scope, row.value);
   }
+}
+
+function deleteStaleVarScopes(db: DatabaseSync): void {
+  db.prepare(`
+    delete from custom_variable_values
+    where scope not like 'dept:%:monthly:%'
+  `).run();
 }
 
 export function seedDemoUser(db: DatabaseSync): void {

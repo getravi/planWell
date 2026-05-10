@@ -123,18 +123,8 @@ describe("PlanWell API", () => {
     const repo = createFileRepository(dbPath);
     const scenario = repo.listScenarios().find((item) => item.name === "Legacy Case");
     expect(scenario?.assumptions).toMatchObject({
-      varGlobal: {
-        revenueGrowthRate: 0.02,
-        cogsPctOfRevenue: 0.4,
-        headcountGrowthRate: 0.01,
-        costPerHead: 12000,
-      },
-      varMonthly: {
-        "2026-02": { revenueGrowthRate: 0.05 },
-      },
       varOverrides: {
         "GPU Cloud": {
-          global: { cogsPctOfRevenue: 0.38 },
           monthly: {
             "2026-03": { costPerHead: 13000 },
           },
@@ -153,20 +143,11 @@ describe("PlanWell API", () => {
       )
       .all("legacy-scenario");
     expect(varRows).toContainEqual({
-      var_id: "revenueGrowthRate",
-      scope: "global",
-      value: 0.02,
-    });
-    expect(varRows).toContainEqual({
-      var_id: "revenueGrowthRate",
-      scope: "monthly:2026-02",
-      value: 0.05,
-    });
-    expect(varRows).toContainEqual({
       var_id: "costPerHead",
       scope: "dept:GPU Cloud:monthly:2026-03",
       value: 13000,
     });
+    expect(varRows.every((r: { scope: string }) => r.scope.startsWith("dept:") && r.scope.includes(":monthly:"))).toBe(true);
     migratedDb.close();
   });
 
@@ -303,13 +284,6 @@ describe("PlanWell API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({
         name: "Board Case",
-        varGlobal: {
-          revenueGrowthRate: 0.1,
-          cogsPctOfRevenue: 0.3,
-          headcountGrowthRate: 0,
-          costPerHead: 12000,
-        },
-        varMonthly: {},
         varOverrides: {},
       }),
     });
@@ -360,7 +334,6 @@ describe("PlanWell API", () => {
           .get(operatingPlan!.id) as { count: number }
       ).count;
     expect(countRows("forecast_values")).toBeGreaterThan(0);
-    expect(countRows("custom_variable_values")).toBeGreaterThan(0);
 
     const deleted = await app.request(`/api/versions/${operatingPlan!.id}`, {
       method: "DELETE",
@@ -528,7 +501,7 @@ describe("PlanWell API", () => {
     });
     expect(blockedDelete.status).toBe(409);
     expect(await blockedDelete.json()).toMatchObject({
-      impact: { actualRows: 1, forecastRows: 144, scenarioOverrides: 1, childCount: 1 },
+      impact: { actualRows: 1, forecastRows: 144, scenarioOverrides: 3, childCount: 1 },
     });
 
     const forcedDelete = await app.request(
@@ -558,13 +531,6 @@ describe("PlanWell API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({
         name: "Hierarchy Sensitivity",
-        varGlobal: {
-          revenueGrowthRate: 0.01,
-          cogsPctOfRevenue: 0.5,
-          headcountGrowthRate: 0,
-          costPerHead: 10000,
-        },
-        varMonthly: {},
         varOverrides: {
           Product: {
             monthly: {
@@ -585,7 +551,7 @@ describe("PlanWell API", () => {
         (row: { month: string; department: string; account: string }) =>
           row.month === "2026-01" && row.department === "GPU Cloud" && row.account === "Revenue",
       )?.value,
-    ).toBe(1010);
+    ).toBe(1000);
 
     const moveGpu = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
       method: "PATCH",

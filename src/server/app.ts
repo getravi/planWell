@@ -24,18 +24,14 @@ const csvImportSchema = z.object({
 
 const coreAccountEnum = z.enum(coreAccounts);
 
-const varValuesSchema = z.record(z.string(), z.number());
 const partialVarValuesSchema = z.record(z.string(), z.number().optional());
 
 const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
   name: z.string().min(1),
-  varGlobal: varValuesSchema.optional(),
-  varMonthly: z.record(z.string(), partialVarValuesSchema).optional(),
   varOverrides: z
     .record(
       z.string(),
       z.object({
-        global: partialVarValuesSchema.optional(),
         monthly: z.record(z.string(), partialVarValuesSchema).optional(),
       }),
     )
@@ -48,7 +44,6 @@ const customVarCreateSchema = z.object({
   label: z.string().min(1),
   kind: z.enum(["input", "calculated"]),
   formula: z.string().optional(),
-  defaultValue: z.number().optional(),
 });
 
 const customVarUpdateSchema = z.object({

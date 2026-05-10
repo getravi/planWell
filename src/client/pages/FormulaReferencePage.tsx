@@ -138,45 +138,15 @@ const EXAMPLES = [
 const PRECEDENCE_LEVELS = [
   {
     level: 1,
-    scope: "Variable default",
-    when: "Always — fallback when nothing else is set",
-    example: "revenueGrowthRate = 0.03",
+    scope: "Ancestor dept monthly",
+    when: "Set on a parent/grandparent department for a specific month — closer ancestors beat more distant ones",
+    example: "Engineering.monthly['2025-06'].headcountGrowthRate = 0.02",
   },
   {
     level: 2,
-    scope: "Scenario global",
-    when: "Set once for the whole scenario, all months, all departments",
-    example: "varGlobal.revenueGrowthRate = 0.05",
-  },
-  {
-    level: 3,
-    scope: "Scenario monthly",
-    when: "Set for one specific month, all departments",
-    example: "varMonthly['2025-06'].revenueGrowthRate = 0.08",
-  },
-  {
-    level: 4,
-    scope: "Ancestor dept global",
-    when: "Set on a parent/grandparent department, all months — closer ancestors beat distant ones",
-    example: "varOverrides.Engineering.global.revenueGrowthRate = 0.07",
-  },
-  {
-    level: 5,
-    scope: "Ancestor dept monthly",
-    when: "Set on a parent/grandparent department, specific month",
-    example: "varOverrides.Engineering.monthly['2025-06'].revenueGrowthRate = 0.10",
-  },
-  {
-    level: 6,
-    scope: "This dept global",
-    when: "Set on the exact department being forecast, all months",
-    example: "varOverrides['GPU Cloud'].global.revenueGrowthRate = 0.12",
-  },
-  {
-    level: 7,
     scope: "This dept monthly",
-    when: "Set on the exact department, specific month — highest priority",
-    example: "varOverrides['GPU Cloud'].monthly['2025-06'].revenueGrowthRate = 0.15",
+    when: "Set on the exact department for a specific month — highest priority",
+    example: "GPU Cloud.monthly['2025-06'].revenueGrowthRate = 0.05",
   },
 ];
 
@@ -340,9 +310,9 @@ export function FormulaReferencePage() {
 
         <h3>Value precedence for input variables</h3>
         <p className="muted">
-          When planWell resolves a variable for a given department and month, it walks through up to
-          seven override slots in order. Each slot only takes effect if a value was explicitly set —
-          unset slots are skipped. The last slot that has a value wins.
+          When planWell resolves a variable for a given department and month, it checks two override
+          slots in order. If no value is set, the variable defaults to 0. The last slot that has a
+          value wins.
         </p>
         <table className="ref-table">
           <thead>
