@@ -286,6 +286,32 @@ describe("driver-based forecasting", () => {
     ]);
   });
 
+  describe("compareSeries", () => {
+    it("handles department names containing the || delimiter", () => {
+      const left = [
+        { month: "2025-12", department: "Sales||Marketing", account: "Revenue", value: 1000 },
+      ];
+      const right = [
+        { month: "2025-12", department: "Sales||Marketing", account: "Revenue", value: 1200 },
+      ];
+      const rows = compareSeries(left, right);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].department).toBe("Sales||Marketing");
+      expect(rows[0].variance).toBeCloseTo(200, 2);
+    });
+
+    it("correctly aggregates when left and right have different keys", () => {
+      const left = [{ month: "2025-12", department: "Eng", account: "Revenue", value: 500 }];
+      const right = [{ month: "2025-12", department: "Sales", account: "Revenue", value: 300 }];
+      const rows = compareSeries(left, right);
+      expect(rows).toHaveLength(2);
+      const eng = rows.find((r) => r.department === "Eng");
+      expect(eng?.leftValue).toBe(500);
+      expect(eng?.rightValue).toBe(0);
+      expect(eng?.variance).toBeCloseTo(-500, 2);
+    });
+  });
+
   describe("safeEvaluate fallback", () => {
     it("falls back to default formula when custom formula references undefined variable", () => {
       const actuals = [

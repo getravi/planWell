@@ -155,16 +155,18 @@ export function buildForecast(
 }
 
 export function compareSeries(left: ActualRow[], right: ActualRow[]): VarianceRow[] {
-  const keys = new Set([...left.map(rowKey), ...right.map(rowKey)]);
+  const leftMap = new Map(left.map((r) => [rowKey(r), r.value]));
+  const rightMap = new Map(right.map((r) => [rowKey(r), r.value]));
+  const keys = new Set([...leftMap.keys(), ...rightMap.keys()]);
   return [...keys].sort().map((key) => {
-    const [month, department, account] = key.split("||");
-    const leftValue = left.find((row) => rowKey(row) === key)?.value ?? 0;
-    const rightValue = right.find((row) => rowKey(row) === key)?.value ?? 0;
+    const [month, department, account] = JSON.parse(key) as [string, string, string];
+    const leftValue = leftMap.get(key) ?? 0;
+    const rightValue = rightMap.get(key) ?? 0;
     const variance = roundCurrency(rightValue - leftValue);
     return {
-      month: month ?? "",
-      department: department ?? "",
-      account: account ?? "",
+      month,
+      department,
+      account,
       leftValue,
       rightValue,
       variance,
@@ -253,7 +255,7 @@ function monthsBetween(startMonth: string, targetMonth: string): number {
 }
 
 function rowKey(row: ActualRow): string {
-  return `${row.month}||${row.department}||${row.account}`;
+  return JSON.stringify([row.month, row.department, row.account]);
 }
 
 function sumByAccount(rows: ActualRow[], account: string): number {
