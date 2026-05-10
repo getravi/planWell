@@ -5,7 +5,6 @@ import type {
   DimensionImpact,
   DimensionKind,
   Dimensions,
-  DriverAssumptions,
   ForecastRow,
   KpiSummary,
   ScenarioAssumptions,
@@ -46,13 +45,6 @@ export type MetricSummary = {
     headcount: number;
   }[];
   months: string[];
-};
-
-export const emptyDrivers: DriverAssumptions = {
-  revenueGrowthRate: 0,
-  cogsPctOfRevenue: 0,
-  headcountGrowthRate: 0,
-  costPerHead: 0,
 };
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
