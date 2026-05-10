@@ -767,6 +767,19 @@ describe("PlanWell API", () => {
       process.env.PLANWELL_SKIP_SEED = original;
     }
   });
+
+  it("readScenarios returns scenarios in sort_order order", async () => {
+    const repo = createTestRepository();
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+    ]);
+    const scenarios = repo.listScenarios();
+    expect(scenarios.map((s) => s.name)).toEqual([
+      "Base Case",
+      "Aggressive Growth",
+      "Conservative",
+    ]);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {

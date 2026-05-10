@@ -3,24 +3,21 @@ import type {
   ScenarioAssumptions,
   ScenarioFormulas,
   CoreAccount,
-  DriverAssumptions,
 } from "../../domain/types.ts";
 import {
   withTransaction,
-  allMonths,
   actualsVersionId,
-  globalScopeKey,
-  driverKeys,
 } from "./utils.ts";
-import type { DriverKey, VersionRow, ScenarioRow, DriverAssumptionRow } from "./utils.ts";
+import type { VersionRow, ScenarioRow } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
 import { insertForecastRows, selectForecastRowsByScenarioId } from "./forecasts.ts";
 import { validateFormula } from "../../domain/formulaEngine.ts";
 import { recalculateScenario } from "./forecasts.ts";
 import {
-  readCustomVarValues,
-  replaceCustomVarValues,
+  readVarValues,
+  replaceVarValues,
   deleteCustomVariableValuesByScenario,
+  listCustomVariables,
 } from "./customVariables.ts";
 
 export type ScenarioRecord = {
@@ -77,9 +74,8 @@ export function createVersion(db: DatabaseSync, rawName: string, sourceId: strin
       now,
       now,
     );
-    replaceDriverAssumptions(db, id, assumptions);
+    replaceVarValues(db, id, assumptions);
     replaceScenarioFormulas(db, id, assumptions.formulas);
-    replaceCustomVarValues(db, id, assumptions);
     const sourceRows =
       sourceId === actualsVersionId
         ? selectCubeRows(db, "actuals")
@@ -106,7 +102,6 @@ export function updateVersion(
       ? normalizeVersionName(changes.name)
       : normalizeVersionName(current.name);
   ensureVersionNameAvailable(db, name, id);
-  const scenario = readScenarioById(db, id);
   const now = new Date().toISOString();
   withTransaction(db, () => {
     if (changes.sortOrder !== undefined) {
@@ -123,9 +118,6 @@ export function updateVersion(
       id,
     );
     db.prepare("update scenarios set name = ?, updated_at = ? where id = ?").run(name, now, id);
-    if (changes.name !== undefined) {
-      replaceDriverAssumptions(db, id, { ...scenario.assumptions, name });
-    }
   });
   return listVersions(db).find((version) => version.id === id)!;
 }
@@ -197,14 +189,12 @@ export function isVersionLocked(db: DatabaseSync, id: string): boolean {
 export function emptyScenarioAssumptions(name: string): ScenarioAssumptions {
   return {
     name,
-    global: {
+    varGlobal: {
       revenueGrowthRate: 0,
       cogsPctOfRevenue: 0,
       headcountGrowthRate: 0,
       costPerHead: 0,
     },
-    monthly: {},
-    overrides: {},
   };
 }
 
@@ -234,148 +224,33 @@ export function readScenarioFormulas(db: DatabaseSync, scenarioId: string): Scen
   return result;
 }
 
-export function replaceDriverAssumptions(
-  db: DatabaseSync,
-  scenarioId: string,
-  assumptions: ScenarioAssumptions,
-): void {
-  db.prepare("delete from driver_assumptions where scenario_id = ?").run(scenarioId);
-  const insert = db.prepare(`
-    insert into driver_assumptions (scenario_id, scope_type, scope_key, month, driver_key, value)
-    values (?, ?, ?, ?, ?, ?)
-  `);
-  const insertDrivers = (
-    scopeType: "global" | "department",
-    scopeKey: string,
-    month: string,
-    drivers: Partial<DriverAssumptions>,
-  ) => {
-    for (const key of driverKeys) {
-      const value = drivers[key];
-      if (value !== undefined) {
-        insert.run(scenarioId, scopeType, scopeKey, month, key, value);
-      }
-    }
-  };
-
-  insertDrivers("global", globalScopeKey, allMonths, assumptions.global);
-  for (const [month, drivers] of Object.entries(assumptions.monthly ?? {})) {
-    insertDrivers("global", globalScopeKey, month, drivers);
-  }
-  for (const [department, override] of Object.entries(assumptions.overrides)) {
-    const { monthly, ...defaultDrivers } = override;
-    insertDrivers("department", department, allMonths, defaultDrivers);
-    for (const [month, drivers] of Object.entries(monthly ?? {})) {
-      insertDrivers("department", department, month, drivers);
-    }
-  }
-}
-
-export function readDriverAssumptions(
-  db: DatabaseSync,
-  scenario: ScenarioRow,
-): ScenarioAssumptions {
-  const rows = db
-    .prepare(
-      "select scenario_id, scope_type, scope_key, month, driver_key, value from driver_assumptions where scenario_id = ?",
-    )
-    .all(scenario.id) as DriverAssumptionRow[];
-  const assumptions: ScenarioAssumptions = {
-    name: scenario.name,
-    global: {
-      revenueGrowthRate: 0,
-      cogsPctOfRevenue: 0,
-      headcountGrowthRate: 0,
-      costPerHead: 0,
-    },
-    monthly: {},
-    overrides: {},
-  };
-
-  for (const row of rows) {
-    if (!isDriverKey(row.driver_key)) {
-      continue;
-    }
-    if (row.scope_type === "global") {
-      if (row.month === allMonths) {
-        assumptions.global[row.driver_key] = row.value;
-      } else {
-        assumptions.monthly ??= {};
-        assumptions.monthly[row.month] ??= {};
-        assumptions.monthly[row.month][row.driver_key] = row.value;
-      }
-      continue;
-    }
-    if (row.scope_type === "department") {
-      const override = (assumptions.overrides[row.scope_key] ??= {});
-      if (row.month === allMonths) {
-        override[row.driver_key] = row.value;
-      } else {
-        override.monthly ??= {};
-        override.monthly[row.month] ??= {};
-        override.monthly[row.month][row.driver_key] = row.value;
-      }
-    }
-  }
-
-  if (Object.keys(assumptions.monthly ?? {}).length === 0) {
-    delete assumptions.monthly;
-  }
-  return assumptions;
-}
-
-export function isDriverKey(value: string): value is DriverKey {
-  return driverKeys.includes(value as DriverKey);
-}
-
 export function readScenarios(db: DatabaseSync): ScenarioRecord[] {
-  return (
-    db
-      .prepare(`
-    select scenarios.id, versions.name, versions.locked, versions.updated_at
-    from scenarios
-    join versions on versions.id = scenarios.id
-    where versions.kind = 'scenario'
-    order by versions.name
-  `)
-      .all() as (ScenarioRow & { locked: number })[]
-  )
-    .map((row) => {
-      const assumptions = readDriverAssumptions(db, row);
-      const formulas = readScenarioFormulas(db, row.id);
-      if (Object.keys(formulas).length > 0) {
-        assumptions.formulas = formulas;
-      }
-      const customVarData = readCustomVarValues(db, row.id);
-      if (Object.keys(customVarData.customVarGlobal).length > 0) {
-        assumptions.customVarGlobal = customVarData.customVarGlobal;
-      }
-      if (Object.keys(customVarData.customVarMonthly).length > 0) {
-        assumptions.customVarMonthly = customVarData.customVarMonthly;
-      }
-      if (Object.keys(customVarData.customVarOverrides).length > 0) {
-        assumptions.customVarOverrides = customVarData.customVarOverrides;
-      }
-      return {
-        id: row.id,
-        name: row.name,
-        locked: Boolean(row.locked),
-        assumptions,
-        updatedAt: row.updated_at,
-      };
-    })
-    .sort((left, right) => {
-      const leftVersion = db
-        .prepare("select sort_order from versions where id = ?")
-        .get(left.id) as { sort_order: number };
-      const rightVersion = db
-        .prepare("select sort_order from versions where id = ?")
-        .get(right.id) as { sort_order: number };
-      return (
-        (leftVersion?.sort_order ?? 0) - (rightVersion?.sort_order ?? 0) ||
-        left.name.localeCompare(right.name)
-      );
-    });
+  const rows = db
+    .prepare(`
+      select scenarios.id, versions.name, versions.locked, versions.updated_at, versions.sort_order
+      from scenarios
+      join versions on versions.id = scenarios.id
+      where versions.kind = 'scenario'
+      order by versions.sort_order, versions.name
+    `)
+    .all() as (ScenarioRow & { locked: number; sort_order: number | null })[];
+
+  return rows.map((row) => {
+    const { varGlobal, varMonthly, varOverrides } = readVarValues(db, row.id);
+    const formulas = readScenarioFormulas(db, row.id);
+    const assumptions: ScenarioAssumptions = { name: row.name };
+    if (Object.keys(varGlobal).length > 0) assumptions.varGlobal = varGlobal;
+    if (Object.keys(varMonthly).length > 0) assumptions.varMonthly = varMonthly;
+    if (Object.keys(varOverrides).length > 0) assumptions.varOverrides = varOverrides;
+    if (Object.keys(formulas).length > 0) assumptions.formulas = formulas;
+    return {
+      id: row.id,
+      name: row.name,
+      locked: Boolean(row.locked),
+      assumptions,
+      updatedAt: row.updated_at,
+    };
+  });
 }
 
 export function backfillVersionOrder(db: DatabaseSync): void {
@@ -414,9 +289,10 @@ export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumption
   }
   const id = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
+  const customVarSentinels = Object.fromEntries(listCustomVariables(db).map((v) => [v.id, 1]));
   for (const [account, formula] of Object.entries(assumptions.formulas ?? {})) {
     if (!formula) continue;
-    const result = validateFormula(formula, account as CoreAccount);
+    const result = validateFormula(formula, account as CoreAccount, customVarSentinels);
     if (!result.ok) {
       throw new Error(`Invalid formula for ${account}: ${result.error}`);
     }
@@ -432,9 +308,8 @@ export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumption
       values (?, ?, ?, ?)
       on conflict(id) do update set name = excluded.name, updated_at = excluded.updated_at
     `).run(id, assumptions.name, now, now);
-    replaceDriverAssumptions(db, id, assumptions);
+    replaceVarValues(db, id, assumptions);
     replaceScenarioFormulas(db, id, assumptions.formulas);
-    replaceCustomVarValues(db, id, assumptions);
   });
   recalculateScenario(db, assumptions.name);
   return readScenarios(db).find((scenario) => scenario.name === assumptions.name)!;
