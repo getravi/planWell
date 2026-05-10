@@ -28,7 +28,7 @@ import {
 import { formatCell } from "../format.ts";
 import { Button, EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui.tsx";
 import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
-import { RevenueChart } from "./ActualsPage.tsx";
+import { RevenueChart } from "../components/RevenueChart.tsx";
 
 const PERCENT_VAR_IDS = new Set([
   "revenueGrowthRate",

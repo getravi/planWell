@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileUp } from "lucide-react";
 import { useState } from "react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -16,6 +14,7 @@ import {
 import { Copy } from "lucide-react";
 import { client, type MetricSummary } from "../api.ts";
 import type { ActualRow, DimensionMember } from "../../domain/types.ts";
+import { RevenueChart } from "../components/RevenueChart.tsx";
 import {
   aggregateByMonth,
   buildActualGridMatrix,
@@ -116,35 +115,6 @@ function ImportPanel() {
       {status ? <p className="success">{status}</p> : null}
       {importCsv.error ? <p className="error">{importCsv.error.message}</p> : null}
     </Panel>
-  );
-}
-
-export function RevenueChart({ rows }: { rows: ActualRow[] }) {
-  const data = aggregateByMonth(rows, "Revenue");
-  if (data.length === 0) {
-    return (
-      <EmptyState
-        title="No revenue data"
-        body="Import actuals or select a scenario with forecast values."
-      />
-    );
-  }
-  return (
-    <ResponsiveContainer height={280}>
-      <AreaChart data={data}>
-        <defs>
-          <linearGradient id="revenue-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="5%" stopColor="#166534" stopOpacity={0.24} />
-            <stop offset="95%" stopColor="#166534" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" />
-        <YAxis tickFormatter={(value) => compactCurrency(Number(value))} />
-        <Tooltip formatter={(value) => currency(Number(value))} />
-        <Area dataKey="value" stroke="#166534" fill="url(#revenue-fill)" strokeWidth={2} />
-      </AreaChart>
-    </ResponsiveContainer>
   );
 }
 
