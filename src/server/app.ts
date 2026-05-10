@@ -22,42 +22,25 @@ const csvImportSchema = z.object({
   csv: z.string().min(1),
 });
 
-const driverSchema = z.object({
-  revenueGrowthRate: z.number(),
-  cogsPctOfRevenue: z.number(),
-  headcountGrowthRate: z.number(),
-  costPerHead: z.number(),
-});
-
-const partialDriverSchema = driverSchema.partial();
-
 const coreAccountEnum = z.enum(coreAccounts);
 
-const customVarValuesSchema = z.record(z.string(), z.number());
-const partialCustomVarValuesSchema = z.record(z.string(), z.number().optional());
+const varValuesSchema = z.record(z.string(), z.number());
+const partialVarValuesSchema = z.record(z.string(), z.number().optional());
 
 const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
   name: z.string().min(1),
-  global: driverSchema,
-  monthly: z.record(z.string(), partialDriverSchema).optional(),
-  overrides: z.record(
-    z.string(),
-    partialDriverSchema.extend({
-      monthly: z.record(z.string(), partialDriverSchema).optional(),
-    }),
-  ),
-  formulas: z.record(coreAccountEnum, z.string().min(1)).optional(),
-  customVarGlobal: customVarValuesSchema.optional(),
-  customVarMonthly: z.record(z.string(), partialCustomVarValuesSchema).optional(),
-  customVarOverrides: z
+  varGlobal: varValuesSchema.optional(),
+  varMonthly: z.record(z.string(), partialVarValuesSchema).optional(),
+  varOverrides: z
     .record(
       z.string(),
       z.object({
-        global: partialCustomVarValuesSchema.optional(),
-        monthly: z.record(z.string(), partialCustomVarValuesSchema).optional(),
+        global: partialVarValuesSchema.optional(),
+        monthly: z.record(z.string(), partialVarValuesSchema).optional(),
       }),
     )
     .optional(),
+  formulas: z.record(z.string(), z.string().min(1)).optional(),
 });
 
 const customVarCreateSchema = z.object({
@@ -129,7 +112,12 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   app.get("/api/health", (context) => context.json({ ok: true }));
 
   app.post("/api/auth/login", async (context) => {
-    const payload = loginSchema.parse(await context.req.json());
+    let payload: { email: string; password: string };
+    try {
+      payload = loginSchema.parse(await context.req.json());
+    } catch {
+      return context.json({ error: "Invalid request." }, 400);
+    }
     const user = repo.verifyUser(payload.email, payload.password);
     if (!user) {
       return context.json({ error: "Invalid email or password." }, 401);
@@ -387,13 +375,17 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   });
 
   app.post("/api/analyst/ask", async (context) => {
-    const payload = analystSchema.parse(await context.req.json());
-    return context.json(
-      await analyst.ask(payload.question, {
-        scenario: payload.scenario,
-        compareScenario: payload.compareScenario,
-      }),
-    );
+    try {
+      const payload = analystSchema.parse(await context.req.json());
+      return context.json(
+        await analyst.ask(payload.question, {
+          scenario: payload.scenario,
+          compareScenario: payload.compareScenario,
+        }),
+      );
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   return app;

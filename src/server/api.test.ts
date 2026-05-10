@@ -107,18 +107,18 @@ describe("PlanWell API", () => {
     const repo = createFileRepository(dbPath);
     const scenario = repo.listScenarios().find((item) => item.name === "Legacy Case");
     expect(scenario?.assumptions).toMatchObject({
-      global: {
+      varGlobal: {
         revenueGrowthRate: 0.02,
         cogsPctOfRevenue: 0.4,
         headcountGrowthRate: 0.01,
         costPerHead: 12000,
       },
-      monthly: {
+      varMonthly: {
         "2026-02": { revenueGrowthRate: 0.05 },
       },
-      overrides: {
+      varOverrides: {
         "GPU Cloud": {
-          cogsPctOfRevenue: 0.38,
+          global: { cogsPctOfRevenue: 0.38 },
           monthly: {
             "2026-03": { costPerHead: 13000 },
           },
@@ -131,30 +131,24 @@ describe("PlanWell API", () => {
       name: string;
     }[];
     expect(scenarioColumns.map((column) => column.name)).not.toContain("assumptions_json");
-    const driverRows = migratedDb
+    const varRows = migratedDb
       .prepare(
-        "select scope_type, scope_key, month, driver_key, value from driver_assumptions where scenario_id = ? order by scope_type, scope_key, month, driver_key",
+        "select var_id, scope, value from custom_variable_values where scenario_id = ? order by var_id, scope",
       )
       .all("legacy-scenario");
-    expect(driverRows).toContainEqual({
-      scope_type: "global",
-      scope_key: "__global__",
-      month: "__all__",
-      driver_key: "revenueGrowthRate",
+    expect(varRows).toContainEqual({
+      var_id: "revenueGrowthRate",
+      scope: "global",
       value: 0.02,
     });
-    expect(driverRows).toContainEqual({
-      scope_type: "global",
-      scope_key: "__global__",
-      month: "2026-02",
-      driver_key: "revenueGrowthRate",
+    expect(varRows).toContainEqual({
+      var_id: "revenueGrowthRate",
+      scope: "monthly:2026-02",
       value: 0.05,
     });
-    expect(driverRows).toContainEqual({
-      scope_type: "department",
-      scope_key: "GPU Cloud",
-      month: "2026-03",
-      driver_key: "costPerHead",
+    expect(varRows).toContainEqual({
+      var_id: "costPerHead",
+      scope: "dept:GPU Cloud:monthly:2026-03",
       value: 13000,
     });
     migratedDb.close();
@@ -293,14 +287,14 @@ describe("PlanWell API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({
         name: "Board Case",
-        global: {
+        varGlobal: {
           revenueGrowthRate: 0.1,
           cogsPctOfRevenue: 0.3,
           headcountGrowthRate: 0,
           costPerHead: 12000,
         },
-        monthly: {},
-        overrides: {},
+        varMonthly: {},
+        varOverrides: {},
       }),
     });
     expect(editLocked.status).toBe(400);
@@ -350,7 +344,7 @@ describe("PlanWell API", () => {
           .get(operatingPlan!.id) as { count: number }
       ).count;
     expect(countRows("forecast_values")).toBeGreaterThan(0);
-    expect(countRows("driver_assumptions")).toBeGreaterThan(0);
+    expect(countRows("custom_variable_values")).toBeGreaterThan(0);
 
     const deleted = await app.request(`/api/versions/${operatingPlan!.id}`, {
       method: "DELETE",
@@ -359,7 +353,7 @@ describe("PlanWell API", () => {
     expect(deleted.status).toBe(200);
     expect(repo.listScenarios().some((scenario) => scenario.name === "Operating Plan")).toBe(false);
     expect(countRows("forecast_values")).toBe(0);
-    expect(countRows("driver_assumptions")).toBe(0);
+    expect(countRows("custom_variable_values")).toBe(0);
     expect(
       (
         inspectDb
@@ -548,14 +542,14 @@ describe("PlanWell API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({
         name: "Hierarchy Sensitivity",
-        global: {
+        varGlobal: {
           revenueGrowthRate: 0.01,
           cogsPctOfRevenue: 0.5,
           headcountGrowthRate: 0,
           costPerHead: 10000,
         },
-        monthly: {},
-        overrides: {
+        varMonthly: {},
+        varOverrides: {
           Product: {
             monthly: {
               "2026-01": { revenueGrowthRate: 0.5 },
@@ -676,6 +670,31 @@ describe("PlanWell API", () => {
           quarter.children.map((month) => month.name),
         ),
     ).toContain("2026-01");
+  });
+
+  it("returns 400 for malformed login body", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+
+    const bad = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ notEmail: "foo" }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it("returns 400 for malformed analyst body", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const bad = await app.request("/api/analyst/ask", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ notQuestion: true }),
+    });
+    expect(bad.status).toBe(400);
   });
 
   it("adds a full planning year and extends forecasts through explicit future time months", async () => {
