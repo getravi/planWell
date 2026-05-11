@@ -3,10 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"node src/server/index.ts\" \"vp dev --host 127.0.0.1\"",
     "api": "node src/server/index.ts",
     "build": "tsc && vp build",
+    "start": "node src/server/index.ts",
     "preview": "vp preview"
   },
   "dependencies": {
