@@ -225,7 +225,8 @@ function ScenarioEditor({
   };
 
   const resolveVarDisplay = (varId: string, month: string): number => {
-    let value = 0;
+    const def = varDefs.find((d) => d.id === varId);
+    let value = def?.defaultValue ?? 0;
     for (const ancestor of ancestorLookup.get(selectedDepartment) ?? []) {
       value = active.varOverrides?.[ancestor]?.monthly?.[month]?.[varId] ?? value;
     }

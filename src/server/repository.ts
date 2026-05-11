@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { compareSeries, summarizeKpis } from "../domain/forecast.ts";
 import { validateFormula } from "../domain/formulaEngine.ts";
@@ -115,13 +116,16 @@ export type Repository = {
   createCustomVariable(def: CustomVariableDef): CustomVariableDef;
   updateCustomVariable(
     id: string,
-    patch: { label?: string; formula?: string; sortOrder?: number },
+    patch: { label?: string; formula?: string; sortOrder?: number; defaultValue?: number },
   ): CustomVariableDef;
   deleteCustomVariable(id: string): void;
   validateCustomVariableFormula(
     formula: string,
     availableIds: string[],
   ): { ok: true } | { ok: false; error: string };
+  getSettings(): Record<string, string>;
+  updateSettings(patch: Record<string, string>): void;
+  backup(): Uint8Array;
 };
 
 export function createFileRepository(dbPath = resolve("data/planwell.sqlite")): Repository {
@@ -137,6 +141,7 @@ function createRepository(db: DatabaseSync): Repository {
   migrate(db);
   seedDemoUser(db);
   pruneExpiredSessions(db);
+  setInterval(() => pruneExpiredSessions(db), 60 * 60 * 1000);
 
   return {
     verifyUser(email, password) {
@@ -276,6 +281,25 @@ function createRepository(db: DatabaseSync): Repository {
     validateCustomVariableFormula(formula, availableIds) {
       const allIds = [...new Set([...availableIds, ...dbListCustomVariables(db).map((v) => v.id)])];
       return validateCustomVariableFormula(formula, allIds);
+    },
+    getSettings() {
+      const rows = db.prepare("select key, value from app_settings").all() as { key: string; value: string }[];
+      return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    },
+    updateSettings(patch) {
+      const upsert = db.prepare(
+        "insert into app_settings (key, value) values (?, ?) on conflict(key) do update set value = excluded.value",
+      );
+      for (const [key, value] of Object.entries(patch)) {
+        upsert.run(key, value);
+      }
+    },
+    backup() {
+      const dest = resolve(tmpdir(), `planwell-backup-${Date.now()}.sqlite`);
+      db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+      const data = readFileSync(dest);
+      unlinkSync(dest);
+      return data;
     },
     getMetricSummary(scenarioName) {
       const rows = scenarioName ? this.listForecast(scenarioName) : this.listActuals();

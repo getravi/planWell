@@ -170,4 +170,11 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ question, scenario, compareScenario }),
     }),
+  settings: () => api<{ forecastHorizon: number }>("/api/settings"),
+  updateSettings: (patch: { forecastHorizon?: number }) =>
+    api<{ forecastHorizon: number }>("/api/settings", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  backupUrl: "/api/admin/backup",
 };

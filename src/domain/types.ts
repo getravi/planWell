@@ -20,6 +20,7 @@ export type CustomVariableDef = {
   label: string;
   kind: CustomVariableKind;
   formula?: string;
+  defaultValue?: number;
 };
 
 export type VarValues = Record<string, number>;

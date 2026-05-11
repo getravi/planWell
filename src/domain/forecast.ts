@@ -34,7 +34,7 @@ export function resolveVarValues(
   const resolved: Record<string, number> = {};
 
   for (const def of defs.filter((d) => d.kind === "input")) {
-    let value = 0;
+    let value = def.defaultValue ?? 0;
     for (const ancestor of ancestorLookup.get(department) ?? []) {
       value = assumptions.varOverrides?.[ancestor]?.monthly?.[month]?.[def.id] ?? value;
     }

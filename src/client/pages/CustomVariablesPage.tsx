@@ -43,6 +43,7 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
             <th>ID</th>
             <th>Label</th>
             <th>Kind</th>
+            <th>Default</th>
             <th>Formula</th>
             <th></th>
           </tr>
@@ -55,6 +56,11 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
               </td>
               <td>{v.label}</td>
               <td>{v.kind}</td>
+              <td className="muted">
+                {v.kind === "input" && v.defaultValue !== undefined
+                  ? v.defaultValue
+                  : <span>—</span>}
+              </td>
               <td>
                 {v.formula ? <code>{v.formula}</code> : <span className="muted">—</span>}
               </td>
@@ -80,7 +86,7 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
 }
 
 const AVAILABLE_BUILTIN_IDS = [
-  "base", "growthRate", "cogsPct", "costPerHead", "month", "revenue", "headcount",
+  "base", "month", "revenue", "headcount",
 ];
 
 function AddVariablePanel({ customVariables }: { customVariables: CustomVariableDef[] }) {
@@ -88,6 +94,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
   const [id, setId] = useState("");
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<"input" | "calculated">("input");
+  const [defaultValue, setDefaultValue] = useState("");
   const [formula, setFormula] = useState("");
   const [formulaStatus, setFormulaStatus] = useState<{ ok: boolean; error?: string } | null>(null);
 
@@ -97,6 +104,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
       setId("");
       setLabel("");
       setKind("input");
+      setDefaultValue("");
       setFormula("");
       setFormulaStatus(null);
       await queryClient.invalidateQueries();
@@ -175,6 +183,20 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
           </label>
         </div>
       </div>
+      {kind === "input" ? (
+        <div className="form-field">
+          <label className="form-label">
+            Default value
+            <Input
+              type="number"
+              placeholder="0"
+              value={defaultValue}
+              onChange={(e) => setDefaultValue(e.target.value)}
+            />
+          </label>
+          <small className="muted">Used when no per-dept or per-month override is set.</small>
+        </div>
+      ) : null}
       {kind === "calculated" ? (
         <div className="form-field">
           <label className="form-label">
@@ -210,6 +232,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
             label: label.trim(),
             kind,
             formula: kind === "calculated" ? formula.trim() : undefined,
+            defaultValue: kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
           })
         }
       >

@@ -44,12 +44,18 @@ const customVarCreateSchema = z.object({
   label: z.string().min(1),
   kind: z.enum(["input", "calculated"]),
   formula: z.string().optional(),
+  defaultValue: z.number().optional(),
 });
 
 const customVarUpdateSchema = z.object({
   label: z.string().min(1).optional(),
   formula: z.string().optional(),
   sortOrder: z.number().optional(),
+  defaultValue: z.number().optional(),
+});
+
+const settingsPatchSchema = z.object({
+  forecastHorizon: z.number().int().min(1).max(60).optional(),
 });
 
 const customVarValidateSchema = z.object({
@@ -382,6 +388,48 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
       );
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.get("/api/settings", (context) => {
+    const raw = repo.getSettings();
+    const horizon = raw.forecastHorizon ? parseInt(raw.forecastHorizon, 10) : 12;
+    return context.json({ forecastHorizon: Number.isFinite(horizon) ? horizon : 12 });
+  });
+
+  app.patch("/api/settings", async (context) => {
+    try {
+      const payload = settingsPatchSchema.parse(await context.req.json());
+      const patch: Record<string, string> = {};
+      if (payload.forecastHorizon !== undefined) {
+        patch.forecastHorizon = String(payload.forecastHorizon);
+      }
+      if (Object.keys(patch).length > 0) {
+        repo.updateSettings(patch);
+        repo.recalculateAllScenarios();
+      }
+      const raw = repo.getSettings();
+      const horizon = raw.forecastHorizon ? parseInt(raw.forecastHorizon, 10) : 12;
+      return context.json({ forecastHorizon: Number.isFinite(horizon) ? horizon : 12 });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.get("/api/admin/backup", (context) => {
+    try {
+      const data = repo.backup();
+      const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+      const date = new Date().toISOString().slice(0, 10);
+      return new Response(ab, {
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-disposition": `attachment; filename="planwell-backup-${date}.sqlite"`,
+          "content-length": String(data.byteLength),
+        },
+      });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 500);
     }
   });
 

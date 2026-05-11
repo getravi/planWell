@@ -9,37 +9,18 @@ const VARIABLES = [
     example: "Revenue: last month's actual revenue for the department",
   },
   {
-    name: "growthRate",
-    type: "number",
-    description:
-      "Monthly growth rate driver — revenueGrowthRate for Revenue/COGS, headcountGrowthRate for Headcount/OpEx",
-    example: "0.035 = 3.5% monthly growth",
-  },
-  {
-    name: "cogsPct",
-    type: "number",
-    description: "cogsPctOfRevenue driver — COGS as a fraction of revenue",
-    example: "0.44 = 44% of revenue",
-  },
-  {
-    name: "costPerHead",
-    type: "number",
-    description: "costPerHead driver — monthly cost per full-time employee",
-    example: "19000 = $19K/month per headcount",
-  },
-  {
     name: "month",
     type: "integer",
     description:
-      "Months since last actual (0-based index). Month 1 = one month out, Month 12 = one year out.",
-    example: "month 0 = last actual, month 1 = next month",
+      "Months since last actual (1-based). Month 1 = one month out, Month 12 = one year out.",
+    example: "month 1 = next month, month 12 = one year out",
   },
   {
     name: "revenue",
     type: "number",
     description:
       "Computed revenue for this department and month. Available in COGS and OpEx formulas.",
-    example: "Use in COGS: revenue * cogsPct",
+    example: "Use in COGS: revenue * cogsPctOfRevenue",
   },
   {
     name: "headcount",
@@ -73,13 +54,13 @@ const EXAMPLES = [
   {
     title: "Compound growth (default)",
     account: "Revenue",
-    formula: "base * pow(1 + growthRate, month)",
+    formula: "base * pow(1 + revenueGrowthRate, month)",
     explanation: "Exponential compounding — each month multiplies the prior month's growth.",
   },
   {
     title: "Linear growth",
     account: "Revenue",
-    formula: "base * (1 + growthRate * month)",
+    formula: "base * (1 + revenueGrowthRate * month)",
     explanation:
       "Adds the same absolute amount each month. Slower than compound for long horizons.",
   },
@@ -92,20 +73,20 @@ const EXAMPLES = [
   {
     title: "COGS as % of revenue (default)",
     account: "COGS",
-    formula: "revenue * cogsPct",
-    explanation: "COGS moves with revenue. Adjust cogsPct driver to change the ratio.",
+    formula: "revenue * cogsPctOfRevenue",
+    explanation: "COGS moves with revenue. Adjust cogsPctOfRevenue driver to change the ratio.",
   },
   {
     title: "Fixed COGS margin + floor",
     account: "COGS",
-    formula: "max(revenue * cogsPct, base * 0.8)",
+    formula: "max(revenue * cogsPctOfRevenue, base * 0.8)",
     explanation:
       "COGS as % of revenue, but never falls below 80% of baseline. Useful when fixed costs exist.",
   },
   {
     title: "Headcount compound growth (default)",
     account: "Headcount",
-    formula: "base * pow(1 + growthRate, month)",
+    formula: "base * pow(1 + headcountGrowthRate, month)",
     explanation: "Headcount grows exponentially at headcountGrowthRate.",
   },
   {

@@ -15,17 +15,19 @@ type CustomVariableRow = {
   kind: string;
   formula: string | null;
   sort_order: number;
+  default_value: number | null;
 };
 
 export function listCustomVariables(db: DatabaseSync): CustomVariableDef[] {
   const rows = db
-    .prepare("select id, label, kind, formula, sort_order from custom_variables order by sort_order, id")
+    .prepare("select id, label, kind, formula, sort_order, default_value from custom_variables order by sort_order, id")
     .all() as CustomVariableRow[];
   return rows.map((row) => ({
     id: row.id,
     label: row.label,
     kind: row.kind as "input" | "calculated",
     formula: row.formula ?? undefined,
+    defaultValue: row.default_value ?? undefined,
   }));
 }
 
@@ -60,15 +62,15 @@ export function createCustomVariable(db: DatabaseSync, def: CustomVariableDef): 
   const sortOrder =
     ((db.prepare("select coalesce(max(sort_order), 0) as m from custom_variables").get() as { m: number }).m) + 10;
   db.prepare(
-    "insert into custom_variables (id, label, kind, formula, sort_order) values (?, ?, ?, ?, ?)",
-  ).run(def.id, def.label, def.kind, def.formula ?? null, sortOrder);
+    "insert into custom_variables (id, label, kind, formula, sort_order, default_value) values (?, ?, ?, ?, ?, ?)",
+  ).run(def.id, def.label, def.kind, def.formula ?? null, sortOrder, def.defaultValue ?? null);
   return listCustomVariables(db).find((v) => v.id === def.id)!;
 }
 
 export function updateCustomVariable(
   db: DatabaseSync,
   id: string,
-  patch: { label?: string; formula?: string; sortOrder?: number },
+  patch: { label?: string; formula?: string; sortOrder?: number; defaultValue?: number },
 ): CustomVariableDef {
   const existing = db.prepare("select id, kind from custom_variables where id = ?").get(id) as
     | { id: string; kind: string }
@@ -104,6 +106,9 @@ export function updateCustomVariable(
   }
   if (patch.sortOrder !== undefined) {
     db.prepare("update custom_variables set sort_order = ? where id = ?").run(patch.sortOrder, id);
+  }
+  if (patch.defaultValue !== undefined) {
+    db.prepare("update custom_variables set default_value = ? where id = ?").run(patch.defaultValue, id);
   }
   return listCustomVariables(db).find((v) => v.id === id)!;
 }

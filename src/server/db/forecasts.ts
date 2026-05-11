@@ -134,10 +134,22 @@ export function listPlanningForecastMonths(db: DatabaseSync): string[] {
   if (!lastActualMonth) {
     return [];
   }
+  const horizon = getForecastHorizon(db);
   const explicitFutureMonths = (
     db.prepare("select id from time_month where id > ? order by id").all(lastActualMonth) as {
       id: string;
     }[]
   ).map((row) => row.id);
-  return [...new Set([...nextMonths(lastActualMonth, 12), ...explicitFutureMonths])].sort();
+  return [...new Set([...nextMonths(lastActualMonth, horizon), ...explicitFutureMonths])].sort();
+}
+
+function getForecastHorizon(db: DatabaseSync): number {
+  try {
+    const row = db.prepare("select value from app_settings where key = 'forecastHorizon'").get() as { value: string } | undefined;
+    if (!row) return 12;
+    const n = parseInt(row.value, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 60 ? n : 12;
+  } catch {
+    return 12;
+  }
 }

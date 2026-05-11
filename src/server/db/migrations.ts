@@ -70,6 +70,10 @@ export function migrate(db: DatabaseSync): void {
       value real not null,
       primary key (scenario_id, var_id, scope)
     );
+    create table if not exists app_settings (
+      key text primary key,
+      value text not null
+    );
     create index if not exists actuals_cube_idx on actuals (month, department, account);
     create index if not exists driver_assumptions_lookup_idx on driver_assumptions (scenario_id, scope_type, scope_key, month);
     create index if not exists forecast_cube_idx on forecast_values (scenario_id, month, department, account);
@@ -85,6 +89,7 @@ export function migrate(db: DatabaseSync): void {
   backfillDimensionOrder(db, "department");
   backfillDimensionOrder(db, "account");
   backfillVersionOrder(db);
+  ensureColumn(db, "custom_variables", "default_value", "real");
   seedBuiltinVars(db);
   migrateDriverAssumptionsToVarValues(db);
   deleteStaleVarScopes(db);
@@ -152,16 +157,20 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
 
 function seedBuiltinVars(db: DatabaseSync): void {
   const builtins = [
-    { id: "revenueGrowthRate", label: "Revenue Growth Rate", sort_order: 10 },
-    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", sort_order: 20 },
-    { id: "headcountGrowthRate", label: "Headcount Growth Rate", sort_order: 30 },
-    { id: "costPerHead", label: "Cost per Head", sort_order: 40 },
+    { id: "revenueGrowthRate", label: "Revenue Growth Rate", sort_order: 10, default_value: 0.03 },
+    { id: "cogsPctOfRevenue", label: "COGS % of Revenue", sort_order: 20, default_value: 0.44 },
+    { id: "headcountGrowthRate", label: "Headcount Growth Rate", sort_order: 30, default_value: 0.02 },
+    { id: "costPerHead", label: "Cost per Head", sort_order: 40, default_value: 18000 },
   ];
   const insert = db.prepare(
-    "insert or ignore into custom_variables (id, label, kind, formula, sort_order) values (?, ?, 'input', null, ?)",
+    "insert or ignore into custom_variables (id, label, kind, formula, sort_order, default_value) values (?, ?, 'input', null, ?, ?)",
+  );
+  const setDefault = db.prepare(
+    "update custom_variables set default_value = ? where id = ? and default_value is null",
   );
   for (const v of builtins) {
-    insert.run(v.id, v.label, v.sort_order);
+    insert.run(v.id, v.label, v.sort_order, v.default_value);
+    setDefault.run(v.default_value, v.id);
   }
 }
 

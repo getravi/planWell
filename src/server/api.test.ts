@@ -551,7 +551,7 @@ describe("PlanWell API", () => {
         (row: { month: string; department: string; account: string }) =>
           row.month === "2026-01" && row.department === "GPU Cloud" && row.account === "Revenue",
       )?.value,
-    ).toBe(1000);
+    ).toBe(1030); // revenueGrowthRate defaults to 0.03, so 1000 * 1.03 = 1030
 
     const moveGpu = await app.request("/api/dimensions/department/members/GPU%20Cloud", {
       method: "PATCH",
