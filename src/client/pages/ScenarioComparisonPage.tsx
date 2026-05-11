@@ -122,8 +122,9 @@ function ScenarioComparison({
           <FileText size={15} /> {narrativeLoading ? "Generating…" : "Generate narrative"}
         </GhostButton>
         {hasNarrative && (
-          <GhostButton type="button" onClick={() => setOpen((o) => !o)} aria-label="Toggle narrative">
+          <GhostButton type="button" onClick={() => setOpen((o) => !o)}>
             <ChevronDown size={15} className={open ? "chevron open" : "chevron"} />
+            {open ? "Hide narrative" : "Show narrative"}
           </GhostButton>
         )}
       </div>
