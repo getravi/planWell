@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp } from "lucide-react";
 import { useState } from "react";
 import {
@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { Copy } from "lucide-react";
-import { client, type MetricSummary } from "../api.ts";
+import { client, type AnomalyFlag, type MetricSummary } from "../api.ts";
 import type { ActualRow, DimensionMember } from "../../domain/types.ts";
 import { RevenueChart } from "../components/RevenueChart.tsx";
 import {
@@ -37,6 +37,14 @@ export function ActualsPage({
   accountHierarchy: DimensionMember[];
 }) {
   const filteredSummary = summarizeRows(actuals);
+  const anomalyQuery = useQuery({ queryKey: ["anomalies"], queryFn: client.anomalies });
+  const anomalySet = new Set(
+    (anomalyQuery.data?.anomalies ?? []).map((f) => `${f.department}|${f.account}|${f.month}`)
+  );
+  const anomalyMap = new Map(
+    (anomalyQuery.data?.anomalies ?? []).map((f) => [`${f.department}|${f.account}|${f.month}`, f])
+  );
+
   return (
     <div className="grid two">
       <ImportPanel />
@@ -63,11 +71,18 @@ export function ActualsPage({
       <Panel className="span-two">
         <div className="panel-heading">
           <h2>Actuals by department and account</h2>
+          {anomalyQuery.data && anomalyQuery.data.anomalies.length > 0 && (
+            <span style={{ color: "var(--warning, #d97706)", fontSize: 13 }}>
+              {anomalyQuery.data.anomalies.length} anomaly{anomalyQuery.data.anomalies.length !== 1 ? "s" : ""} detected
+            </span>
+          )}
         </div>
         <ActualsGrid
           rows={actuals}
           departmentHierarchy={departmentHierarchy}
           accountHierarchy={accountHierarchy}
+          anomalySet={anomalySet}
+          anomalyMap={anomalyMap}
         />
       </Panel>
     </div>
@@ -121,10 +136,14 @@ function ActualsGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
+  anomalySet,
+  anomalyMap,
 }: {
   rows: ActualRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  anomalySet: Set<string>;
+  anomalyMap: Map<string, AnomalyFlag>;
 }) {
   const months = getMonths(rows);
   const pivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
@@ -168,11 +187,36 @@ function ActualsGrid({
                 {row.department}
               </th>
               <td>{row.account}</td>
-              {months.map((month) => (
-                <td key={month} className="numeric-cell">
-                  {formatCell(row.account, row.values[month] ?? 0)}
-                </td>
-              ))}
+              {months.map((month) => {
+                const cellKey = `${row.department}|${row.account}|${month}`;
+                const isAnomaly = anomalySet.has(cellKey);
+                const flag = anomalyMap.get(cellKey);
+                return (
+                  <td
+                    key={month}
+                    className="numeric-cell"
+                    style={isAnomaly ? { background: "rgba(217,119,6,0.08)" } : undefined}
+                    title={flag ? `Anomaly: ${flag.reason}` : undefined}
+                  >
+                    {formatCell(row.account, row.values[month] ?? 0)}
+                    {isAnomaly && (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#d97706",
+                          marginLeft: 4,
+                          verticalAlign: "middle",
+                          flexShrink: 0,
+                        }}
+                        aria-label="anomaly"
+                      />
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

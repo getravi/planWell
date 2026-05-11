@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, Save, Settings2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, Save, Settings2, Wand2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   CustomVariableDef,
@@ -151,6 +151,32 @@ function ScenarioEditor({
     },
   });
 
+  const suggestions = useQuery({ queryKey: ["baseline-suggestions"], queryFn: client.baselineSuggestions });
+
+  const applySuggestions = () => {
+    const data = suggestions.data;
+    if (!data || !active || isLocked) return;
+    const deptSuggestion = data.byDepartment[selectedDepartment] ?? data.global;
+    const next = structuredClone(active);
+    const deptOverride = next.varOverrides?.[selectedDepartment] ?? {};
+    const existingMonthly = deptOverride.monthly ?? {};
+    const updatedMonthly: typeof existingMonthly = {};
+    for (const month of monthOptions) {
+      updatedMonthly[month] = {
+        ...existingMonthly[month],
+        revenueGrowthRate: deptSuggestion.revenueGrowthRate,
+        cogsPctOfRevenue: deptSuggestion.cogsPctOfRevenue,
+        headcountGrowthRate: deptSuggestion.headcountGrowthRate,
+        costPerHead: deptSuggestion.costPerHead,
+      };
+    }
+    next.varOverrides = {
+      ...next.varOverrides,
+      [selectedDepartment]: { ...deptOverride, monthly: updatedMonthly },
+    };
+    setDraft(next);
+  };
+
   if (!active) {
     return (
       <Panel className="span-two">
@@ -238,7 +264,14 @@ function ScenarioEditor({
     <Panel className="span-two">
       <div className="panel-heading">
         <h2>Driver assumptions</h2>
-        <Settings2 size={18} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {!isLocked && suggestions.data && (
+            <GhostButton type="button" onClick={applySuggestions} title="Populate drivers from historical actuals">
+              <Wand2 size={15} /> Suggest from actuals
+            </GhostButton>
+          )}
+          <Settings2 size={18} />
+        </div>
       </div>
       <p className="muted driver-note">
         {isLocked

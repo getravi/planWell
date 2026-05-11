@@ -10,6 +10,9 @@ import type {
   ScenarioAssumptions,
   VarianceRow,
 } from "../domain/types.ts";
+export type { AnomalyFlag } from "../domain/anomaly.ts";
+export type { BaselineSuggestions } from "../domain/baseline.ts";
+export type { NarrativeReport } from "../server/analyst.ts";
 
 export type ScenarioRecord = {
   id: string;
@@ -178,4 +181,11 @@ export const client = {
     }),
   backupUrl: "/api/admin/backup",
   restoreUrl: "/api/admin/restore",
+  anomalies: () => api<{ anomalies: import("../domain/anomaly.ts").AnomalyFlag[] }>("/api/anomalies"),
+  baselineSuggestions: () => api<import("../domain/baseline.ts").BaselineSuggestions>("/api/forecast/baseline-suggestions"),
+  generateNarrative: (scenario: string, compareScenario?: string) =>
+    api<import("../server/analyst.ts").NarrativeReport>("/api/analyst/narrative", {
+      method: "POST",
+      body: JSON.stringify({ scenario, compareScenario }),
+    }),
 };

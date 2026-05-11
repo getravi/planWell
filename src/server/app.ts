@@ -3,8 +3,10 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { parseActualsCsv } from "../domain/importer.ts";
+import { detectAnomalies } from "../domain/anomaly.ts";
+import { suggestDrivers } from "../domain/baseline.ts";
 import { coreAccounts, type ScenarioAssumptions } from "../domain/types.ts";
-import { createAnalyst } from "./analyst.ts";
+import { createAnalyst, generateNarrative } from "./analyst.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
 import { sampleLongCsv, sampleWideCsv } from "./sample-data.ts";
 
@@ -181,6 +183,14 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.get("/api/cube/actuals", (context) => {
     return context.json({ rows: repo.listActuals(), summary: repo.getMetricSummary() });
+  });
+
+  app.get("/api/anomalies", (context) => {
+    return context.json({ anomalies: detectAnomalies(repo.listActuals()) });
+  });
+
+  app.get("/api/forecast/baseline-suggestions", (context) => {
+    return context.json(suggestDrivers(repo.listActuals()));
   });
 
   app.get("/api/cube/forecast", (context) => {
@@ -387,6 +397,21 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
           compareScenario: payload.compareScenario,
         }),
       );
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.post("/api/analyst/narrative", async (context) => {
+    try {
+      const { scenario, compareScenario, periodLabel } = z
+        .object({
+          scenario: z.string().min(1),
+          compareScenario: z.string().optional(),
+          periodLabel: z.string().optional(),
+        })
+        .parse(await context.req.json());
+      return context.json(await generateNarrative(repo, scenario, compareScenario, periodLabel));
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
