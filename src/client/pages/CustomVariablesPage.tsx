@@ -12,7 +12,7 @@ export function CustomVariablesPage({
 }) {
   return (
     <div className="grid two">
-      <AddVariablePanel customVariables={customVariables} />
+      <AddVariablePanel customVariables={customVariables} className="span-two" />
       <Panel className="span-two">
         <div className="panel-heading">
           <h2>Custom variables</h2>
@@ -89,7 +89,7 @@ const AVAILABLE_BUILTIN_IDS = [
   "base", "month", "revenue", "headcount",
 ];
 
-function AddVariablePanel({ customVariables }: { customVariables: CustomVariableDef[] }) {
+function AddVariablePanel({ customVariables, className }: { customVariables: CustomVariableDef[]; className?: string }) {
   const queryClient = useQueryClient();
   const [id, setId] = useState("");
   const [label, setLabel] = useState("");
@@ -127,7 +127,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
     (kind === "input" || (kind === "calculated" && formula.trim() && formulaStatus?.ok));
 
   return (
-    <Panel>
+    <Panel className={className}>
       <div className="panel-heading">
         <h2>Add variable</h2>
       </div>
