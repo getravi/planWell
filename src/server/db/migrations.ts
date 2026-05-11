@@ -224,6 +224,21 @@ export function seedDemoUser(db: DatabaseSync): void {
   );
 }
 
+export function seedEnvUser(db: DatabaseSync): void {
+  const email = process.env.SEED_EMAIL;
+  const password = process.env.SEED_PASSWORD;
+  if (!email || !password) return;
+  const exists = db.prepare("select id from users where email = ?").get(email.toLowerCase());
+  if (exists) return;
+  db.prepare("insert into users (id, email, password_hash, created_at) values (?, ?, ?, ?)").run(
+    crypto.randomUUID(),
+    email.toLowerCase(),
+    hashPassword.create(password),
+    new Date().toISOString(),
+  );
+  console.log(`[seed] created user: ${email}`);
+}
+
 export function ensureDefaultScenarios(db: DatabaseSync): void {
   const insertVersion = db.prepare(`
     insert into versions (id, name, kind, created_at, updated_at)

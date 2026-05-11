@@ -18,7 +18,7 @@ import type {
 } from "../domain/types.ts";
 import { hashPassword } from "./security.ts";
 
-import { migrate, seedDemoUser, ensureDefaultScenarios } from "./db/migrations.ts";
+import { migrate, seedDemoUser, seedEnvUser, ensureDefaultScenarios } from "./db/migrations.ts";
 
 export function pruneExpiredSessions(db: DatabaseSync): void {
   db.prepare("delete from sessions where expires_at < ?").run(new Date().toISOString());
@@ -128,7 +128,7 @@ export type Repository = {
   backup(): Uint8Array;
 };
 
-export function createFileRepository(dbPath = process.env.DB_PATH ?? resolve("data/planwell.sqlite")): Repository {
+export function createFileRepository(dbPath = process.env.SQLITE_PATH ?? resolve("data/planwell.sqlite")): Repository {
   mkdirSync(dirname(dbPath), { recursive: true });
   return createRepository(new DatabaseSync(dbPath));
 }
@@ -140,6 +140,7 @@ export function createTestRepository(): Repository {
 function createRepository(db: DatabaseSync): Repository {
   migrate(db);
   seedDemoUser(db);
+  seedEnvUser(db);
   pruneExpiredSessions(db);
   setInterval(() => pruneExpiredSessions(db), 60 * 60 * 1000);
 
