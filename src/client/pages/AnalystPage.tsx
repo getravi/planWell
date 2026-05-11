@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { Bot } from "lucide-react";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { client } from "../api.ts";
 import { currency } from "../format.ts";
 import { Button, EmptyState, Label, Panel } from "../ui.tsx";
@@ -43,7 +44,7 @@ export function AnalystPage({
         </div>
         {ask.data ? (
           <>
-            <p className="answer">{ask.data.answer}</p>
+            <div className="answer"><ReactMarkdown>{ask.data.answer}</ReactMarkdown></div>
             <div className="citations">
               {ask.data.citations.map((citation) => (
                 <span key={citation.label}>

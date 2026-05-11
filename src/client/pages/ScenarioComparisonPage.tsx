@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Copy, FileText } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import {
   CartesianGrid,
   Legend,
@@ -72,8 +73,8 @@ export function ScenarioComparisonPage({
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
       />
-      {(report || narrativeError) && (
-        <NarrativePanel report={report} error={narrativeError} left={left} right={right} />
+      {(narrativeLoading || report || narrativeError) && (
+        <NarrativePanel report={report} error={narrativeError} loading={narrativeLoading} left={left} right={right} />
       )}
     </div>
   );
@@ -244,11 +245,13 @@ function VarianceGrid({
 function NarrativePanel({
   report,
   error,
+  loading,
   left,
   right,
 }: {
   report: NarrativeReport | null;
   error: string;
+  loading: boolean;
   left: string;
   right: string;
 }) {
@@ -258,21 +261,26 @@ function NarrativePanel({
         <h2>Executive narrative</h2>
         <span>{left} vs {right}</span>
       </div>
+      {loading && <p className="muted">Generating narrative…</p>}
       {error && <p className="error">{error}</p>}
       {report && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
-          <p style={{ fontWeight: 600, fontSize: 15 }}>{report.headline}</p>
+          <Md className="muted" style={{ fontWeight: 600, fontSize: 15 }}>{report.headline}</Md>
           {report.sections.map((s) => (
             <div key={s.title}>
               <strong style={{ fontSize: 13 }}>{s.title}</strong>
-              <p className="muted" style={{ marginTop: 4 }}>{s.body}</p>
+              <Md className="muted" style={{ marginTop: 4, fontSize: 13 }}>{s.body}</Md>
             </div>
           ))}
           {report.risks.length > 0 && (
             <div>
               <strong style={{ fontSize: 13, color: "var(--warning, #d97706)" }}>Risks & flags</strong>
               <ul style={{ marginTop: 4, paddingLeft: 20 }}>
-                {report.risks.map((r, i) => <li key={i} className="muted" style={{ fontSize: 13 }}>{r}</li>)}
+                {report.risks.map((r, i) => (
+                  <li key={i} style={{ fontSize: 13 }}>
+                    <Md>{r}</Md>
+                  </li>
+                ))}
               </ul>
             </div>
           )}
@@ -280,5 +288,13 @@ function NarrativePanel({
         </div>
       )}
     </Panel>
+  );
+}
+
+function Md({ children, className, style }: { children: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <div className={className} style={style}>
+      <ReactMarkdown>{children}</ReactMarkdown>
+    </div>
   );
 }
