@@ -40,9 +40,31 @@ export function ScenarioComparisonPage({
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
+  const [report, setReport] = useState<NarrativeReport | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState("");
+
+  async function generateNarrative() {
+    setNarrativeLoading(true);
+    setNarrativeError("");
+    try {
+      setReport(await client.generateNarrative(right, left));
+    } catch (err) {
+      setNarrativeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNarrativeLoading(false);
+    }
+  }
+
   return (
     <div className="grid two">
-      <ScenarioComparison rows={rows} left={left} right={right} />
+      <ScenarioComparison
+        rows={rows}
+        left={left}
+        right={right}
+        onGenerateNarrative={() => void generateNarrative()}
+        narrativeLoading={narrativeLoading}
+      />
       <VarianceView
         rows={rows}
         left={left}
@@ -50,7 +72,9 @@ export function ScenarioComparisonPage({
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
       />
-      <NarrativePanel scenario={right} compareScenario={left} />
+      {(report || narrativeError) && (
+        <NarrativePanel report={report} error={narrativeError} left={left} right={right} />
+      )}
     </div>
   );
 }
@@ -59,10 +83,14 @@ function ScenarioComparison({
   rows,
   left,
   right,
+  onGenerateNarrative,
+  narrativeLoading,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
+  onGenerateNarrative: () => void;
+  narrativeLoading: boolean;
 }) {
   const chartRows = useMemo(() => aggregateVarianceByMonth(rows, "Revenue"), [rows]);
   return (
@@ -84,6 +112,11 @@ function ScenarioComparison({
           <Line dataKey="rightValue" name={right} stroke="#1d4ed8" strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
+      <div style={{ marginTop: 12 }}>
+        <GhostButton type="button" onClick={onGenerateNarrative} disabled={narrativeLoading}>
+          <FileText size={15} /> {narrativeLoading ? "Generating…" : "Generate narrative"}
+        </GhostButton>
+      </div>
     </Panel>
   );
 }
@@ -208,36 +241,24 @@ function VarianceGrid({
   );
 }
 
-function NarrativePanel({ scenario, compareScenario }: { scenario: string; compareScenario: string }) {
-  const [report, setReport] = useState<NarrativeReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function generate() {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await client.generateNarrative(scenario, compareScenario);
-      setReport(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
+function NarrativePanel({
+  report,
+  error,
+  left,
+  right,
+}: {
+  report: NarrativeReport | null;
+  error: string;
+  left: string;
+  right: string;
+}) {
   return (
     <Panel className="span-two">
       <div className="panel-heading">
         <h2>Executive narrative</h2>
-        <GhostButton type="button" onClick={() => void generate()} disabled={loading}>
-          <FileText size={15} /> {loading ? "Generating…" : "Generate narrative"}
-        </GhostButton>
+        <span>{left} vs {right}</span>
       </div>
       {error && <p className="error">{error}</p>}
-      {!report && !loading && (
-        <p className="muted">Click "Generate narrative" to produce an AI-written executive summary comparing {compareScenario} vs {scenario}.</p>
-      )}
       {report && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
           <p style={{ fontWeight: 600, fontSize: 15 }}>{report.headline}</p>
