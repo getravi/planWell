@@ -18,10 +18,12 @@ export type NarrativeReport = {
   provider: "claude" | "gemini" | "local";
 };
 
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
 export type Analyst = {
   ask(
     question: string,
-    context: { scenario?: string; compareScenario?: string },
+    context: { scenario?: string; compareScenario?: string; history?: ChatMessage[] },
   ): Promise<AnalystAnswer>;
 };
 
@@ -239,11 +241,15 @@ class ClaudeAnalyst implements Analyst {
 
   async ask(
     question: string,
-    context: { scenario?: string; compareScenario?: string },
+    context: { scenario?: string; compareScenario?: string; history?: ChatMessage[] },
   ): Promise<AnalystAnswer> {
     const systemPrompt = `You are a guarded FP&A analyst. Answer ONLY from tool results. Be concise and cite specific numbers. Current context: scenario="${context.scenario ?? "actuals"}"${context.compareScenario ? `, compareScenario="${context.compareScenario}"` : ""}.`;
 
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+    const priorMessages: Anthropic.MessageParam[] = (context.history ?? []).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+    const messages: Anthropic.MessageParam[] = [...priorMessages, { role: "user", content: question }];
 
     for (let i = 0; i < 5; i++) {
       const response = await this.client.messages.create({

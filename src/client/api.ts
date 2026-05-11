@@ -164,14 +164,14 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ formula, availableIds }),
     }),
-  ask: (question: string, scenario?: string, compareScenario?: string) =>
+  ask: (question: string, scenario?: string, compareScenario?: string, history?: { role: "user" | "assistant"; content: string }[]) =>
     api<{
       answer: string;
       provider: string;
       citations: { tool: string; label: string; value: number | string }[];
     }>("/api/analyst/ask", {
       method: "POST",
-      body: JSON.stringify({ question, scenario, compareScenario }),
+      body: JSON.stringify({ question, scenario, compareScenario, history }),
     }),
   settings: () => api<{ forecastHorizon: number }>("/api/settings"),
   updateSettings: (patch: { forecastHorizon?: number }) =>

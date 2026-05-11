@@ -71,10 +71,12 @@ const formulaValidateSchema = z.object({
   account: coreAccountEnum,
 });
 
+const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string() });
 const analystSchema = z.object({
   question: z.string().min(1),
   scenario: z.string().optional(),
   compareScenario: z.string().optional(),
+  history: z.array(chatMessageSchema).optional(),
 });
 
 const dimensionKindSchema = z.enum(["department", "account", "time"]);
@@ -395,6 +397,7 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
         await analyst.ask(payload.question, {
           scenario: payload.scenario,
           compareScenario: payload.compareScenario,
+          history: payload.history,
         }),
       );
     } catch (error) {
