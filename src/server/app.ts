@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
@@ -428,6 +429,30 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
           "content-length": String(data.byteLength),
         },
       });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 500);
+    }
+  });
+
+  app.post("/api/admin/restore", async (context) => {
+    const dbPath = process.env.SQLITE_PATH;
+    if (!dbPath) {
+      return context.json({ error: "SQLITE_PATH not set — restore not supported in this environment" }, 400);
+    }
+    try {
+      const form = await context.req.formData();
+      const file = form.get("file");
+      if (!(file instanceof File)) {
+        return context.json({ error: "No file uploaded" }, 400);
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const magic = Buffer.from("SQLite format 3\0");
+      if (bytes.length < 16 || !magic.equals(Buffer.from(bytes.slice(0, 16)))) {
+        return context.json({ error: "Not a valid SQLite database file" }, 400);
+      }
+      writeFileSync(dbPath, bytes);
+      setTimeout(() => process.exit(0), 200);
+      return context.json({ ok: true });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 500);
     }

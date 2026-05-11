@@ -42,6 +42,7 @@ import { buildDescendantLookup, orderedOptionsFromMembers } from "./dimension-ut
 import { currency, number, percent } from "./format.ts";
 
 import { LoginScreen } from "./components/LoginScreen.tsx";
+import { AdminPage } from "./pages/AdminPage.tsx";
 import { ActualsPage } from "./pages/ActualsPage.tsx";
 import { AnalystPage } from "./pages/AnalystPage.tsx";
 import { CustomVariablesPage } from "./pages/CustomVariablesPage.tsx";
@@ -92,6 +93,7 @@ const VIEWS = [
   "Custom Variables",
   "Schema",
   "Formula Reference",
+  "Admin",
 ];
 
 function slugify(text: string) {
@@ -227,7 +229,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
     view === "Formulas" ||
     view === "Custom Variables" ||
     view === "Schema" ||
-    view === "Formula Reference";
+    view === "Formula Reference" ||
+    view === "Admin";
 
   useEffect(() => {
     if (!dimensions.isSuccess) {
@@ -314,6 +317,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                     ["Formulas", SquareFunction],
                     ["Custom Variables", Variable],
                     ["Schema", Database],
+                    ["Admin", Settings2],
                   ].map(([label, Icon]) => (
                     <SidebarMenuItem key={label as string}>
                       <SidebarMenuButton
@@ -495,6 +499,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
         {view === "Schema" ? <SchemaPage /> : null}
         {view === "Formula Reference" ? <FormulaReferencePage /> : null}
+        {view === "Admin" ? <AdminPage /> : null}
       </SidebarInset>
     </SidebarProvider>
   );

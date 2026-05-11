@@ -36,7 +36,6 @@ export function TimeSettingsPage({
   return (
     <div className="grid two">
       <ForecastHorizonPanel />
-      <BackupPanel />
       <div className="span-two">
         <DimensionEditor kind="time" members={dimensions?.time ?? []} />
       </div>
@@ -85,23 +84,6 @@ function ForecastHorizonPanel() {
         {save.isPending ? "Saving…" : "Save & recalculate"}
       </Button>
       {save.error ? <p className="error">{save.error.message}</p> : null}
-    </Panel>
-  );
-}
-
-function BackupPanel() {
-  return (
-    <Panel>
-      <div className="panel-heading">
-        <h2>Database backup</h2>
-      </div>
-      <p className="muted">
-        Download a consistent point-in-time snapshot of the SQLite database. Use this to back up
-        your data before major changes or deployments.
-      </p>
-      <a href={client.backupUrl} download>
-        <Button type="button">Download backup</Button>
-      </a>
     </Panel>
   );
 }

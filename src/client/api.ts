@@ -177,4 +177,5 @@ export const client = {
       body: JSON.stringify(patch),
     }),
   backupUrl: "/api/admin/backup",
+  restoreUrl: "/api/admin/restore",
 };
