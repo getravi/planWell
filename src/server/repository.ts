@@ -128,7 +128,7 @@ export type Repository = {
   backup(): Uint8Array;
 };
 
-export function createFileRepository(dbPath = resolve("data/planwell.sqlite")): Repository {
+export function createFileRepository(dbPath = process.env.DB_PATH ?? resolve("data/planwell.sqlite")): Repository {
   mkdirSync(dirname(dbPath), { recursive: true });
   return createRepository(new DatabaseSync(dbPath));
 }
