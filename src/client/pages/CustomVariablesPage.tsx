@@ -131,12 +131,8 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
       <div className="panel-heading">
         <h2>Add variable</h2>
       </div>
-      <p className="muted">
-        Input variables appear as editable rows in the driver matrix. Calculated variables are
-        evaluated from a formula using other variables and built-in values.
-      </p>
-      <div className="form-field">
-        <label className="form-label">
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+        <label className="form-label" style={{ flex: "1 1 120px" }}>
           ID
           <Input
             type="text"
@@ -145,10 +141,7 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
             onChange={(e) => setId(e.target.value)}
           />
         </label>
-        <small className="muted">Letters, digits, underscores. Cannot be changed after creation.</small>
-      </div>
-      <div className="form-field">
-        <label className="form-label">
+        <label className="form-label" style={{ flex: "1 1 140px" }}>
           Label
           <Input
             type="text"
@@ -157,36 +150,34 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
             onChange={(e) => setLabel(e.target.value)}
           />
         </label>
-      </div>
-      <div className="form-field">
-        <span className="form-label">Kind</span>
-        <div className="radio-group">
-          <label>
-            <input
-              type="radio"
-              name="kind"
-              value="input"
-              checked={kind === "input"}
-              onChange={() => setKind("input")}
-            />
-            Input
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="kind"
-              value="calculated"
-              checked={kind === "calculated"}
-              onChange={() => setKind("calculated")}
-            />
-            Calculated
-          </label>
+        <div className="form-label" style={{ flex: "0 0 auto" }}>
+          Kind
+          <div className="radio-group" style={{ marginTop: 4 }}>
+            <label>
+              <input
+                type="radio"
+                name="kind"
+                value="input"
+                checked={kind === "input"}
+                onChange={() => setKind("input")}
+              />
+              Input
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="kind"
+                value="calculated"
+                checked={kind === "calculated"}
+                onChange={() => setKind("calculated")}
+              />
+              Calculated
+            </label>
+          </div>
         </div>
-      </div>
-      {kind === "input" ? (
-        <div className="form-field">
-          <label className="form-label">
-            Default value
+        {kind === "input" ? (
+          <label className="form-label" style={{ flex: "0 1 100px" }}>
+            Default
             <Input
               type="number"
               placeholder="0"
@@ -194,12 +185,8 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
               onChange={(e) => setDefaultValue(e.target.value)}
             />
           </label>
-          <small className="muted">Used when no per-dept or per-month override is set.</small>
-        </div>
-      ) : null}
-      {kind === "calculated" ? (
-        <div className="form-field">
-          <label className="form-label">
+        ) : (
+          <label className="form-label" style={{ flex: "2 1 180px" }}>
             Formula
             <Input
               type="text"
@@ -212,32 +199,30 @@ function AddVariablePanel({ customVariables }: { customVariables: CustomVariable
               onBlur={validateFormula}
             />
           </label>
-          <small className="muted">
-            Available: {[...AVAILABLE_BUILTIN_IDS, ...customVariables.map((v) => v.id)].join(", ")}
-          </small>
-          {formulaStatus ? (
-            formulaStatus.ok ? (
-              <small className="success">Valid</small>
-            ) : (
-              <small className="error">{formulaStatus.error}</small>
-            )
-          ) : null}
-        </div>
+        )}
+        <Button
+          disabled={!canSubmit || createMutation.isPending}
+          style={{ flexShrink: 0 }}
+          onClick={() =>
+            createMutation.mutate({
+              id: id.trim(),
+              label: label.trim(),
+              kind,
+              formula: kind === "calculated" ? formula.trim() : undefined,
+              defaultValue: kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
+            })
+          }
+        >
+          Add variable
+        </Button>
+      </div>
+      {kind === "calculated" && formulaStatus ? (
+        formulaStatus.ok ? (
+          <small className="success">Formula valid</small>
+        ) : (
+          <small className="error">{formulaStatus.error}</small>
+        )
       ) : null}
-      <Button
-        disabled={!canSubmit || createMutation.isPending}
-        onClick={() =>
-          createMutation.mutate({
-            id: id.trim(),
-            label: label.trim(),
-            kind,
-            formula: kind === "calculated" ? formula.trim() : undefined,
-            defaultValue: kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
-          })
-        }
-      >
-        Add variable
-      </Button>
       {createMutation.error ? <p className="error">{createMutation.error.message}</p> : null}
     </Panel>
   );
