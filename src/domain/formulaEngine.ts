@@ -59,8 +59,9 @@ function extractSymbolNames(formula: string): string[] {
     const node = math.parse(formula);
     const names: string[] = [];
     node.traverse((n) => {
-      if (n.isSymbolNode && typeof (n as { name?: unknown }).name === "string") {
-        names.push((n as { name: string }).name);
+      const sym = n as unknown as { isSymbolNode?: boolean; name?: string };
+      if (sym.isSymbolNode && typeof sym.name === "string") {
+        names.push(sym.name);
       }
     });
     return names;

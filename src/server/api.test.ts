@@ -147,7 +147,7 @@ describe("PlanWell API", () => {
       scope: "dept:GPU Cloud:monthly:2026-03",
       value: 13000,
     });
-    expect(varRows.every((r: { scope: string }) => r.scope.startsWith("dept:") && r.scope.includes(":monthly:"))).toBe(true);
+    expect(varRows.every((r) => String(r.scope).startsWith("dept:") && String(r.scope).includes(":monthly:"))).toBe(true);
     migratedDb.close();
   });
 
