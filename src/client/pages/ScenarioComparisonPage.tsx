@@ -134,6 +134,21 @@ function ScenarioComparison({
           {narrativeError && <p className="error">{narrativeError}</p>}
           {narrativeReport && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <GhostButton
+                  type="button"
+                  onClick={() => {
+                    const text = [
+                      narrativeReport.headline,
+                      ...narrativeReport.sections.map((s) => `${s.title}\n${s.body}`),
+                      narrativeReport.risks.length ? `Risks & flags\n${narrativeReport.risks.join("\n")}` : "",
+                    ].filter(Boolean).join("\n\n");
+                    void navigator.clipboard.writeText(text);
+                  }}
+                >
+                  <Copy size={14} /> Copy text
+                </GhostButton>
+              </div>
               <Md style={{ fontWeight: 600, fontSize: 15 }}>{narrativeReport.headline}</Md>
               {narrativeReport.sections.map((s) => (
                 <div key={s.title}>
