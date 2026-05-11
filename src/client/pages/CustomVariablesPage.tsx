@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { client } from "../api.ts";
 import type { CustomVariableDef } from "../../domain/types.ts";
@@ -28,12 +28,53 @@ export function CustomVariablesPage({
   );
 }
 
+type EditDraft = { label: string; defaultValue: string; formula: string };
+
 function CustomVariableTable({ customVariables }: { customVariables: CustomVariableDef[] }) {
   const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EditDraft>({ label: "", defaultValue: "", formula: "" });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => client.deleteCustomVariable(id),
     onSuccess: async () => { await queryClient.invalidateQueries(); },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof client.updateCustomVariable>[1] }) =>
+      client.updateCustomVariable(id, patch),
+    onSuccess: async () => {
+      setEditingId(null);
+      await queryClient.invalidateQueries();
+    },
+  });
+
+  function startEdit(v: CustomVariableDef) {
+    setEditingId(v.id);
+    setDraft({
+      label: v.label,
+      defaultValue: v.defaultValue !== undefined ? String(v.defaultValue) : "",
+      formula: v.formula ?? "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    updateMutation.reset();
+  }
+
+  function saveEdit(v: CustomVariableDef) {
+    const patch: Parameters<typeof client.updateCustomVariable>[1] = {};
+    if (draft.label !== v.label) patch.label = draft.label;
+    if (v.kind === "input") {
+      const num = draft.defaultValue !== "" ? Number(draft.defaultValue) : undefined;
+      if (num !== v.defaultValue) patch.defaultValue = num;
+    }
+    if (v.kind === "calculated" && draft.formula !== (v.formula ?? "")) {
+      patch.formula = draft.formula;
+    }
+    updateMutation.mutate({ id: v.id, patch });
+  }
 
   return (
     <div className="ref-table-wrap">
@@ -49,38 +90,91 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
           </tr>
         </thead>
         <tbody>
-          {customVariables.map((v) => (
-            <tr key={v.id}>
-              <td>
-                <code>{v.id}</code>
-              </td>
-              <td>{v.label}</td>
-              <td>{v.kind}</td>
-              <td className="muted">
-                {v.kind === "input" && v.defaultValue !== undefined
-                  ? v.defaultValue
-                  : <span>—</span>}
-              </td>
-              <td>
-                {v.formula ? <code>{v.formula}</code> : <span className="muted">—</span>}
-              </td>
-              <td>
-                <GhostButton
-                  type="button"
-                  aria-label={`Delete ${v.id}`}
-                  onClick={() => deleteMutation.mutate(v.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 size={14} />
-                </GhostButton>
-              </td>
-            </tr>
-          ))}
+          {customVariables.map((v) => {
+            const isEditing = editingId === v.id;
+            return (
+              <tr key={v.id}>
+                <td><code>{v.id}</code></td>
+                <td>
+                  {isEditing ? (
+                    <Input
+                      type="text"
+                      value={draft.label}
+                      onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+                      style={{ width: "100%", minWidth: 100 }}
+                    />
+                  ) : v.label}
+                </td>
+                <td>{v.kind}</td>
+                <td>
+                  {isEditing && v.kind === "input" ? (
+                    <Input
+                      type="number"
+                      value={draft.defaultValue}
+                      onChange={(e) => setDraft((d) => ({ ...d, defaultValue: e.target.value }))}
+                      style={{ width: 80 }}
+                    />
+                  ) : (
+                    v.kind === "input" && v.defaultValue !== undefined
+                      ? v.defaultValue
+                      : <span className="muted">—</span>
+                  )}
+                </td>
+                <td>
+                  {isEditing && v.kind === "calculated" ? (
+                    <Input
+                      type="text"
+                      value={draft.formula}
+                      onChange={(e) => setDraft((d) => ({ ...d, formula: e.target.value }))}
+                      style={{ width: "100%", minWidth: 140 }}
+                    />
+                  ) : (
+                    v.formula ? <code>{v.formula}</code> : <span className="muted">—</span>
+                  )}
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {isEditing ? (
+                    <>
+                      <GhostButton
+                        type="button"
+                        aria-label="Save"
+                        onClick={() => saveEdit(v)}
+                        disabled={updateMutation.isPending || !draft.label.trim()}
+                      >
+                        <Check size={14} />
+                      </GhostButton>
+                      <GhostButton type="button" aria-label="Cancel" onClick={cancelEdit}>
+                        <X size={14} />
+                      </GhostButton>
+                    </>
+                  ) : (
+                    <>
+                      <GhostButton
+                        type="button"
+                        aria-label={`Edit ${v.id}`}
+                        onClick={() => startEdit(v)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Pencil size={14} />
+                      </GhostButton>
+                      <GhostButton
+                        type="button"
+                        aria-label={`Delete ${v.id}`}
+                        onClick={() => deleteMutation.mutate(v.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 size={14} />
+                      </GhostButton>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
-      {deleteMutation.error ? (
-        <p className="error">{deleteMutation.error.message}</p>
-      ) : null}
+      {deleteMutation.error ? <p className="error">{deleteMutation.error.message}</p> : null}
+      {updateMutation.error ? <p className="error">{updateMutation.error.message}</p> : null}
     </div>
   );
 }

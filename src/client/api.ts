@@ -146,7 +146,7 @@ export const client = {
     ),
   updateCustomVariable: (
     id: string,
-    patch: { label?: string; formula?: string; sortOrder?: number },
+    patch: { label?: string; formula?: string; sortOrder?: number; defaultValue?: number },
   ) =>
     api<{ customVariable: CustomVariableDef; customVariables: CustomVariableDef[] }>(
       `/api/custom-variables/${id}`,
