@@ -398,15 +398,16 @@ Return JSON: {"headline":"<one sentence>","sections":[{"title":"Revenue","body":
 }
 
 function parseNarrativeJson(text: string): Omit<NarrativeReport, "provider"> {
+  const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   try {
-    const parsed = JSON.parse(text) as Partial<NarrativeReport>;
+    const parsed = JSON.parse(stripped) as Partial<NarrativeReport>;
     return {
       headline: parsed.headline ?? "",
       sections: parsed.sections ?? [],
       risks: parsed.risks ?? [],
     };
   } catch {
-    return { headline: text.slice(0, 200), sections: [], risks: [] };
+    return { headline: stripped.slice(0, 300), sections: [], risks: [] };
   }
 }
 
