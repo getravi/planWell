@@ -38,56 +38,17 @@ export function createAnalyst(repo: Repository): Analyst {
       process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
     );
   }
-  return new LocalGroundedAnalyst(repo);
+  return {
+    async ask() {
+      return {
+        answer: "No AI provider configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to enable the analyst.",
+        provider: "local" as const,
+        citations: [],
+      };
+    },
+  };
 }
 
-class LocalGroundedAnalyst implements Analyst {
-  private readonly repo: Repository;
-
-  constructor(repo: Repository) {
-    this.repo = repo;
-  }
-
-  async ask(
-    question: string,
-    context: { scenario?: string; compareScenario?: string },
-  ): Promise<AnalystAnswer> {
-    if (context.scenario && context.compareScenario && asksForVariance(question)) {
-      return answerScenarioVariance(this.repo, context.scenario, context.compareScenario);
-    }
-
-    const summary = this.repo.getMetricSummary(context.scenario);
-    const lowered = question.toLowerCase();
-    const department = summary.departments.find((item) =>
-      lowered.includes(item.department.toLowerCase()),
-    );
-    const scoped = department ?? summary.departments[0];
-    const grossMargin = scoped.revenue - scoped.cogs;
-    const grossMarginPct = scoped.revenue === 0 ? null : grossMargin / scoped.revenue;
-    const label = context.scenario ? `${context.scenario} forecast` : "historical actuals";
-
-    const answer = department
-      ? `${scoped.department} ${label}: revenue is ${formatCurrency(scoped.revenue)}, COGS is ${formatCurrency(scoped.cogs)}, and gross margin is ${formatCurrency(grossMargin)}${grossMarginPct === null ? "" : ` (${formatPercent(grossMarginPct)})`}.`
-      : `${label}: total revenue is ${formatCurrency(summary.kpis.revenue)}, gross margin is ${formatCurrency(summary.kpis.grossMargin)}${summary.kpis.grossMarginPct === null ? "" : ` (${formatPercent(summary.kpis.grossMarginPct)})`}, OpEx is ${formatCurrency(summary.kpis.opex)}, and headcount is ${formatNumber(summary.kpis.headcount)}.`;
-
-    return {
-      answer,
-      provider: "local",
-      citations: [
-        {
-          tool: "getMetricSummary",
-          label: department ? `${scoped.department} revenue` : "Total revenue",
-          value: department ? scoped.revenue : summary.kpis.revenue,
-        },
-        {
-          tool: "getMetricSummary",
-          label: department ? `${scoped.department} COGS` : "Total COGS",
-          value: department ? scoped.cogs : summary.kpis.cogs,
-        },
-      ],
-    };
-  }
-}
 
 class GeminiAnalyst implements Analyst {
   private readonly client: GoogleGenAI;
@@ -148,7 +109,11 @@ class GeminiAnalyst implements Analyst {
 
     const requestedTool = response.functionCalls?.[0]?.name === "getMetricSummary";
     if (!requestedTool) {
-      return new LocalGroundedAnalyst(this.repo).ask(question, context);
+      return {
+        answer: "The AI analyst could not produce a grounded answer. Please try rephrasing your question.",
+        provider: "gemini",
+        citations: [],
+      };
     }
 
     const second = await this.client.models.generateContent({
@@ -258,6 +223,8 @@ class ClaudeAnalyst implements Analyst {
         system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         tools: CLAUDE_TOOLS.map((t) => ({ ...t, cache_control: { type: "ephemeral" } as const })),
         messages,
+        // Force at least one tool call on the first turn so answers are grounded in real data
+        ...(i === 0 ? { tool_choice: { type: "any" as const } } : {}),
       });
 
       if (response.stop_reason === "end_turn") {
@@ -288,7 +255,11 @@ class ClaudeAnalyst implements Analyst {
       break;
     }
 
-    return new LocalGroundedAnalyst(this.repo).ask(question, context);
+    return {
+      answer: "The AI analyst could not produce a grounded answer. Please try again.",
+      provider: "claude",
+      citations: [],
+    };
   }
 }
 
