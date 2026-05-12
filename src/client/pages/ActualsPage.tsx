@@ -1,6 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileUp } from "lucide-react";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
@@ -24,7 +22,7 @@ import {
   summarizeRows,
 } from "../pivot.ts";
 import { compactCurrency, currency, formatCell } from "../format.ts";
-import { EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui.tsx";
+import { EmptyState, ExportMenu, GhostButton, Panel } from "../ui.tsx";
 import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 
 export function ActualsPage({
@@ -47,7 +45,6 @@ export function ActualsPage({
 
   return (
     <div className="grid two">
-      <ImportPanel />
       <Panel>
         <div className="panel-heading">
           <h2>Department cost breakdown</h2>
@@ -86,49 +83,6 @@ export function ActualsPage({
         />
       </Panel>
     </div>
-  );
-}
-
-function ImportPanel() {
-  const queryClient = useQueryClient();
-  const [status, setStatus] = useState("");
-  const importCsv = useMutation({
-    mutationFn: client.importCsv,
-    onSuccess: async (result) => {
-      setStatus(
-        `Imported ${result.diagnostics.rowsImported} rows from ${result.diagnostics.shape} CSV.`,
-      );
-      await queryClient.invalidateQueries();
-    },
-  });
-  return (
-    <Panel>
-      <div className="panel-heading">
-        <h2>Import actuals</h2>
-        <FileUp size={18} />
-      </div>
-      <p className="muted">
-        Upload long or wide CSV actuals. Data is normalized into month, department, account, and
-        value.
-      </p>
-      <div className="sample-links">
-        <a href="/api/sample-csvs/long">Long sample</a>
-        <a href="/api/sample-csvs/wide">Wide sample</a>
-      </div>
-      <Input
-        type="file"
-        accept=".csv,text/csv"
-        onChange={async (event) => {
-          const file = event.target.files?.[0];
-          if (!file) {
-            return;
-          }
-          importCsv.mutate(await file.text());
-        }}
-      />
-      {status ? <p className="success">{status}</p> : null}
-      {importCsv.error ? <p className="error">{importCsv.error.message}</p> : null}
-    </Panel>
   );
 }
 

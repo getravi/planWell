@@ -173,9 +173,9 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ question, scenario, compareScenario, history }),
     }),
-  settings: () => api<{ forecastHorizon: number; aiModel: string | null }>("/api/settings"),
-  updateSettings: (patch: { forecastHorizon?: number; aiModel?: string }) =>
-    api<{ forecastHorizon: number; aiModel: string | null }>("/api/settings", {
+  settings: () => api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>("/api/settings"),
+  updateSettings: (patch: { forecastHorizon?: number; aiModel?: string; lastActualsMonth?: string | null }) =>
+    api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>("/api/settings", {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),

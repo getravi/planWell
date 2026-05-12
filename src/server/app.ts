@@ -62,6 +62,7 @@ const customVarUpdateSchema = z.object({
 const settingsPatchSchema = z.object({
   forecastHorizon: z.number().int().min(1).max(60).optional(),
   aiModel: z.string().optional(),
+  lastActualsMonth: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
 });
 
 
@@ -513,6 +514,7 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
     return {
       forecastHorizon: Number.isFinite(horizon) ? horizon : 12,
       aiModel: raw.aiModel ?? null,
+      lastActualsMonth: raw.lastActualsMonth ?? null,
     };
   }
 
@@ -529,6 +531,9 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
       }
       if (payload.aiModel !== undefined) {
         patch.aiModel = payload.aiModel;
+      }
+      if (payload.lastActualsMonth !== undefined) {
+        patch.lastActualsMonth = payload.lastActualsMonth ?? "";
       }
       if (Object.keys(patch).length > 0) {
         repo.updateSettings(patch);
