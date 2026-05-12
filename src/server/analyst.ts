@@ -34,7 +34,7 @@ export function createAnalyst(repo: Repository): Analyst {
     return new GeminiAnalyst(
       repo,
       process.env.GEMINI_API_KEY,
-      process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+      process.env.GEMINI_MODEL ?? "gemini-3.1-pro",
     );
   }
   return {
