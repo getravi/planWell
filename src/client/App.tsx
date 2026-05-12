@@ -394,7 +394,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <h1>{view}</h1>
           </div>
           <div className="scenario-pickers">
-            {availableYears.length > 0 ? (
+            {availableYears.length > 0 && view !== "Site Settings" ? (
               <label className="page-selector">
                 <Select
                   aria-label="Year"
@@ -488,7 +488,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
         view !== "Formulas" &&
         view !== "Custom Variables" &&
         view !== "Formula Reference" &&
-        view !== "Data Integration" ? (
+        view !== "Data Integration" &&
+        view !== "Site Settings" ? (
           <KpiStrip
             summary={currentSummary}
             variant={view === "Scenario Comparison" ? "variance" : "standard"}
