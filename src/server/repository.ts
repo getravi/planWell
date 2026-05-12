@@ -280,6 +280,7 @@ function createRepository(db: DatabaseSync): Repository {
       const accounts = flattenDimensionNames(listNamedDimension(db, "account"));
       for (const acc of accounts) {
         extraVars[acc] = 1;
+        extraVars[acc.toLowerCase()] = 1;
       }
       return validateFormula(formula, account, extraVars);
     },
@@ -334,6 +335,11 @@ function createRepository(db: DatabaseSync): Repository {
       const customVarSentinels = Object.fromEntries(
         dbListCustomVariables(db).map((v) => [v.id, 1]),
       );
+      const accounts = flattenDimensionNames(listNamedDimension(db, "account"));
+      for (const acc of accounts) {
+        customVarSentinels[acc] = 1;
+        customVarSentinels[acc.toLowerCase()] = 1;
+      }
       for (const [account, formula] of Object.entries(formulas)) {
         if (!formula) continue;
         const result = validateFormula(formula, account as CoreAccount, customVarSentinels);
