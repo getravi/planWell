@@ -87,17 +87,30 @@ describe("driver-based forecasting", () => {
   ];
 
   it("builds a 12-month forward forecast with dept monthly overrides", () => {
-    const forecast = buildForecast(actuals, {
-      name: "Base Case",
-      varOverrides: {
-        "GPU Cloud": {
-          monthly: { "2026-01": { revenueGrowthRate: 0.1, cogsPctOfRevenue: 0.42, headcountGrowthRate: 0.05, costPerHead: 15000 } },
-        },
-        Engineering: {
-          monthly: { "2026-01": { headcountGrowthRate: 0.1, costPerHead: 18000 } },
+    const forecast = buildForecast(
+      actuals,
+      {
+        name: "Base Case",
+        varOverrides: {
+          "GPU Cloud": {
+            monthly: {
+              "2026-01": {
+                revenueGrowthRate: 0.1,
+                cogsPctOfRevenue: 0.42,
+                headcountGrowthRate: 0.05,
+                costPerHead: 15000,
+              },
+            },
+          },
+          Engineering: {
+            monthly: { "2026-01": { headcountGrowthRate: 0.1, costPerHead: 18000 } },
+          },
         },
       },
-    }, [], undefined, builtinDefs);
+      [],
+      undefined,
+      builtinDefs,
+    );
 
     expect(forecast).toHaveLength(96);
     expect(
@@ -129,22 +142,38 @@ describe("driver-based forecasting", () => {
   });
 
   it("uses per-dept monthly overrides for different months", () => {
-    const forecast = buildForecast(actuals, {
-      name: "Monthly Plan",
-      varOverrides: {
-        "GPU Cloud": {
-          monthly: {
-            "2026-01": { revenueGrowthRate: 0.1, cogsPctOfRevenue: 0.4, headcountGrowthRate: 0.05, costPerHead: 15000 },
-            "2026-02": { revenueGrowthRate: 0.5, cogsPctOfRevenue: 0.3, headcountGrowthRate: 0.08, costPerHead: 16000 },
+    const forecast = buildForecast(
+      actuals,
+      {
+        name: "Monthly Plan",
+        varOverrides: {
+          "GPU Cloud": {
+            monthly: {
+              "2026-01": {
+                revenueGrowthRate: 0.1,
+                cogsPctOfRevenue: 0.4,
+                headcountGrowthRate: 0.05,
+                costPerHead: 15000,
+              },
+              "2026-02": {
+                revenueGrowthRate: 0.5,
+                cogsPctOfRevenue: 0.3,
+                headcountGrowthRate: 0.08,
+                costPerHead: 16000,
+              },
+            },
           },
-        },
-        Engineering: {
-          monthly: {
-            "2026-01": { headcountGrowthRate: 0.2, costPerHead: 20000 },
+          Engineering: {
+            monthly: {
+              "2026-01": { headcountGrowthRate: 0.2, costPerHead: 20000 },
+            },
           },
         },
       },
-    }, [], undefined, builtinDefs);
+      [],
+      undefined,
+      builtinDefs,
+    );
 
     expect(
       forecast.find(
@@ -337,9 +366,7 @@ describe("nextMonths", () => {
 });
 
 describe("resolveVarValues precedence", () => {
-  const defs: CustomVariableDef[] = [
-    { id: "rate", label: "Rate", kind: "input" },
-  ];
+  const defs: CustomVariableDef[] = [{ id: "rate", label: "Rate", kind: "input" }];
   const ancestorLookup = new Map([
     ["Child", ["Parent"]],
     ["Parent", []],
@@ -386,9 +413,7 @@ describe("resolveVarValues precedence", () => {
   });
 
   it("multi-level ancestors: grandparent < parent < child (monthly)", () => {
-    const multiDefs: CustomVariableDef[] = [
-      { id: "rate", label: "Rate", kind: "input" },
-    ];
+    const multiDefs: CustomVariableDef[] = [{ id: "rate", label: "Rate", kind: "input" }];
     const multiAncestors = new Map<string, string[]>([
       ["GrandParent", []],
       ["Parent", ["GrandParent"]],

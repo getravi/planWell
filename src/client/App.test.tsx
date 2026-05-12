@@ -324,9 +324,7 @@ describe("PlanWell workbench UI", () => {
           return false;
         }
         const body = JSON.parse(init.body);
-        return (
-          body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09
-        );
+        return body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09;
       }),
     ).toBe(true);
   });
@@ -655,7 +653,12 @@ describe("PlanWell workbench UI", () => {
             {
               id: "base",
               name: "Base Case",
-              assumptions: { name: "Base Case", varGlobal: baseDrivers(), varMonthly: {}, varOverrides: {} },
+              assumptions: {
+                name: "Base Case",
+                varGlobal: baseDrivers(),
+                varMonthly: {},
+                varOverrides: {},
+              },
             },
             {
               id: "upside",
@@ -873,7 +876,12 @@ describe("PlanWell workbench UI", () => {
             {
               id: "base",
               name: "Base Case",
-              assumptions: { name: "Base Case", varGlobal: baseDrivers(), varMonthly: {}, varOverrides: {} },
+              assumptions: {
+                name: "Base Case",
+                varGlobal: baseDrivers(),
+                varMonthly: {},
+                varOverrides: {},
+              },
             },
             {
               id: "upside",

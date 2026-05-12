@@ -35,12 +35,24 @@ export function createLocalAnalyst(repo: Repository): Analyst {
   return {
     async ask(question, context) {
       if (context.scenario && context.compareScenario) {
-        const rows = repo.compare(context.scenario, context.compareScenario).filter((r) => r.variance !== 0);
+        const rows = repo
+          .compare(context.scenario, context.compareScenario)
+          .filter((r) => r.variance !== 0);
         const top = [...rows].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))[0];
         const answer = top
           ? `${context.scenario} vs ${context.compareScenario}: largest variance is ${top.account} for ${top.department} in ${top.month} (${top.variance >= 0 ? "+" : ""}${top.variance.toFixed(0)}).`
           : `${context.scenario} vs ${context.compareScenario}: no material variances found.`;
-        return { answer, provider: "local", citations: [{ tool: "compareScenarios", label: `${context.scenario} vs ${context.compareScenario}`, value: rows.length }] };
+        return {
+          answer,
+          provider: "local",
+          citations: [
+            {
+              tool: "compareScenarios",
+              label: `${context.scenario} vs ${context.compareScenario}`,
+              value: rows.length,
+            },
+          ],
+        };
       }
       const summary = repo.getMetricSummary(context.scenario);
       const lowered = question.toLowerCase();
@@ -49,7 +61,17 @@ export function createLocalAnalyst(repo: Repository): Analyst {
       const answer = dept
         ? `${dept.department} (${label}): revenue ${dept.revenue.toFixed(0)}, COGS ${dept.cogs.toFixed(0)}, gross margin ${(dept.revenue - dept.cogs).toFixed(0)}.`
         : `${label}: total revenue ${summary.kpis.revenue.toFixed(0)}, gross margin ${summary.kpis.grossMargin.toFixed(0)}.`;
-      return { answer, provider: "local", citations: [{ tool: "getMetricSummary", label: dept?.department ?? label, value: dept?.revenue ?? summary.kpis.revenue }] };
+      return {
+        answer,
+        provider: "local",
+        citations: [
+          {
+            tool: "getMetricSummary",
+            label: dept?.department ?? label,
+            value: dept?.revenue ?? summary.kpis.revenue,
+          },
+        ],
+      };
     },
   };
 }
@@ -64,14 +86,14 @@ export function createAnalyst(repo: Repository): Analyst {
   return {
     async ask() {
       return {
-        answer: "No AI provider configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to enable the analyst.",
+        answer:
+          "No AI provider configured. Set ANTHROPIC_API_KEY or GEMINI_API_KEY to enable the analyst.",
         provider: "local" as const,
         citations: [],
       };
     },
   };
 }
-
 
 const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -122,9 +144,11 @@ class GeminiAnalyst implements Analyst {
   }
 
   private callTool(name: string, args: Record<string, unknown>): unknown {
-    if (name === "getMetricSummary") return this.repo.getMetricSummary(args.scenario as string | undefined);
+    if (name === "getMetricSummary")
+      return this.repo.getMetricSummary(args.scenario as string | undefined);
     if (name === "listActuals") return this.repo.listActuals();
-    if (name === "compareScenarios") return this.repo.compare(args.left as string, args.right as string);
+    if (name === "compareScenarios")
+      return this.repo.compare(args.left as string, args.right as string);
     if (name === "detectAnomalies") return detectAnomalies(this.repo.listActuals());
     return null;
   }
@@ -157,24 +181,39 @@ class GeminiAnalyst implements Analyst {
       const calls = response.functionCalls;
       if (!calls || calls.length === 0) {
         const text = response.text ?? "The analyst could not produce an answer.";
-        logger.info({ provider: "gemini", model, iterations: i + 1, ms: Date.now() - t0 }, "analyst.ask");
+        logger.info(
+          { provider: "gemini", model, iterations: i + 1, ms: Date.now() - t0 },
+          "analyst.ask",
+        );
         return { answer: text, provider: "gemini", citations: citationsCollected };
       }
 
       // Preserve raw parts (including thoughtSignature) so thinking models don't reject the next turn
-      const rawParts = response.candidates?.[0]?.content?.parts as Record<string, unknown>[] | undefined;
-      const modelParts = rawParts ?? calls.map((c) => ({ functionCall: { name: c.name, args: c.args } }));
+      const rawParts = response.candidates?.[0]?.content?.parts as
+        | Record<string, unknown>[]
+        | undefined;
+      const modelParts =
+        rawParts ?? calls.map((c) => ({ functionCall: { name: c.name, args: c.args } }));
       contents.push({ role: "model", parts: modelParts });
 
       const responseParts = calls.map((c) => {
         const result = this.callTool(c.name ?? "", (c.args ?? {}) as Record<string, unknown>);
-        citationsCollected.push(...extractGeminiCitations(c.name ?? "", (c.args ?? {}) as Record<string, unknown>, result));
+        citationsCollected.push(
+          ...extractGeminiCitations(
+            c.name ?? "",
+            (c.args ?? {}) as Record<string, unknown>,
+            result,
+          ),
+        );
         return { functionResponse: { name: c.name, response: { result } } };
       });
       contents.push({ role: "user", parts: responseParts });
     }
 
-    logger.warn({ provider: "gemini", model, ms: Date.now() - t0 }, "analyst.ask max iterations reached");
+    logger.warn(
+      { provider: "gemini", model, ms: Date.now() - t0 },
+      "analyst.ask max iterations reached",
+    );
     return {
       answer: "The analyst could not produce a grounded answer. Please try again.",
       provider: "gemini",
@@ -213,7 +252,8 @@ const CLAUDE_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "detectAnomalies",
-    description: "Return anomaly flags from historical actuals (statistical outliers and MoM spikes).",
+    description:
+      "Return anomaly flags from historical actuals (statistical outliers and MoM spikes).",
     input_schema: { type: "object" as const, properties: {} },
   },
 ];
@@ -260,7 +300,10 @@ class ClaudeAnalyst implements Analyst {
       role: m.role,
       content: m.content,
     }));
-    const messages: Anthropic.MessageParam[] = [...priorMessages, { role: "user", content: question }];
+    const messages: Anthropic.MessageParam[] = [
+      ...priorMessages,
+      { role: "user", content: question },
+    ];
     const toolUseBlocks: Anthropic.ToolUseBlock[] = [];
     const t0 = Date.now();
     let totalInputTokens = 0;
@@ -281,7 +324,17 @@ class ClaudeAnalyst implements Analyst {
 
       if (response.stop_reason === "end_turn") {
         const textBlock = response.content.find((b) => b.type === "text");
-        logger.info({ provider: "claude", model, iterations: i + 1, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, ms: Date.now() - t0 }, "analyst.ask");
+        logger.info(
+          {
+            provider: "claude",
+            model,
+            iterations: i + 1,
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            ms: Date.now() - t0,
+          },
+          "analyst.ask",
+        );
         return {
           answer: textBlock?.type === "text" ? textBlock.text : "No answer produced.",
           provider: "claude",
@@ -293,7 +346,9 @@ class ClaudeAnalyst implements Analyst {
         const assistantContent: Anthropic.ContentBlock[] = response.content;
         messages.push({ role: "assistant", content: assistantContent });
 
-        const newToolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+        const newToolUses = response.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+        );
         toolUseBlocks.push(...newToolUses);
 
         const toolResults: Anthropic.ToolResultBlockParam[] = newToolUses.map((b) => ({
@@ -309,7 +364,10 @@ class ClaudeAnalyst implements Analyst {
       break;
     }
 
-    logger.warn({ provider: "claude", model, ms: Date.now() - t0 }, "analyst.ask max iterations reached");
+    logger.warn(
+      { provider: "claude", model, ms: Date.now() - t0 },
+      "analyst.ask max iterations reached",
+    );
     return {
       answer: "The AI analyst could not produce a grounded answer. Please try again.",
       provider: "claude",
@@ -321,7 +379,11 @@ class ClaudeAnalyst implements Analyst {
 function buildClaudeCitations(toolUses: Anthropic.ToolUseBlock[]): AnalystAnswer["citations"] {
   return toolUses.map((b) => {
     const input = b.input as Record<string, unknown>;
-    return { tool: b.name, label: citationLabel(b.name, input), value: citationValue(b.name, input) };
+    return {
+      tool: b.name,
+      label: citationLabel(b.name, input),
+      value: citationValue(b.name, input),
+    };
   });
 }
 
@@ -330,18 +392,25 @@ function extractGeminiCitations(
   args: Record<string, unknown>,
   result: unknown,
 ): AnalystAnswer["citations"] {
-  return [{ tool: name, label: citationLabel(name, args), value: citationValue(name, args, result) }];
+  return [
+    { tool: name, label: citationLabel(name, args), value: citationValue(name, args, result) },
+  ];
 }
 
 function citationLabel(tool: string, input: Record<string, unknown>): string {
-  if (tool === "getMetricSummary") return input.scenario ? `${input.scenario} summary` : "Actuals summary";
+  if (tool === "getMetricSummary")
+    return input.scenario ? `${input.scenario} summary` : "Actuals summary";
   if (tool === "compareScenarios") return `${String(input.left)} vs ${String(input.right)}`;
   if (tool === "listActuals") return "Historical actuals";
   if (tool === "detectAnomalies") return "Anomaly scan";
   return tool;
 }
 
-function citationValue(tool: string, _input: Record<string, unknown>, result?: unknown): string | number {
+function citationValue(
+  tool: string,
+  _input: Record<string, unknown>,
+  result?: unknown,
+): string | number {
   if (tool === "getMetricSummary" && result && typeof result === "object") {
     const r = result as { kpis?: { revenue?: number } };
     return r.kpis?.revenue ?? "—";
@@ -376,10 +445,18 @@ export async function generateNarrative(
   const selectedModel = repo.getSettings().aiModel ?? null;
 
   if (process.env.ANTHROPIC_API_KEY) {
-    return generateNarrativeClaude(context, process.env.ANTHROPIC_API_KEY, selectedModel ?? DEFAULT_CLAUDE_MODEL);
+    return generateNarrativeClaude(
+      context,
+      process.env.ANTHROPIC_API_KEY,
+      selectedModel ?? DEFAULT_CLAUDE_MODEL,
+    );
   }
   if (process.env.GEMINI_API_KEY) {
-    return generateNarrativeGemini(context, process.env.GEMINI_API_KEY, selectedModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL);
+    return generateNarrativeGemini(
+      context,
+      process.env.GEMINI_API_KEY,
+      selectedModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+    );
   }
   return generateNarrativeLocal(context);
 }
@@ -398,7 +475,7 @@ async function generateNarrativeClaude(
     system: [
       {
         type: "text",
-        text: "You are an FP&A analyst writing an executive narrative. Return ONLY valid JSON matching the schema: {\"headline\":string,\"sections\":[{\"title\":string,\"body\":string}],\"risks\":[string]}. No markdown fences.",
+        text: 'You are an FP&A analyst writing an executive narrative. Return ONLY valid JSON matching the schema: {"headline":string,"sections":[{"title":string,"body":string}],"risks":[string]}. No markdown fences.',
         cache_control: { type: "ephemeral" },
       },
     ],
@@ -454,7 +531,9 @@ type NarrativeContext = {
   topVariances: ReturnType<Repository["compare"]>;
 };
 
-function buildNarrativeContext(ctx: NarrativeContext) { return ctx; }
+function buildNarrativeContext(ctx: NarrativeContext) {
+  return ctx;
+}
 
 function buildNarrativePrompt(ctx: NarrativeContext): string {
   return `Generate an executive narrative for the following planning data.
@@ -468,7 +547,10 @@ Return JSON: {"headline":"<one sentence>","sections":[{"title":"Revenue","body":
 }
 
 function parseNarrativeJson(text: string): Omit<NarrativeReport, "provider"> {
-  const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  const stripped = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
   try {
     const parsed = JSON.parse(stripped) as Partial<NarrativeReport>;
     return {
@@ -480,7 +562,6 @@ function parseNarrativeJson(text: string): Omit<NarrativeReport, "provider"> {
     return { headline: stripped.slice(0, 300), sections: [], risks: [] };
   }
 }
-
 
 type ProviderModel = { id: string; label: string };
 type ProviderEntry = { id: string; label: string; models: ProviderModel[] };
@@ -497,7 +578,9 @@ export async function listAvailableModels(): Promise<{ providers: ProviderEntry[
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .map((m) => ({ id: m.id, label: m.display_name }));
       if (models.length > 0) providers.push({ id: "anthropic", label: "Anthropic", models });
-    } catch { /* invalid key or API down */ }
+    } catch {
+      /* invalid key or API down */
+    }
   }
 
   if (process.env.GEMINI_API_KEY) {
@@ -506,7 +589,7 @@ export async function listAvailableModels(): Promise<{ providers: ProviderEntry[
         `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}&pageSize=100`,
       );
       if (res.ok) {
-        const data = await res.json() as {
+        const data = (await res.json()) as {
           models?: { name: string; displayName: string; supportedGenerationMethods?: string[] }[];
         };
         const models = (data.models ?? [])
@@ -525,7 +608,9 @@ export async function listAvailableModels(): Promise<{ providers: ProviderEntry[
           .sort((a, b) => b.id.localeCompare(a.id));
         if (models.length > 0) providers.push({ id: "google", label: "Google Gemini", models });
       }
-    } catch { /* invalid key or API down */ }
+    } catch {
+      /* invalid key or API down */
+    }
   }
 
   return { providers };

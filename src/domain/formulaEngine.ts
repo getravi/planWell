@@ -8,7 +8,9 @@ const math = create(all);
 // as doing so with { override: true } would make it reachable as a symbol.
 math.import(
   {
-    createUnit: () => { throw new Error("createUnit is not allowed in formulas"); },
+    createUnit: () => {
+      throw new Error("createUnit is not allowed in formulas");
+    },
   },
   { override: true },
 );
@@ -79,7 +81,9 @@ export function topoSortCustomVars(defs: CustomVariableDef[]): CustomVariableDef
 
   for (const def of defs) {
     if (def.kind !== "calculated" || !def.formula) continue;
-    const deps = [...new Set(extractSymbolNames(def.formula).filter((s) => allIds.has(s) && s !== def.id))];
+    const deps = [
+      ...new Set(extractSymbolNames(def.formula).filter((s) => allIds.has(s) && s !== def.id)),
+    ];
     for (const dep of deps) {
       edges.get(dep)!.push(def.id);
       inDegree.set(def.id, (inDegree.get(def.id) ?? 0) + 1);

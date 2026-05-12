@@ -480,9 +480,15 @@ export function ExportMenu({
         <ChevronDown size={12} className="export-menu-chevron" />
       </summary>
       <div className="export-menu-popup">
-        <button className="export-menu-item" onClick={onCsv}>CSV</button>
-        <button className="export-menu-item" onClick={onXlsx}>Excel</button>
-        <button className="export-menu-item" onClick={onPdf}>PDF</button>
+        <button className="export-menu-item" onClick={onCsv}>
+          CSV
+        </button>
+        <button className="export-menu-item" onClick={onXlsx}>
+          Excel
+        </button>
+        <button className="export-menu-item" onClick={onPdf}>
+          PDF
+        </button>
       </div>
     </details>
   );

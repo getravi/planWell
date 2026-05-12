@@ -136,7 +136,6 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [forecastDepartment, setForecastDepartment] = useState("__all__");
   const [actualsDepartment, setActualsDepartment] = useState("__all__");
   const [selectedYear, setSelectedYear] = useState<string>("__all__");
-  const [granularity, setGranularity] = useState<"month" | "quarter">("month");
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
   const settings = useQuery({ queryKey: ["settings"], queryFn: client.settings });
   const lastActualsMonth = settings.data?.lastActualsMonth ?? null;
@@ -186,15 +185,24 @@ function Workbench({ userEmail }: { userEmail: string }) {
     ];
   }, [actualRows, forecastRows, lastActualsMonth]);
   const yearForecastRows = useMemo(
-    () => selectedYear === "__all__" ? blendedForecastRows : blendedForecastRows.filter((r) => r.month.startsWith(selectedYear)),
+    () =>
+      selectedYear === "__all__"
+        ? blendedForecastRows
+        : blendedForecastRows.filter((r) => r.month.startsWith(selectedYear)),
     [blendedForecastRows, selectedYear],
   );
   const yearActualRows = useMemo(
-    () => selectedYear === "__all__" ? actualRows : actualRows.filter((r) => r.month.startsWith(selectedYear)),
+    () =>
+      selectedYear === "__all__"
+        ? actualRows
+        : actualRows.filter((r) => r.month.startsWith(selectedYear)),
     [actualRows, selectedYear],
   );
   const yearVarianceRows = useMemo(
-    () => selectedYear === "__all__" ? (variance.data?.rows ?? []) : (variance.data?.rows ?? []).filter((r) => r.month.startsWith(selectedYear)),
+    () =>
+      selectedYear === "__all__"
+        ? (variance.data?.rows ?? [])
+        : (variance.data?.rows ?? []).filter((r) => r.month.startsWith(selectedYear)),
     [variance.data?.rows, selectedYear],
   );
   const departmentDescendants = useMemo(
@@ -224,9 +232,10 @@ function Workbench({ userEmail }: { userEmail: string }) {
   }, [departmentDescendants, forecastDepartment, yearForecastRows]);
   const actualsDepartmentOptions = useMemo(
     () =>
-      orderedOptionsFromMembers(dimensions.data?.department ?? [], [
-        ...yearActualRows.map((row) => row.department),
-      ]),
+      orderedOptionsFromMembers(
+        dimensions.data?.department ?? [],
+        yearActualRows.map((row) => row.department),
+      ),
     [dimensions.data?.department, yearActualRows],
   );
   const actualsDepartments = useMemo(
@@ -395,18 +404,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <h1>{view}</h1>
           </div>
           <div className="scenario-pickers">
-            {(view === "Actuals" || view === "Forecast Model" || view === "Scenario Comparison") ? (
-              <label className="page-selector">
-                <Select
-                  aria-label="Granularity"
-                  value={granularity}
-                  onChange={(event) => setGranularity(event.target.value as "month" | "quarter")}
-                >
-                  <option value="month">Monthly</option>
-                  <option value="quarter">Quarterly</option>
-                </Select>
-              </label>
-            ) : null}
+
             {availableYears.length > 0 && view !== "Site Settings" ? (
               <label className="page-selector">
                 <Select
@@ -514,7 +512,6 @@ function Workbench({ userEmail }: { userEmail: string }) {
             actuals={filteredActualRows}
             departmentHierarchy={dimensions.data?.department ?? []}
             accountHierarchy={dimensions.data?.account ?? []}
-            granularity={granularity}
           />
         ) : null}
         {view === "Forecast Model" ? (
@@ -527,7 +524,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             departmentHierarchy={dimensions.data?.department ?? []}
             accountHierarchy={dimensions.data?.account ?? []}
             customVarDefs={customVariables.data ?? []}
-            granularity={granularity}
+            selectedYear={selectedYear}
           />
         ) : null}
         {view === "Scenario Comparison" ? (
@@ -537,11 +534,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
             right={rightScenario}
             departmentHierarchy={dimensions.data?.department ?? []}
             accountHierarchy={dimensions.data?.account ?? []}
-            granularity={granularity}
           />
         ) : null}
         {view === "Analyst" ? (
-          <AnalystPage scenario={leftScenario} compareScenario={rightScenario} />
+          <AnalystPage
+            scenario={leftScenario}
+            compareScenario={rightScenario}
+            selectedYear={selectedYear}
+          />
         ) : null}
         {view === "Dimensions" ? (
           <DimensionsPage

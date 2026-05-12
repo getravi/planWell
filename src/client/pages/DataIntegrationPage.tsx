@@ -93,8 +93,16 @@ function LastActualsMonthPanel() {
         <input
           type="month"
           value={current}
-          onChange={(e) => { setValue(e.target.value); setSaved(false); }}
-          style={{ padding: "6px 8px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          style={{
+            padding: "6px 8px",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            fontSize: 14,
+          }}
         />
         <Button type="button" disabled={saving} onClick={() => void save()}>
           {saving ? "Saving…" : "Save"}
@@ -104,7 +112,11 @@ function LastActualsMonthPanel() {
             Clear
           </Button>
         ) : null}
-        {saved && <span className="muted" style={{ fontSize: 13 }}>Saved</span>}
+        {saved && (
+          <span className="muted" style={{ fontSize: 13 }}>
+            Saved
+          </span>
+        )}
       </div>
       {data?.lastActualsMonth && (
         <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>

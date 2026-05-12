@@ -1,10 +1,28 @@
 import { DatabaseSync } from "node:sqlite";
 import type { CustomVariableDef, ScenarioAssumptions } from "../../domain/types.ts";
-import { topoSortCustomVars, validateCustomFormula, CycleError } from "../../domain/formulaEngine.ts";
+import {
+  topoSortCustomVars,
+  validateCustomFormula,
+  CycleError,
+} from "../../domain/formulaEngine.ts";
 
 const RESERVED_IDS = new Set([
-  "base", "month", "revenue", "headcount",
-  "pow", "sqrt", "abs", "max", "min", "round", "pi", "e", "true", "false", "NaN", "Infinity",
+  "base",
+  "month",
+  "revenue",
+  "headcount",
+  "pow",
+  "sqrt",
+  "abs",
+  "max",
+  "min",
+  "round",
+  "pi",
+  "e",
+  "true",
+  "false",
+  "NaN",
+  "Infinity",
 ]);
 
 const ID_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -20,7 +38,9 @@ type CustomVariableRow = {
 
 export function listCustomVariables(db: DatabaseSync): CustomVariableDef[] {
   const rows = db
-    .prepare("select id, label, kind, formula, sort_order, default_value from custom_variables order by sort_order, id")
+    .prepare(
+      "select id, label, kind, formula, sort_order, default_value from custom_variables order by sort_order, id",
+    )
     .all() as CustomVariableRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -33,7 +53,9 @@ export function listCustomVariables(db: DatabaseSync): CustomVariableDef[] {
 
 export function createCustomVariable(db: DatabaseSync, def: CustomVariableDef): CustomVariableDef {
   if (!ID_PATTERN.test(def.id)) {
-    throw new Error(`"${def.id}" is not a valid identifier. Use letters, digits, and underscores only.`);
+    throw new Error(
+      `"${def.id}" is not a valid identifier. Use letters, digits, and underscores only.`,
+    );
   }
   if (RESERVED_IDS.has(def.id)) {
     throw new Error(`"${def.id}" is a reserved identifier.`);
@@ -60,7 +82,11 @@ export function createCustomVariable(db: DatabaseSync, def: CustomVariableDef): 
     }
   }
   const sortOrder =
-    ((db.prepare("select coalesce(max(sort_order), 0) as m from custom_variables").get() as { m: number }).m) + 10;
+    (
+      db.prepare("select coalesce(max(sort_order), 0) as m from custom_variables").get() as {
+        m: number;
+      }
+    ).m + 10;
   db.prepare(
     "insert into custom_variables (id, label, kind, formula, sort_order, default_value) values (?, ?, ?, ?, ?, ?)",
   ).run(def.id, def.label, def.kind, def.formula ?? null, sortOrder, def.defaultValue ?? null);
@@ -108,7 +134,10 @@ export function updateCustomVariable(
     db.prepare("update custom_variables set sort_order = ? where id = ?").run(patch.sortOrder, id);
   }
   if (patch.defaultValue !== undefined) {
-    db.prepare("update custom_variables set default_value = ? where id = ?").run(patch.defaultValue, id);
+    db.prepare("update custom_variables set default_value = ? where id = ?").run(
+      patch.defaultValue,
+      id,
+    );
   }
   return listCustomVariables(db).find((v) => v.id === id)!;
 }
@@ -122,22 +151,31 @@ export function deleteCustomVariable(db: DatabaseSync, id: string): void {
   const pattern = new RegExp(`\\b${id}\\b`);
 
   const calcVarRefs = (
-    db.prepare("select id, label, formula from custom_variables where kind = 'calculated' and id != ? and formula is not null").all(id) as
-      { id: string; label: string; formula: string }[]
+    db
+      .prepare(
+        "select id, label, formula from custom_variables where kind = 'calculated' and id != ? and formula is not null",
+      )
+      .all(id) as { id: string; label: string; formula: string }[]
   ).filter((v) => pattern.test(v.formula));
   if (calcVarRefs.length > 0) {
     const names = calcVarRefs.map((v) => v.label).join(", ");
-    throw new Error(`Variable "${id}" is used in the formula of: ${names}. Remove it from those formulas first.`);
+    throw new Error(
+      `Variable "${id}" is used in the formula of: ${names}. Remove it from those formulas first.`,
+    );
   }
 
   const scenarioFormulaRows = (
-    db.prepare("select account, formula from scenario_formulas").all() as
-      { account: string; formula: string }[]
+    db.prepare("select account, formula from scenario_formulas").all() as {
+      account: string;
+      formula: string;
+    }[]
   ).filter((r) => pattern.test(r.formula));
 
   if (scenarioFormulaRows.length > 0) {
     const accounts = [...new Set(scenarioFormulaRows.map((r) => r.account))].join(", ");
-    throw new Error(`Variable "${id}" is used in scenario formula overrides for: ${accounts}. Remove it from those formulas first.`);
+    throw new Error(
+      `Variable "${id}" is used in scenario formula overrides for: ${accounts}. Remove it from those formulas first.`,
+    );
   }
 
   db.prepare("delete from custom_variable_values where var_id = ?").run(id);
@@ -158,7 +196,10 @@ export function readVarValues(
     )
     .all(scenarioId) as { var_id: string; scope: string; value: number }[];
 
-  const varOverrides: Record<string, { monthly?: Record<string, Partial<Record<string, number>>> }> = {};
+  const varOverrides: Record<
+    string,
+    { monthly?: Record<string, Partial<Record<string, number>>> }
+  > = {};
   const monthlyMarker = ":monthly:";
 
   for (const row of rows) {
@@ -187,7 +228,8 @@ export function replaceVarValues(
   for (const [dept, override] of Object.entries(assumptions.varOverrides ?? {})) {
     for (const [month, vars] of Object.entries(override.monthly ?? {})) {
       for (const [varId, value] of Object.entries(vars)) {
-        if (value !== undefined) insert.run(scenarioId, varId, `dept:${dept}:monthly:${month}`, value);
+        if (value !== undefined)
+          insert.run(scenarioId, varId, `dept:${dept}:monthly:${month}`, value);
       }
     }
   }

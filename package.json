@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22.6.0"
-  },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"node --env-file-if-present=.env src/server/index.ts\" \"vp dev --host 127.0.0.1\"",
     "api": "node --env-file-if-present=.env src/server/index.ts",
@@ -49,6 +46,9 @@
     "typescript": "~6.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.6.0"
   },
   "packageManager": "pnpm@10.33.3"
 }

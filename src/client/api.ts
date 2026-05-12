@@ -140,8 +140,7 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ formula, account }),
     }),
-  listCustomVariables: () =>
-    api<{ customVariables: CustomVariableDef[] }>("/api/custom-variables"),
+  listCustomVariables: () => api<{ customVariables: CustomVariableDef[] }>("/api/custom-variables"),
   createCustomVariable: (def: CustomVariableDef) =>
     api<{ customVariable: CustomVariableDef; customVariables: CustomVariableDef[] }>(
       "/api/custom-variables",
@@ -164,7 +163,12 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ formula, availableIds }),
     }),
-  ask: (question: string, scenario?: string, compareScenario?: string, history?: { role: "user" | "assistant"; content: string }[]) =>
+  ask: (
+    question: string,
+    scenario?: string,
+    compareScenario?: string,
+    history?: { role: "user" | "assistant"; content: string }[],
+  ) =>
     api<{
       answer: string;
       provider: string;
@@ -173,12 +177,22 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ question, scenario, compareScenario, history }),
     }),
-  settings: () => api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>("/api/settings"),
-  updateSettings: (patch: { forecastHorizon?: number; aiModel?: string; lastActualsMonth?: string | null }) =>
-    api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>("/api/settings", {
-      method: "PATCH",
-      body: JSON.stringify(patch),
-    }),
+  settings: () =>
+    api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>(
+      "/api/settings",
+    ),
+  updateSettings: (patch: {
+    forecastHorizon?: number;
+    aiModel?: string;
+    lastActualsMonth?: string | null;
+  }) =>
+    api<{ forecastHorizon: number; aiModel: string | null; lastActualsMonth: string | null }>(
+      "/api/settings",
+      {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      },
+    ),
   aiProviders: () =>
     api<{
       providers: { id: string; label: string; models: { id: string; label: string }[] }[];
@@ -186,8 +200,10 @@ export const client = {
     }>("/api/settings/ai-providers"),
   backupUrl: "/api/admin/backup",
   restoreUrl: "/api/admin/restore",
-  anomalies: () => api<{ anomalies: import("../domain/anomaly.ts").AnomalyFlag[] }>("/api/anomalies"),
-  baselineSuggestions: () => api<import("../domain/baseline.ts").BaselineSuggestions>("/api/forecast/baseline-suggestions"),
+  anomalies: () =>
+    api<{ anomalies: import("../domain/anomaly.ts").AnomalyFlag[] }>("/api/anomalies"),
+  baselineSuggestions: () =>
+    api<import("../domain/baseline.ts").BaselineSuggestions>("/api/forecast/baseline-suggestions"),
   generateNarrative: (scenario: string, compareScenario?: string) =>
     api<import("../server/analyst.ts").NarrativeReport>("/api/analyst/narrative", {
       method: "POST",

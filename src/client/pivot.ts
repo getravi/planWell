@@ -304,6 +304,48 @@ export function collapsePivotActualRowsToQuarters(
   };
 }
 
+/**
+ * Keeps monthly granularity but appends a year-total column (e.g. "2024-FY")
+ * after each year's months. Headcount uses closing balance; all others are summed.
+ */
+export function collapsePivotActualRowsToMonthsWithYearTotal(
+  rows: PivotActualRow[],
+  months: string[],
+): { rows: PivotActualRow[]; periods: string[] } {
+  const yearToMonths = new Map<string, string[]>();
+  for (const m of months) {
+    const y = m.slice(0, 4);
+    const ya = yearToMonths.get(y) ?? [];
+    ya.push(m);
+    yearToMonths.set(y, ya);
+  }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))].sort();
+  const periods: string[] = [];
+  for (const year of years) {
+    periods.push(...months.filter((m) => m.startsWith(year)));
+    periods.push(`${year}-FY`);
+  }
+  const getValue = (row: PivotActualRow, ms: string[]) =>
+    row.account === "Headcount"
+      ? (row.values[ms.at(-1)!] ?? 0)
+      : ms.reduce((sum, m) => sum + (row.values[m] ?? 0), 0);
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      values: Object.fromEntries(
+        periods.map((p) => {
+          if (isFYPeriod(p)) {
+            const ms = yearToMonths.get(p.slice(0, 4)) ?? [];
+            return [p, getValue(row, ms)];
+          }
+          return [p, row.values[p] ?? 0];
+        }),
+      ),
+    })),
+    periods,
+  };
+}
+
 /** Collapses pivoted variance rows to quarter buckets with year totals. Variance is summed; variancePct is null at aggregated level. */
 export function collapsePivotVarianceRowsToQuarters(
   rows: PivotVarianceRow[],
@@ -338,6 +380,45 @@ export function collapsePivotVarianceRowsToQuarters(
             : (quarterToMonths.get(p) ?? []);
           const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
           return [p, { variance, variancePct: null }];
+        }),
+      ),
+    })),
+    periods,
+  };
+}
+
+/**
+ * Keeps monthly granularity but appends a year-total column (e.g. "2024-FY")
+ * after each year's months. Variance is summed; variancePct is null at aggregated level.
+ */
+export function collapsePivotVarianceRowsToMonthsWithYearTotal(
+  rows: PivotVarianceRow[],
+  months: string[],
+): { rows: PivotVarianceRow[]; periods: string[] } {
+  const yearToMonths = new Map<string, string[]>();
+  for (const m of months) {
+    const y = m.slice(0, 4);
+    const ya = yearToMonths.get(y) ?? [];
+    ya.push(m);
+    yearToMonths.set(y, ya);
+  }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))].sort();
+  const periods: string[] = [];
+  for (const year of years) {
+    periods.push(...months.filter((m) => m.startsWith(year)));
+    periods.push(`${year}-FY`);
+  }
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      values: Object.fromEntries(
+        periods.map((p) => {
+          if (isFYPeriod(p)) {
+            const ms = yearToMonths.get(p.slice(0, 4)) ?? [];
+            const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
+            return [p, { variance, variancePct: null }];
+          }
+          return [p, row.values[p] ?? { variance: 0, variancePct: null }];
         }),
       ),
     })),

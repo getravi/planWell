@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -17,6 +18,7 @@ import {
   buildActualGridMatrix,
   buildActualGridTsv,
   collapsePivotActualRowsToQuarters,
+  collapsePivotActualRowsToMonthsWithYearTotal,
   copyGrid,
   getMonths,
   isFYPeriod,
@@ -32,12 +34,10 @@ export function ActualsPage({
   actuals,
   departmentHierarchy,
   accountHierarchy,
-  granularity,
 }: {
   actuals: ActualRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
 }) {
   const filteredSummary = summarizeRows(actuals);
   const anomalyQuery = useQuery({ queryKey: ["anomalies"], queryFn: client.anomalies });
@@ -86,7 +86,6 @@ export function ActualsPage({
           accountHierarchy={accountHierarchy}
           anomalySet={anomalySet}
           anomalyMap={anomalyMap}
-          granularity={granularity}
         />
       </Panel>
     </div>
@@ -99,15 +98,14 @@ function ActualsGrid({
   accountHierarchy,
   anomalySet,
   anomalyMap,
-  granularity,
 }: {
   rows: ActualRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
   anomalySet: Set<string>;
   anomalyMap: Map<string, AnomalyFlag>;
-  granularity: Granularity;
 }) {
+  const [granularity, setGranularity] = useState<Granularity>("month");
   const months = getMonths(rows);
   const rawPivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
   if (rawPivotRows.length === 0) {
@@ -116,31 +114,49 @@ function ActualsGrid({
   const { rows: pivotRows, periods } =
     granularity === "quarter"
       ? collapsePivotActualRowsToQuarters(rawPivotRows, months)
-      : { rows: rawPivotRows, periods: months };
+      : collapsePivotActualRowsToMonthsWithYearTotal(rawPivotRows, months);
   return (
     <>
-      <div className="grid-toolbar">
-        <GhostButton
-          type="button"
-          aria-label="Copy grid"
-          onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
-        >
-          <Copy size={15} /> Copy grid
-        </GhostButton>
-        <ExportMenu
-          onCsv={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            exportCsv("actuals.csv", m.headers, m.rows);
-          }}
-          onXlsx={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows);
-          }}
-          onPdf={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            exportPdf("actuals.pdf", "Actuals", m.headers, m.rows);
-          }}
-        />
+      <div className="grid-toolbar" style={{ justifyContent: "space-between" }}>
+        <div className="tab-bar">
+          <button
+            type="button"
+            className={granularity === "month" ? "active" : ""}
+            onClick={() => setGranularity("month")}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            className={granularity === "quarter" ? "active" : ""}
+            onClick={() => setGranularity("quarter")}
+          >
+            Quarterly
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <GhostButton
+            type="button"
+            aria-label="Copy grid"
+            onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
+          >
+            <Copy size={15} /> Copy grid
+          </GhostButton>
+          <ExportMenu
+            onCsv={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              exportCsv("actuals.csv", m.headers, m.rows);
+            }}
+            onXlsx={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows);
+            }}
+            onPdf={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              exportPdf("actuals.pdf", "Actuals", m.headers, m.rows);
+            }}
+          />
+        </div>
       </div>
       <div className="spreadsheet-wrap">
         <table className="spreadsheet-grid">
@@ -149,7 +165,9 @@ function ActualsGrid({
               <th>Department</th>
               <th>Account</th>
               {periods.map((period) => (
-                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>{period}</th>
+                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>
+                  {period}
+                </th>
               ))}
             </tr>
           </thead>

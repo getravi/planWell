@@ -5,11 +5,7 @@ import { client } from "../api.ts";
 import type { CustomVariableDef } from "../../domain/types.ts";
 import { Button, GhostButton, Input, Panel } from "../ui.tsx";
 
-export function CustomVariablesPage({
-  customVariables,
-}: {
-  customVariables: CustomVariableDef[];
-}) {
+export function CustomVariablesPage({ customVariables }: { customVariables: CustomVariableDef[] }) {
   return (
     <div className="grid two">
       <AddVariablePanel customVariables={customVariables} className="span-two" />
@@ -37,12 +33,19 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => client.deleteCustomVariable(id),
-    onSuccess: async () => { await queryClient.invalidateQueries(); },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof client.updateCustomVariable>[1] }) =>
-      client.updateCustomVariable(id, patch),
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: Parameters<typeof client.updateCustomVariable>[1];
+    }) => client.updateCustomVariable(id, patch),
     onSuccess: async () => {
       setEditingId(null);
       await queryClient.invalidateQueries();
@@ -94,7 +97,9 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
             const isEditing = editingId === v.id;
             return (
               <tr key={v.id}>
-                <td><code>{v.id}</code></td>
+                <td>
+                  <code>{v.id}</code>
+                </td>
                 <td>
                   {isEditing ? (
                     <Input
@@ -103,7 +108,9 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
                       onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
                       style={{ width: "100%", minWidth: 100 }}
                     />
-                  ) : v.label}
+                  ) : (
+                    v.label
+                  )}
                 </td>
                 <td>{v.kind}</td>
                 <td>
@@ -114,10 +121,10 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
                       onChange={(e) => setDraft((d) => ({ ...d, defaultValue: e.target.value }))}
                       style={{ width: 80 }}
                     />
+                  ) : v.kind === "input" && v.defaultValue !== undefined ? (
+                    v.defaultValue
                   ) : (
-                    v.kind === "input" && v.defaultValue !== undefined
-                      ? v.defaultValue
-                      : <span className="muted">—</span>
+                    <span className="muted">—</span>
                   )}
                 </td>
                 <td>
@@ -128,8 +135,10 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
                       onChange={(e) => setDraft((d) => ({ ...d, formula: e.target.value }))}
                       style={{ width: "100%", minWidth: 140 }}
                     />
+                  ) : v.formula ? (
+                    <code>{v.formula}</code>
                   ) : (
-                    v.formula ? <code>{v.formula}</code> : <span className="muted">—</span>
+                    <span className="muted">—</span>
                   )}
                 </td>
                 <td style={{ whiteSpace: "nowrap" }}>
@@ -179,11 +188,15 @@ function CustomVariableTable({ customVariables }: { customVariables: CustomVaria
   );
 }
 
-const AVAILABLE_BUILTIN_IDS = [
-  "base", "month", "revenue", "headcount",
-];
+const AVAILABLE_BUILTIN_IDS = ["base", "month", "revenue", "headcount"];
 
-function AddVariablePanel({ customVariables, className }: { customVariables: CustomVariableDef[]; className?: string }) {
+function AddVariablePanel({
+  customVariables,
+  className,
+}: {
+  customVariables: CustomVariableDef[];
+  className?: string;
+}) {
   const queryClient = useQueryClient();
   const [id, setId] = useState("");
   const [label, setLabel] = useState("");
@@ -225,7 +238,9 @@ function AddVariablePanel({ customVariables, className }: { customVariables: Cus
       <div className="panel-heading">
         <h2>Add variable</h2>
       </div>
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
+      <div
+        style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}
+      >
         <label className="form-label" style={{ flex: "1 1 120px" }}>
           ID
           <Input
@@ -303,7 +318,8 @@ function AddVariablePanel({ customVariables, className }: { customVariables: Cus
               label: label.trim(),
               kind,
               formula: kind === "calculated" ? formula.trim() : undefined,
-              defaultValue: kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
+              defaultValue:
+                kind === "input" && defaultValue !== "" ? Number(defaultValue) : undefined,
             })
           }
         >

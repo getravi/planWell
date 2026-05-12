@@ -11,11 +11,7 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function exportCsv(
-  filename: string,
-  headers: string[],
-  rows: (string | number)[][],
-) {
+export function exportCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const csv = [headers, ...rows]
     .map((row) =>
       row
@@ -78,7 +74,9 @@ export async function exportXlsx(
 
   const buffer = await wb.xlsx.writeBuffer();
   downloadBlob(
-    new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
     filename,
   );
 }

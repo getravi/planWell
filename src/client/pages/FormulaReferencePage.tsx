@@ -243,7 +243,9 @@ export function FormulaReferencePage() {
           <tbody>
             {DRIVER_VARS.map((v) => (
               <tr key={v.name}>
-                <td><code>{v.name}</code></td>
+                <td>
+                  <code>{v.name}</code>
+                </td>
                 <td>{v.description}</td>
                 <td className="muted">{v.usedIn}</td>
               </tr>
@@ -315,8 +317,8 @@ export function FormulaReferencePage() {
         <p className="muted">
           Custom variables let you define reusable drivers that feed into forecast formulas. There
           are two kinds: <strong>input</strong> variables hold numeric values you set per scenario,
-          and <strong>calculated</strong> variables derive their value from a mathjs formula that can
-          reference other custom variables.
+          and <strong>calculated</strong> variables derive their value from a mathjs formula that
+          can reference other custom variables.
         </p>
 
         <h3>Input vs. calculated</h3>
@@ -331,16 +333,24 @@ export function FormulaReferencePage() {
           </thead>
           <tbody>
             <tr>
-              <td><strong>input</strong></td>
+              <td>
+                <strong>input</strong>
+              </td>
               <td>Numbers you enter per scenario / department / month</td>
               <td>—</td>
-              <td><code>revenueGrowthRate = 0.05</code></td>
+              <td>
+                <code>revenueGrowthRate = 0.05</code>
+              </td>
             </tr>
             <tr>
-              <td><strong>calculated</strong></td>
+              <td>
+                <strong>calculated</strong>
+              </td>
               <td>A mathjs formula evaluated at forecast time</td>
               <td>Other custom variables (inputs first)</td>
-              <td><code>adjustedRate = revenueGrowthRate * seasonalFactor</code></td>
+              <td>
+                <code>adjustedRate = revenueGrowthRate * seasonalFactor</code>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -364,26 +374,29 @@ export function FormulaReferencePage() {
             {PRECEDENCE_LEVELS.map((row) => (
               <tr key={row.level}>
                 <td className="muted">{row.level}</td>
-                <td><strong>{row.scope}</strong></td>
+                <td>
+                  <strong>{row.scope}</strong>
+                </td>
                 <td>{row.when}</td>
-                <td><code>{row.example}</code></td>
+                <td>
+                  <code>{row.example}</code>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         <p className="muted">
-          Ancestor overrides inherit down the department tree — a value set on{" "}
-          <em>Engineering</em> applies to <em>Frontend</em> and <em>Backend</em> unless those
-          departments set their own value. Closer ancestors (parent) beat more distant ones
-          (grandparent).
+          Ancestor overrides inherit down the department tree — a value set on <em>Engineering</em>{" "}
+          applies to <em>Frontend</em> and <em>Backend</em> unless those departments set their own
+          value. Closer ancestors (parent) beat more distant ones (grandparent).
         </p>
 
         <h3>Calculated variable evaluation order</h3>
         <p className="muted">
-          Calculated variables are sorted into dependency order (topological sort) before evaluation,
-          so a variable that references another is always evaluated after its dependency. If you
-          create a cycle (<code>a</code> depends on <code>b</code>, <code>b</code> depends on{" "}
-          <code>a</code>), planWell will reject it at save time.
+          Calculated variables are sorted into dependency order (topological sort) before
+          evaluation, so a variable that references another is always evaluated after its
+          dependency. If you create a cycle (<code>a</code> depends on <code>b</code>,{" "}
+          <code>b</code> depends on <code>a</code>), planWell will reject it at save time.
         </p>
         <p className="muted">
           Calculated variables see all resolved input values, but they cannot reference forecast

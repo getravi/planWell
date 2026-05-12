@@ -62,9 +62,12 @@ const customVarUpdateSchema = z.object({
 const settingsPatchSchema = z.object({
   forecastHorizon: z.number().int().min(1).max(60).optional(),
   aiModel: z.string().optional(),
-  lastActualsMonth: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
+  lastActualsMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .nullable()
+    .optional(),
 });
-
 
 const customVarValidateSchema = z.object({
   formula: z.string().min(1),
@@ -116,14 +119,24 @@ const versionUpdateSchema = z
     },
   );
 
-export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository; analyst?: Analyst }): Hono<AppEnv> {
+export function createApp({
+  repo,
+  analyst: injectedAnalyst,
+}: {
+  repo: Repository;
+  analyst?: Analyst;
+}): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
   const analyst = injectedAnalyst ?? createAnalyst(repo);
 
   const recalcSubs = new Set<(scenarioName: string) => void>();
   function notifyRecalcDone(scenarioName: string) {
     for (const fn of recalcSubs) {
-      try { fn(scenarioName); } catch { /* subscriber closed */ }
+      try {
+        fn(scenarioName);
+      } catch {
+        /* subscriber closed */
+      }
     }
   }
   function bgRecalcScenario(scenarioName: string) {
@@ -154,7 +167,15 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
   app.use("/api/*", async (context, next) => {
     const t0 = Date.now();
     await next();
-    logger.info({ method: context.req.method, path: new URL(context.req.url).pathname, status: context.res.status, ms: Date.now() - t0 }, "http");
+    logger.info(
+      {
+        method: context.req.method,
+        path: new URL(context.req.url).pathname,
+        status: context.res.status,
+        ms: Date.now() - t0,
+      },
+      "http",
+    );
   });
 
   app.get("/api/health", (context) => context.json({ ok: true }));
@@ -247,7 +268,9 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
         sub = (scenarioName: string) => {
           try {
             controller.enqueue(encoder.encode(`event: recalc-done\ndata: ${scenarioName}\n\n`));
-          } catch { /* stream closed */ }
+          } catch {
+            /* stream closed */
+          }
         };
         recalcSubs.add(sub);
         heartbeatId = setInterval(() => {
@@ -404,7 +427,9 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
   app.post("/api/custom-variables/validate-formula", async (context) => {
     try {
       const payload = customVarValidateSchema.parse(await context.req.json());
-      return context.json(repo.validateCustomVariableFormula(payload.formula, payload.availableIds));
+      return context.json(
+        repo.validateCustomVariableFormula(payload.formula, payload.availableIds),
+      );
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
@@ -414,7 +439,10 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
     try {
       const payload = customVarCreateSchema.parse(await context.req.json());
       const def = repo.createCustomVariable(payload);
-      return context.json({ customVariable: def, customVariables: repo.listCustomVariables() }, 201);
+      return context.json(
+        { customVariable: def, customVariables: repo.listCustomVariables() },
+        201,
+      );
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
@@ -564,7 +592,10 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
   app.get("/api/admin/backup", (context) => {
     try {
       const data = repo.backup();
-      const ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+      const ab = data.buffer.slice(
+        data.byteOffset,
+        data.byteOffset + data.byteLength,
+      ) as ArrayBuffer;
       const date = new Date().toISOString().slice(0, 10);
       return new Response(ab, {
         headers: {
@@ -581,7 +612,10 @@ export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository
   app.post("/api/admin/restore", async (context) => {
     const dbPath = process.env.SQLITE_PATH;
     if (!dbPath) {
-      return context.json({ error: "SQLITE_PATH not set — restore not supported in this environment" }, 400);
+      return context.json(
+        { error: "SQLITE_PATH not set — restore not supported in this environment" },
+        400,
+      );
     }
     try {
       const form = await context.req.formData();

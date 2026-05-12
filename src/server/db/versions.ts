@@ -1,13 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import type {
-  ScenarioAssumptions,
-  ScenarioFormulas,
-  CoreAccount,
-} from "../../domain/types.ts";
-import {
-  withTransaction,
-  actualsVersionId,
-} from "./utils.ts";
+import type { ScenarioAssumptions, ScenarioFormulas, CoreAccount } from "../../domain/types.ts";
+import { withTransaction, actualsVersionId } from "./utils.ts";
 import type { VersionRow, ScenarioRow } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
 import { insertForecastRows, selectForecastRowsByScenarioId } from "./forecasts.ts";

@@ -148,7 +148,11 @@ describe("PlanWell API", () => {
       scope: "dept:GPU Cloud:monthly:2026-03",
       value: 13000,
     });
-    expect(varRows.every((r) => String(r.scope).startsWith("dept:") && String(r.scope).includes(":monthly:"))).toBe(true);
+    expect(
+      varRows.every(
+        (r) => String(r.scope).startsWith("dept:") && String(r.scope).includes(":monthly:"),
+      ),
+    ).toBe(true);
     migratedDb.close();
   });
 
@@ -845,7 +849,12 @@ describe("PlanWell API", () => {
     const createB = await app.request("/api/custom-variables", {
       method: "POST",
       headers: { "content-type": "application/json", cookie },
-      body: JSON.stringify({ id: "myCalc", label: "My Calc", kind: "calculated", formula: "myRate * 2" }),
+      body: JSON.stringify({
+        id: "myCalc",
+        label: "My Calc",
+        kind: "calculated",
+        formula: "myRate * 2",
+      }),
     });
     expect(createB.status).toBe(201);
 

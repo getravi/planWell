@@ -126,7 +126,10 @@ function AiModelPanel() {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <select
             value={current}
-            onChange={(e) => { setSelected(e.target.value); setSaved(false); }}
+            onChange={(e) => {
+              setSelected(e.target.value);
+              setSaved(false);
+            }}
             style={{ width: "100%", padding: "6px 8px" }}
           >
             {providers.map((provider) => (
@@ -143,7 +146,11 @@ function AiModelPanel() {
             <Button type="button" disabled={saving || !current} onClick={() => void save()}>
               {saving ? "Saving…" : "Save"}
             </Button>
-            {saved && <span className="muted" style={{ fontSize: 13 }}>Saved</span>}
+            {saved && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                Saved
+              </span>
+            )}
           </div>
         </div>
       )}

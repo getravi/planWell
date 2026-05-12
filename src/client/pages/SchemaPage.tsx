@@ -139,7 +139,10 @@ export function SchemaPage() {
           />
           <div className="schema-note-card">
             <strong>Custom variable resolution</strong>
-            <span>Precedence (lowest → highest): default_value → ancestor dept monthly → this dept monthly</span>
+            <span>
+              Precedence (lowest → highest): default_value → ancestor dept monthly → this dept
+              monthly
+            </span>
             <span>Calculated vars evaluated in topological order after inputs</span>
             <code>input</code>
             <code>calculated</code>

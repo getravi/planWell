@@ -18,6 +18,7 @@ import {
   buildVarianceGridTsv,
   buildVarianceInsights,
   collapsePivotVarianceRowsToQuarters,
+  collapsePivotVarianceRowsToMonthsWithYearTotal,
   copyGrid,
   describeVarianceInsight,
   getMonths,
@@ -37,14 +38,12 @@ export function ScenarioComparisonPage({
   right,
   departmentHierarchy,
   accountHierarchy,
-  granularity,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
 }) {
   const [report, setReport] = useState<NarrativeReport | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
@@ -79,7 +78,6 @@ export function ScenarioComparisonPage({
         right={right}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
-        granularity={granularity}
       />
     </div>
   );
@@ -203,14 +201,12 @@ function VarianceView({
   right,
   departmentHierarchy,
   accountHierarchy,
-  granularity,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
 }) {
   const insights = buildVarianceInsights(rows);
   return (
@@ -229,7 +225,6 @@ function VarianceView({
         rows={rows}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
-        granularity={granularity}
       />
     </Panel>
   );
@@ -253,13 +248,12 @@ function VarianceGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
-  granularity,
 }: {
   rows: VarianceRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
 }) {
+  const [granularity, setGranularity] = useState<Granularity>("month");
   const months = getMonths(rows);
   const rawPivotRows = pivotVarianceRows(rows, departmentHierarchy, accountHierarchy);
   if (rawPivotRows.length === 0) {
@@ -268,31 +262,49 @@ function VarianceGrid({
   const { rows: pivotRows, periods } =
     granularity === "quarter"
       ? collapsePivotVarianceRowsToQuarters(rawPivotRows, months)
-      : { rows: rawPivotRows, periods: months };
+      : collapsePivotVarianceRowsToMonthsWithYearTotal(rawPivotRows, months);
   return (
     <>
-      <div className="grid-toolbar">
-        <GhostButton
-          type="button"
-          aria-label="Copy grid"
-          onClick={() => copyGrid(buildVarianceGridTsv(periods, pivotRows))}
-        >
-          <Copy size={15} /> Copy grid
-        </GhostButton>
-        <ExportMenu
-          onCsv={() => {
-            const m = buildVarianceGridMatrix(periods, pivotRows);
-            exportCsv("variance.csv", m.headers, m.rows);
-          }}
-          onXlsx={() => {
-            const m = buildVarianceGridMatrix(periods, pivotRows);
-            void exportXlsx("variance.xlsx", "Variance", m.headers, m.rows);
-          }}
-          onPdf={() => {
-            const m = buildVarianceGridMatrix(periods, pivotRows);
-            exportPdf("variance.pdf", "Scenario Variance", m.headers, m.rows);
-          }}
-        />
+      <div className="grid-toolbar" style={{ justifyContent: "space-between" }}>
+        <div className="tab-bar">
+          <button
+            type="button"
+            className={granularity === "month" ? "active" : ""}
+            onClick={() => setGranularity("month")}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            className={granularity === "quarter" ? "active" : ""}
+            onClick={() => setGranularity("quarter")}
+          >
+            Quarterly
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <GhostButton
+            type="button"
+            aria-label="Copy grid"
+            onClick={() => copyGrid(buildVarianceGridTsv(periods, pivotRows))}
+          >
+            <Copy size={15} /> Copy grid
+          </GhostButton>
+          <ExportMenu
+            onCsv={() => {
+              const m = buildVarianceGridMatrix(periods, pivotRows);
+              exportCsv("variance.csv", m.headers, m.rows);
+            }}
+            onXlsx={() => {
+              const m = buildVarianceGridMatrix(periods, pivotRows);
+              void exportXlsx("variance.xlsx", "Variance", m.headers, m.rows);
+            }}
+            onPdf={() => {
+              const m = buildVarianceGridMatrix(periods, pivotRows);
+              exportPdf("variance.pdf", "Scenario Variance", m.headers, m.rows);
+            }}
+          />
+        </div>
       </div>
       <div className="spreadsheet-wrap">
         <table className="spreadsheet-grid">
@@ -301,7 +313,9 @@ function VarianceGrid({
               <th>Department</th>
               <th>Account</th>
               {periods.map((period) => (
-                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>{period}</th>
+                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>
+                  {period}
+                </th>
               ))}
             </tr>
           </thead>

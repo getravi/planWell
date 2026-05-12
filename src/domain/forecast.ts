@@ -1,4 +1,9 @@
-import { DEFAULT_FORMULAS, evaluateFormula, topoSortCustomVars, type FormulaContext } from "./formulaEngine.ts";
+import {
+  DEFAULT_FORMULAS,
+  evaluateFormula,
+  topoSortCustomVars,
+  type FormulaContext,
+} from "./formulaEngine.ts";
 import { logger } from "../logger.ts";
 import type {
   ActualRow,
@@ -15,7 +20,10 @@ function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccoun
   try {
     return evaluateFormula(formula, ctx);
   } catch (err) {
-    logger.warn({ account: fallback, err: err instanceof Error ? err.message : String(err) }, "formula.eval.failed");
+    logger.warn(
+      { account: fallback, err: err instanceof Error ? err.message : String(err) },
+      "formula.eval.failed",
+    );
     return evaluateFormula(DEFAULT_FORMULAS[fallback], ctx);
   }
 }
@@ -107,28 +115,52 @@ export function buildForecast(
       const revenue = roundCurrency(
         safeEvaluate(
           formulaFor("Revenue"),
-          { base: findLatestValue(actuals, department, "Revenue", lastMonth), month: monthIndex, revenue: 0, headcount: 0, ...vars },
+          {
+            base: findLatestValue(actuals, department, "Revenue", lastMonth),
+            month: monthIndex,
+            revenue: 0,
+            headcount: 0,
+            ...vars,
+          },
           "Revenue",
         ),
       );
       const cogs = roundCurrency(
         safeEvaluate(
           formulaFor("COGS"),
-          { base: findLatestValue(actuals, department, "COGS", lastMonth), month: monthIndex, revenue, headcount: 0, ...vars },
+          {
+            base: findLatestValue(actuals, department, "COGS", lastMonth),
+            month: monthIndex,
+            revenue,
+            headcount: 0,
+            ...vars,
+          },
           "COGS",
         ),
       );
       const headcount = roundMetric(
         safeEvaluate(
           formulaFor("Headcount"),
-          { base: findLatestValue(actuals, department, "Headcount", lastMonth), month: monthIndex, revenue, headcount: 0, ...vars },
+          {
+            base: findLatestValue(actuals, department, "Headcount", lastMonth),
+            month: monthIndex,
+            revenue,
+            headcount: 0,
+            ...vars,
+          },
           "Headcount",
         ),
       );
       const opex = roundCurrency(
         safeEvaluate(
           formulaFor("OpEx"),
-          { base: findLatestValue(actuals, department, "OpEx", lastMonth), month: monthIndex, revenue, headcount, ...vars },
+          {
+            base: findLatestValue(actuals, department, "OpEx", lastMonth),
+            month: monthIndex,
+            revenue,
+            headcount,
+            ...vars,
+          },
           "OpEx",
         ),
       );
@@ -273,7 +305,10 @@ function sumByAccount(rows: ActualRow[], account: string): number {
 function closingBalance(rows: ActualRow[], account: string): number {
   const accountRows = rows.filter((row) => row.account === account);
   if (accountRows.length === 0) return 0;
-  const lastMonth = accountRows.map((row) => row.month).sort().at(-1)!;
+  const lastMonth = accountRows
+    .map((row) => row.month)
+    .sort()
+    .at(-1)!;
   return roundCurrency(
     accountRows.filter((row) => row.month === lastMonth).reduce((sum, row) => sum + row.value, 0),
   );

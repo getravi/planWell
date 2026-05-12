@@ -130,7 +130,9 @@ export type Repository = {
   backup(): Uint8Array;
 };
 
-export function createFileRepository(dbPath = process.env.SQLITE_PATH ?? resolve("data/planwell.sqlite")): Repository {
+export function createFileRepository(
+  dbPath = process.env.SQLITE_PATH ?? resolve("data/planwell.sqlite"),
+): Repository {
   mkdirSync(dirname(dbPath), { recursive: true });
   return createRepository(new DatabaseSync(dbPath));
 }
@@ -286,7 +288,10 @@ function createRepository(db: DatabaseSync): Repository {
       return validateCustomVariableFormula(formula, allIds);
     },
     getSettings() {
-      const rows = db.prepare("select key, value from app_settings").all() as { key: string; value: string }[];
+      const rows = db.prepare("select key, value from app_settings").all() as {
+        key: string;
+        value: string;
+      }[];
       return Object.fromEntries(rows.map((r) => [r.key, r.value]));
     },
     updateSettings(patch) {

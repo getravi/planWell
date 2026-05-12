@@ -12,6 +12,7 @@ import {
   buildActualGridMatrix,
   buildActualGridTsv,
   collapsePivotActualRowsToQuarters,
+  collapsePivotActualRowsToMonthsWithYearTotal,
   copyGrid,
   formatHorizonLabel,
   getMonths,
@@ -43,7 +44,6 @@ export function ForecastPage({
   departmentHierarchy,
   accountHierarchy,
   customVarDefs = [],
-  granularity,
   selectedYear,
 }: {
   scenarios: ScenarioRecord[];
@@ -53,7 +53,6 @@ export function ForecastPage({
   departments: string[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
   selectedYear: string;
   customVarDefs?: CustomVariableDef[];
 }) {
@@ -101,7 +100,6 @@ export function ForecastPage({
           rows={rows}
           departmentHierarchy={departmentHierarchy}
           accountHierarchy={accountHierarchy}
-          granularity={granularity}
         />
       </Panel>
     </div>
@@ -412,13 +410,12 @@ function ForecastGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
-  granularity,
 }: {
   rows: ForecastRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
-  granularity: Granularity;
 }) {
+  const [granularity, setGranularity] = useState<Granularity>("month");
   const months = getMonths(rows);
   const rawPivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
   if (rawPivotRows.length === 0) {
@@ -429,31 +426,49 @@ function ForecastGrid({
   const { rows: pivotRows, periods } =
     granularity === "quarter"
       ? collapsePivotActualRowsToQuarters(rawPivotRows, months)
-      : { rows: rawPivotRows, periods: months };
+      : collapsePivotActualRowsToMonthsWithYearTotal(rawPivotRows, months);
   return (
     <>
-      <div className="grid-toolbar">
-        <GhostButton
-          type="button"
-          aria-label="Copy grid"
-          onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
-        >
-          <Copy size={15} /> Copy grid
-        </GhostButton>
-        <ExportMenu
-          onCsv={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            exportCsv("forecast.csv", m.headers, m.rows);
-          }}
-          onXlsx={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows);
-          }}
-          onPdf={() => {
-            const m = buildActualGridMatrix(periods, pivotRows);
-            exportPdf("forecast.pdf", "Forecast", m.headers, m.rows);
-          }}
-        />
+      <div className="grid-toolbar" style={{ justifyContent: "space-between" }}>
+        <div className="tab-bar">
+          <button
+            type="button"
+            className={granularity === "month" ? "active" : ""}
+            onClick={() => setGranularity("month")}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            className={granularity === "quarter" ? "active" : ""}
+            onClick={() => setGranularity("quarter")}
+          >
+            Quarterly
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <GhostButton
+            type="button"
+            aria-label="Copy grid"
+            onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
+          >
+            <Copy size={15} /> Copy grid
+          </GhostButton>
+          <ExportMenu
+            onCsv={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              exportCsv("forecast.csv", m.headers, m.rows);
+            }}
+            onXlsx={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows);
+            }}
+            onPdf={() => {
+              const m = buildActualGridMatrix(periods, pivotRows);
+              exportPdf("forecast.pdf", "Forecast", m.headers, m.rows);
+            }}
+          />
+        </div>
       </div>
       <div className="spreadsheet-wrap">
         <table className="spreadsheet-grid">
@@ -462,7 +477,9 @@ function ForecastGrid({
               <th>Department</th>
               <th>Account</th>
               {periods.map((period) => (
-                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>{period}</th>
+                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>
+                  {period}
+                </th>
               ))}
             </tr>
           </thead>
@@ -477,7 +494,10 @@ function ForecastGrid({
                 </th>
                 <td>{row.account}</td>
                 {periods.map((period) => (
-                  <td key={period} className={`numeric-cell${isFYPeriod(period) ? " fy-total-col" : ""}`}>
+                  <td
+                    key={period}
+                    className={`numeric-cell${isFYPeriod(period) ? " fy-total-col" : ""}`}
+                  >
                     {formatCell(row.account, row.values[period] ?? 0)}
                   </td>
                 ))}

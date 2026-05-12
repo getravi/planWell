@@ -32,7 +32,14 @@ export function RevenueChart({ rows }: { rows: ActualRow[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" interval={0} tick={{ fontSize: 11 }} angle={-35} textAnchor="end" height={50} />
+        <XAxis
+          dataKey="month"
+          interval={0}
+          tick={{ fontSize: 11 }}
+          angle={-35}
+          textAnchor="end"
+          height={50}
+        />
         <YAxis tickFormatter={(value) => compactCurrency(Number(value))} />
         <Tooltip formatter={(value) => currency(Number(value))} />
         <Area dataKey="value" stroke="#166534" fill="url(#revenue-fill)" strokeWidth={2} />

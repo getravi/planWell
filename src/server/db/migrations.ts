@@ -133,10 +133,7 @@ export function migrateLegacyScenarioAssumptions(db: DatabaseSync): void {
       replaceVarValues(db, row.id, {
         name: old.name,
         varOverrides: Object.fromEntries(
-          Object.entries(old.overrides ?? {}).map(([dept, ov]) => [
-            dept,
-            { monthly: ov.monthly },
-          ]),
+          Object.entries(old.overrides ?? {}).map(([dept, ov]) => [dept, { monthly: ov.monthly }]),
         ),
       });
     }
@@ -160,7 +157,12 @@ function seedBuiltinVars(db: DatabaseSync): void {
   const builtins = [
     { id: "revenueGrowthRate", label: "Revenue Growth Rate", sort_order: 10, default_value: 0.03 },
     { id: "cogsPctOfRevenue", label: "COGS % of Revenue", sort_order: 20, default_value: 0.44 },
-    { id: "headcountGrowthRate", label: "Headcount Growth Rate", sort_order: 30, default_value: 0.02 },
+    {
+      id: "headcountGrowthRate",
+      label: "Headcount Growth Rate",
+      sort_order: 30,
+      default_value: 0.02,
+    },
     { id: "costPerHead", label: "Cost per Head", sort_order: 40, default_value: 18000 },
   ];
   const insert = db.prepare(
@@ -176,11 +178,20 @@ function seedBuiltinVars(db: DatabaseSync): void {
 }
 
 function migrateDriverAssumptionsToVarValues(db: DatabaseSync): void {
-  const driverRows = db.prepare(`
+  const driverRows = db
+    .prepare(`
     select scenario_id, scope_type, scope_key, month, driver_key, value
     from driver_assumptions
     where driver_key in ('revenueGrowthRate', 'cogsPctOfRevenue', 'headcountGrowthRate', 'costPerHead')
-  `).all() as { scenario_id: string; scope_type: string; scope_key: string; month: string; driver_key: string; value: number }[];
+  `)
+    .all() as {
+    scenario_id: string;
+    scope_type: string;
+    scope_key: string;
+    month: string;
+    driver_key: string;
+    value: number;
+  }[];
 
   const insert = db.prepare(`
     insert or ignore into custom_variable_values (scenario_id, var_id, scope, value)
@@ -262,7 +273,12 @@ export function ensureDefaultScenarios(db: DatabaseSync): void {
     const row = db.prepare("select id from scenarios where name = ?").get(scenario.name) as {
       id: string;
     };
-    const hasValues = (db.prepare("select count(*) as cnt from custom_variable_values where scenario_id = ?").get(row.id) as { cnt: number }).cnt > 0;
+    const hasValues =
+      (
+        db
+          .prepare("select count(*) as cnt from custom_variable_values where scenario_id = ?")
+          .get(row.id) as { cnt: number }
+      ).cnt > 0;
     if (!hasValues) {
       replaceVarValues(db, row.id, scenario);
     }

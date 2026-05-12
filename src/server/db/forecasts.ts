@@ -20,7 +20,8 @@ export function updateScenarioAssumptions(
 }
 
 export function countScenarioOverrides(db: DatabaseSync, department: string): number {
-  return readScenarios(db).filter((scenario) => scenario.assumptions.varOverrides?.[department]).length;
+  return readScenarios(db).filter((scenario) => scenario.assumptions.varOverrides?.[department])
+    .length;
 }
 
 export function renameScenarioOverride(db: DatabaseSync, from: string, to: string): void {
@@ -125,9 +126,9 @@ export function insertForecastRows(
 }
 
 export function listPlanningForecastMonths(db: DatabaseSync): string[] {
-  const monthRows = db
-    .prepare("select distinct month from actuals order by month")
-    .all() as { month: string }[];
+  const monthRows = db.prepare("select distinct month from actuals order by month").all() as {
+    month: string;
+  }[];
   const lastActualMonth = monthRows.at(-1)?.month;
   if (!lastActualMonth) {
     return [];
@@ -143,7 +144,9 @@ export function listPlanningForecastMonths(db: DatabaseSync): string[] {
 
 function getForecastHorizon(db: DatabaseSync): number {
   try {
-    const row = db.prepare("select value from app_settings where key = 'forecastHorizon'").get() as { value: string } | undefined;
+    const row = db.prepare("select value from app_settings where key = 'forecastHorizon'").get() as
+      | { value: string }
+      | undefined;
     if (!row) return 12;
     const n = parseInt(row.value, 10);
     return Number.isFinite(n) && n >= 1 && n <= 60 ? n : 12;

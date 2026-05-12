@@ -15,15 +15,15 @@ Financial planning and forecasting tool for growing teams. Import actuals, model
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, Recharts, TanStack Query/Table |
-| Backend | Hono on Node.js |
-| Database | SQLite via `node:sqlite` (built-in, no ORM at runtime) |
+| Layer          | Technology                                             |
+| -------------- | ------------------------------------------------------ |
+| Frontend       | React 19, Recharts, TanStack Query/Table               |
+| Backend        | Hono on Node.js                                        |
+| Database       | SQLite via `node:sqlite` (built-in, no ORM at runtime) |
 | Formula engine | mathjs (sandboxed — `import` and `createUnit` blocked) |
-| AI | Google Gemini (`@google/genai`) |
-| Build | Vite+ (`vp`) |
-| Tests | Vitest via `vp test` |
+| AI             | Google Gemini (`@google/genai`)                        |
+| Build          | Vite+ (`vp`)                                           |
+| Tests          | Vitest via `vp test`                                   |
 
 ## Getting started
 
@@ -47,12 +47,12 @@ Set `PLANWELL_SKIP_SEED=1` to disable demo user seeding in production.
 
 ## Environment variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `API_PORT` | `8787` | Port for the Hono API server |
-| `SQLITE_PATH` | `data/planwell.sqlite` | Path to the SQLite database file |
-| `PLANWELL_SKIP_SEED` | _(unset)_ | Set to `1` to skip demo credential seeding |
-| `GEMINI_API_KEY` | _(unset)_ | Google Gemini key for the AI analyst feature |
+| Variable             | Default                | Description                                  |
+| -------------------- | ---------------------- | -------------------------------------------- |
+| `API_PORT`           | `8787`                 | Port for the Hono API server                 |
+| `SQLITE_PATH`        | `data/planwell.sqlite` | Path to the SQLite database file             |
+| `PLANWELL_SKIP_SEED` | _(unset)_              | Set to `1` to skip demo credential seeding   |
+| `GEMINI_API_KEY`     | _(unset)_              | Google Gemini key for the AI analyst feature |
 
 ## CSV import format
 
@@ -102,11 +102,11 @@ Sessions expire after 8 hours. The database file is created at first run; `data/
 
 Open the **Schema** tab inside the app for a live ERD. Key tables:
 
-| Table | Purpose |
-|---|---|
-| `actuals` | Imported historical data (month × department × account) |
-| `versions` | Named versions — one `actuals` version plus N scenario versions |
-| `forecast_values` | Calculated forecast cells per scenario |
-| `custom_variables` | User-defined input/calculated variable definitions |
-| `custom_variable_values` | Per-scenario, per-scope variable values |
-| `scenario_formulas` | Per-account formula overrides per scenario |
+| Table                    | Purpose                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| `actuals`                | Imported historical data (month × department × account)         |
+| `versions`               | Named versions — one `actuals` version plus N scenario versions |
+| `forecast_values`        | Calculated forecast cells per scenario                          |
+| `custom_variables`       | User-defined input/calculated variable definitions              |
+| `custom_variable_values` | Per-scenario, per-scope variable values                         |
+| `scenario_formulas`      | Per-account formula overrides per scenario                      |

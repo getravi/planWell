@@ -13,9 +13,11 @@ type Message =
 export function AnalystPage({
   scenario,
   compareScenario,
+  selectedYear,
 }: {
   scenario: string;
   compareScenario: string;
+  selectedYear: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -33,6 +35,9 @@ export function AnalystPage({
     setInput("");
     setError("");
 
+    const yearContext = selectedYear !== "__all__" ? `[Year filter: ${selectedYear}] ` : "";
+    const questionWithContext = yearContext + question;
+
     const userMsg: Message = { role: "user", content: question };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
@@ -40,10 +45,15 @@ export function AnalystPage({
 
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     try {
-      const result = await client.ask(question, scenario, compareScenario, history);
+      const result = await client.ask(questionWithContext, scenario, compareScenario, history);
       setMessages([
         ...nextMessages,
-        { role: "assistant", content: result.answer, citations: result.citations, provider: result.provider },
+        {
+          role: "assistant",
+          content: result.answer,
+          citations: result.citations,
+          provider: result.provider,
+        },
       ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -60,7 +70,8 @@ export function AnalystPage({
         <Bot size={18} />
       </div>
       <p className="muted" style={{ marginBottom: 12 }}>
-        Answers grounded in approved aggregate tools over the imported cube. Ask follow-up questions to dig deeper.
+        Answers grounded in approved aggregate tools over the imported cube. Ask follow-up questions
+        to dig deeper.
       </p>
 
       <div
@@ -96,7 +107,8 @@ export function AnalystPage({
                 padding: "10px 14px",
                 borderRadius: 10,
                 fontSize: 13,
-                background: msg.role === "user" ? "var(--accent, #1d4ed8)" : "var(--surface-raised, #f1f5f9)",
+                background:
+                  msg.role === "user" ? "var(--accent, #1d4ed8)" : "var(--surface-raised, #f1f5f9)",
                 color: msg.role === "user" ? "#fff" : "var(--fg)",
               }}
             >
@@ -132,7 +144,11 @@ export function AnalystPage({
             </div>
           </div>
         )}
-        {error && <p className="error" style={{ fontSize: 13 }}>{error}</p>}
+        {error && (
+          <p className="error" style={{ fontSize: 13 }}>
+            {error}
+          </p>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -158,8 +174,20 @@ export function AnalystPage({
       {messages.length > 0 && (
         <button
           type="button"
-          style={{ alignSelf: "flex-start", marginTop: 6, fontSize: 11, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-          onClick={() => { setMessages([]); setError(""); }}
+          style={{
+            alignSelf: "flex-start",
+            marginTop: 6,
+            fontSize: 11,
+            color: "var(--muted)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+          }}
+          onClick={() => {
+            setMessages([]);
+            setError("");
+          }}
         >
           Clear conversation
         </button>

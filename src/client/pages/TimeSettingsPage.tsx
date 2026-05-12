@@ -50,7 +50,9 @@ function ForecastHorizonPanel() {
 
   const save = useMutation({
     mutationFn: (h: number) => client.updateSettings({ forecastHorizon: h }),
-    onSuccess: async () => { await queryClient.invalidateQueries(); },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+    },
   });
 
   const currentHorizon = settings.data?.forecastHorizon ?? 12;
@@ -62,8 +64,8 @@ function ForecastHorizonPanel() {
         <h2>Forecast horizon</h2>
       </div>
       <p className="muted">
-        Number of months to generate when recalculating scenarios. Default is 12.
-        Explicit time members added below extend the horizon automatically.
+        Number of months to generate when recalculating scenarios. Default is 12. Explicit time
+        members added below extend the horizon automatically.
       </p>
       <div className="form-field">
         <label className="form-label">
@@ -78,7 +80,13 @@ function ForecastHorizonPanel() {
         </label>
       </div>
       <Button
-        disabled={save.isPending || draft === currentHorizon || draft < 1 || draft > 60 || !Number.isFinite(draft)}
+        disabled={
+          save.isPending ||
+          draft === currentHorizon ||
+          draft < 1 ||
+          draft > 60 ||
+          !Number.isFinite(draft)
+        }
         onClick={() => save.mutate(draft)}
       >
         {save.isPending ? "Saving…" : "Save & recalculate"}

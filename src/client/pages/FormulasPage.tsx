@@ -18,7 +18,10 @@ export function FormulasPage() {
   if (scenarioList.length === 0) {
     return (
       <Panel>
-        <EmptyState title="No scenarios" body="Import actuals to create the default scenario set." />
+        <EmptyState
+          title="No scenarios"
+          body="Import actuals to create the default scenario set."
+        />
       </Panel>
     );
   }
@@ -48,9 +51,7 @@ export function FormulasPage() {
           </Select>
         </label>
       </div>
-      {selected ? (
-        <FormulaEditor key={selected.id} scenario={selected} />
-      ) : null}
+      {selected ? <FormulaEditor key={selected.id} scenario={selected} /> : null}
     </Panel>
   );
 }
@@ -58,7 +59,12 @@ export function FormulasPage() {
 function FormulaEditor({
   scenario,
 }: {
-  scenario: { id: string; name: string; locked: boolean; assumptions: import("../../domain/types.ts").ScenarioAssumptions };
+  scenario: {
+    id: string;
+    name: string;
+    locked: boolean;
+    assumptions: import("../../domain/types.ts").ScenarioAssumptions;
+  };
 }) {
   const queryClient = useQueryClient();
   const [formulas, setFormulas] = useState<ScenarioFormulas>(scenario.assumptions.formulas ?? {});
@@ -67,12 +73,10 @@ function FormulaEditor({
   >({});
   const isLocked = scenario.locked;
   const hasError = Object.values(validationState).some((s) => s && !s.ok && !s.pending);
-  const isDirty =
-    JSON.stringify(formulas) !== JSON.stringify(scenario.assumptions.formulas ?? {});
+  const isDirty = JSON.stringify(formulas) !== JSON.stringify(scenario.assumptions.formulas ?? {});
 
   const save = useMutation({
-    mutationFn: () =>
-      client.saveScenario({ ...scenario.assumptions, formulas }),
+    mutationFn: () => client.saveScenario({ ...scenario.assumptions, formulas }),
     onSuccess: async () => {
       await queryClient.invalidateQueries();
     },
@@ -83,7 +87,10 @@ function FormulaEditor({
     try {
       const result = await client.validateFormula(formula, account);
       const error = result.ok ? undefined : (result as { ok: false; error: string }).error;
-      setValidationState((prev) => ({ ...prev, [account]: { ok: result.ok, error, pending: false } }));
+      setValidationState((prev) => ({
+        ...prev,
+        [account]: { ok: result.ok, error, pending: false },
+      }));
     } catch {
       setValidationState((prev) => ({
         ...prev,
@@ -100,79 +107,86 @@ function FormulaEditor({
         </p>
       ) : null}
       <div className="formulas-table-wrap">
-      <table className="formulas-table">
-        <thead>
-          <tr>
-            <th>Account</th>
-            <th>Formula</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {FORMULA_ACCOUNTS.map((account) => {
-            const formula = formulas[account] ?? "";
-            const state = validationState[account];
-            return (
-              <tr key={account}>
-                <td className="formulas-table-label">{account}</td>
-                <td>
-                  <Input
-                    aria-label={`${account} formula`}
-                    placeholder={DEFAULT_FORMULAS[account]}
-                    value={formula}
-                    disabled={isLocked}
-                    onChange={(e) => {
-                      const next = { ...formulas };
-                      if (e.target.value) {
-                        next[account] = e.target.value;
-                      } else {
+        <table className="formulas-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Formula</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {FORMULA_ACCOUNTS.map((account) => {
+              const formula = formulas[account] ?? "";
+              const state = validationState[account];
+              return (
+                <tr key={account}>
+                  <td className="formulas-table-label">{account}</td>
+                  <td>
+                    <Input
+                      aria-label={`${account} formula`}
+                      placeholder={DEFAULT_FORMULAS[account]}
+                      value={formula}
+                      disabled={isLocked}
+                      onChange={(e) => {
+                        const next = { ...formulas };
+                        if (e.target.value) {
+                          next[account] = e.target.value;
+                        } else {
+                          delete next[account];
+                          setValidationState((prev) => {
+                            const s = { ...prev };
+                            delete s[account];
+                            return s;
+                          });
+                        }
+                        setFormulas(next);
+                      }}
+                      onBlur={() => {
+                        if (formula) validate(account, formula);
+                      }}
+                      className={state && !state.ok && !state.pending ? "input-error" : undefined}
+                      style={{ fontFamily: "monospace", width: "100%" }}
+                    />
+                    {state && !state.pending && (
+                      <span
+                        className={state.ok ? "formula-ok" : "formula-error"}
+                        style={{ fontSize: 12 }}
+                      >
+                        {state.ok ? "✓ Valid" : state.error}
+                      </span>
+                    )}
+                    {state?.pending && (
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        Validating…
+                      </span>
+                    )}
+                  </td>
+                  <td className="formulas-table-reset">
+                    <GhostButton
+                      type="button"
+                      aria-label={`Reset ${account} to default`}
+                      disabled={isLocked || !formula}
+                      title="Reset to default"
+                      onClick={() => {
+                        const next = { ...formulas };
                         delete next[account];
+                        setFormulas(next);
                         setValidationState((prev) => {
                           const s = { ...prev };
                           delete s[account];
                           return s;
                         });
-                      }
-                      setFormulas(next);
-                    }}
-                    onBlur={() => {
-                      if (formula) validate(account, formula);
-                    }}
-                    className={state && !state.ok && !state.pending ? "input-error" : undefined}
-                    style={{ fontFamily: "monospace", width: "100%" }}
-                  />
-                  {state && !state.pending && (
-                    <span className={state.ok ? "formula-ok" : "formula-error"} style={{ fontSize: 12 }}>
-                      {state.ok ? "✓ Valid" : state.error}
-                    </span>
-                  )}
-                  {state?.pending && <span className="muted" style={{ fontSize: 12 }}>Validating…</span>}
-                </td>
-                <td className="formulas-table-reset">
-                  <GhostButton
-                    type="button"
-                    aria-label={`Reset ${account} to default`}
-                    disabled={isLocked || !formula}
-                    title="Reset to default"
-                    onClick={() => {
-                      const next = { ...formulas };
-                      delete next[account];
-                      setFormulas(next);
-                      setValidationState((prev) => {
-                        const s = { ...prev };
-                        delete s[account];
-                        return s;
-                      });
-                    }}
-                  >
-                    ↺
-                  </GhostButton>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                      }}
+                    >
+                      ↺
+                    </GhostButton>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       <Button
         disabled={isLocked || !isDirty || hasError || save.isPending}

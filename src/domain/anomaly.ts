@@ -10,7 +10,11 @@ export type AnomalyFlag = {
   reason: string;
 };
 
-export function detectAnomalies(actuals: ActualRow[], zThreshold = 2, momThreshold = 0.25): AnomalyFlag[] {
+export function detectAnomalies(
+  actuals: ActualRow[],
+  zThreshold = 2,
+  momThreshold = 0.25,
+): AnomalyFlag[] {
   // Group by (department, account)
   const groups = new Map<string, { month: string; value: number }[]>();
   for (const row of actuals) {
