@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>planWell — Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #1a1a2e;
+      background: #f8f9fc;
+      padding: 48px 24px;
+    }
+    .page {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 56px 64px;
+    }
+    h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1d4ed8;
+      margin: 40px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #dbeafe;
+      letter-spacing: -0.2px;
+    }
+    h3 { font-size: 14px; font-weight: 600; margin: 20px 0 6px; color: #334155; }
+    p { margin-bottom: 12px; color: #374151; }
+    ul { padding-left: 20px; margin-bottom: 12px; }
+    li { margin-bottom: 5px; color: #374151; }
+    code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12.5px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: #0f172a;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 13.5px;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      font-weight: 600;
+      color: #475569;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td {
+      padding: 8px 12px;
+      border: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .diagram {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: #0f172a;
+      color: #94a3b8;
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin: 16px 0 24px;
+      overflow-x: auto;
+      line-height: 1.7;
+    }
+    .diagram .hl { color: #7dd3fc; }
+    .diagram .green { color: #86efac; }
+    .diagram .yellow { color: #fde68a; }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 99px;
+      margin-right: 6px;
+    }
+    .pill-blue { background: #dbeafe; color: #1d4ed8; }
+    .pill-green { background: #dcfce7; color: #166534; }
+    .pill-orange { background: #ffedd5; color: #9a3412; }
+    .divider { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
+    .callout {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 16px 0;
+      font-size: 13.5px;
+      color: #78350f;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>planWell</h1>
+  <p class="subtitle">Architecture overview &mdash; last updated May 2026</p>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <h2>1. System overview</h2>
+
+  <p>planWell is a single-tenant financial planning tool deployed as a single Node.js process. The frontend is a React SPA served as static files by the same process. All state lives in one SQLite file, mounted on a Railway volume.</p>
+
+  <div class="diagram">
+<span class="hl">Browser</span>
+  └─ React SPA (Vite build, served by Hono)
+       └─ fetch() → <span class="green">Hono API</span> (:8787)
+            ├─ Auth middleware (session cookie)
+            ├─ /api/cube/*        ← actuals + forecast reads
+            ├─ /api/scenarios/*   ← scenario CRUD + formula eval
+            ├─ /api/analyst/*     ← LLM Q&amp;A + narrative
+            ├─ /api/settings/*    ← forecast horizon, AI model
+            └─ /api/admin/*       ← backup / restore
+                 │
+                 └─ <span class="yellow">Repository</span> (node:sqlite, synchronous)
+                      └─ planwell.sqlite  ← Railway volume mount
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <h2>2. Data model</h2>
+
+  <p>The schema is a narrow-long <strong>planning cube</strong> with three dimension tables and two fact tables.</p>
+
+  <table>
+    <thead>
+      <tr><th>Table</th><th>Role</th><th>Key columns</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>actuals</code></td>
+        <td>Historical ledger</td>
+        <td><code>month, department, account, value</code></td>
+      </tr>
+      <tr>
+        <td><code>forecast_values</code></td>
+        <td>Computed forecast (denormalised)</td>
+        <td><code>scenario_id, month, department, account, value</code></td>
+      </tr>
+      <tr>
+        <td><code>driver_assumptions</code></td>
+        <td>User inputs per scenario / department / month</td>
+        <td><code>scenario_id, scope_type, scope_key, month, driver_key, value</code></td>
+      </tr>
+      <tr>
+        <td><code>department</code> / <code>account</code></td>
+        <td>Dimension hierarchies with sort order</td>
+        <td><code>name, parent_name, sort_order</code></td>
+      </tr>
+      <tr>
+        <td><code>versions</code></td>
+        <td>Named plan versions (actuals or scenario)</td>
+        <td><code>id, name, kind, locked</code></td>
+      </tr>
+      <tr>
+        <td><code>custom_variables</code></td>
+        <td>User-defined KPIs (input or calculated)</td>
+        <td><code>id, label, kind, formula, sort_order</code></td>
+      </tr>
+      <tr>
+        <td><code>app_settings</code></td>
+        <td>Key-value store for settings</td>
+        <td><code>key, value</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Design decisions</h3>
+  <ul>
+    <li><strong>Denormalised forecast cache.</strong> <code>forecast_values</code> stores computed outputs rather than re-running the formula engine on every read. This makes cube queries fast and keeps the read path simple. The trade-off is that assumptions changes must trigger a <code>recalculateAllScenarios()</code> write pass.</li>
+    <li><strong>Narrow-long layout.</strong> Every (month, department, account) triplet is a row. This makes arbitrary slice-and-dice queries trivial SQL aggregations and avoids the wide-table sparse-column problem common in spreadsheet-style schemas.</li>
+    <li><strong>Driver assumptions separate from outputs.</strong> Keeping inputs (<code>driver_assumptions</code>) and outputs (<code>forecast_values</code>) in separate tables means the formula engine is always re-derivable from inputs, and rollback/audit is straightforward.</li>
+    <li><strong>Composite primary keys on fact tables.</strong> Indexed on the most common access pattern: <code>(scenario_id, month, department, account)</code>.</li>
+  </ul>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <h2>3. Technology choices</h2>
+
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Choice</th><th>Rationale</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Runtime</td>
+        <td>Node.js 24</td>
+        <td>Built-in <code>node:sqlite</code> (no native addon to compile), <code>--env-file-if-present</code>, and fast startup on Railway.</td>
+      </tr>
+      <tr>
+        <td>Server framework</td>
+        <td>Hono</td>
+        <td>Minimal, typed, zero-dependency routing. Serves both the API and the built SPA from one process with no Nginx layer.</td>
+      </tr>
+      <tr>
+        <td>Database</td>
+        <td>SQLite via <code>node:sqlite</code></td>
+        <td>Single-file, zero-ops, no connection pool. Synchronous API eliminates async/await overhead for hot read paths. Backup is a single <code>database.serialize()</code> call.</td>
+      </tr>
+      <tr>
+        <td>Frontend</td>
+        <td>React 19 + Vite</td>
+        <td>React 19 concurrent features for responsive UI; Vite for fast HMR and lean prod bundles.</td>
+      </tr>
+      <tr>
+        <td>Data fetching</td>
+        <td>TanStack Query</td>
+        <td>Cache invalidation, background refetch, and loading states without a global store. Query keys map 1-to-1 with API routes.</td>
+      </tr>
+      <tr>
+        <td>Formula engine</td>
+        <td>mathjs</td>
+        <td>Safe sandboxed expression evaluation for user-defined COGS/OpEx formulas and custom variables.</td>
+      </tr>
+      <tr>
+        <td>Validation</td>
+        <td>Zod</td>
+        <td>Runtime schema validation at every API boundary; shared types inferred by TypeScript on the server side.</td>
+      </tr>
+      <tr>
+        <td>Deployment</td>
+        <td>Railway</td>
+        <td>Volume mounts for SQLite persistence across deploys, <code>PORT</code> env var injection, and simple env-var secrets management.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <h2>4. AI / ML approach</h2>
+
+  <h3>Provider strategy</h3>
+  <p>Two LLM providers are supported. The active provider is determined by which API key is set:</p>
+  <ul>
+    <li><span class="pill pill-blue">Anthropic</span> Claude — agentic tool-use loop (preferred)</li>
+    <li><span class="pill pill-green">Google</span> Gemini — single-pass context injection (fallback)</li>
+  </ul>
+  <p>The selected model is stored in <code>app_settings</code> and loaded at call time, so it can be changed from the Admin UI without a restart.</p>
+
+  <h3>Grounded Q&amp;A (Claude path)</h3>
+  <p>Claude is given four tools over the planning cube and forced to call at least one before answering (<code>tool_choice: { type: "any" }</code> on the first turn). The agentic loop runs up to 5 iterations, accumulating tool results before producing a final answer.</p>
+
+  <div class="diagram">
+User question
+  └─ <span class="hl">ClaudeAnalyst.ask()</span>
+       ├─ system: "Available scenarios: Base, Upside, …"
+       ├─ tool_choice: any  (first turn — forces grounding)
+       │
+       ├─ iteration 1 → Claude calls getMetricSummary("Base")
+       ├─ iteration 2 → Claude calls compareScenarios("Base","Upside")
+       └─ iteration 3 → stop_reason: end_turn → return answer
+  </div>
+
+  <p>Multi-turn conversation history is passed in full on every request so follow-up questions have context.</p>
+
+  <h3>Grounded Q&amp;A (Gemini path)</h3>
+  <p>Because the Google GenAI SDK does not support the same agentic tool-use loop, Gemini receives a single prompt containing all scenario summaries pre-fetched from the database. This trades token efficiency for reliability.</p>
+
+  <h3>Narrative generation</h3>
+  <p>A separate <code>POST /api/analyst/narrative</code> endpoint builds a rich context object (KPI summary, top variance rows, top anomaly flags) and asks the LLM to return structured JSON matching <code>{ headline, sections[], risks[] }</code>. The system prompt instructs the model not to use markdown fences; a fence-stripping fallback handles non-compliant responses.</p>
+
+  <h3>Anomaly detection</h3>
+  <p>Pure statistical, no model inference. For each (department, account) time series: Z-score flagging (<code>|value − mean| &gt; 2σ</code>) and month-over-month spike detection (&gt; 25% change). Results surface as amber indicators in the Actuals grid and are fed to the narrative prompt as context.</p>
+
+  <h3>Baseline suggestions</h3>
+  <p>Driver defaults are computed from actuals using CAGR for Revenue and Headcount, trailing-average COGS % of Revenue, and trailing cost-per-head (OpEx ÷ Headcount). All deterministic — no LLM involved.</p>
+
+  <div class="callout">
+    <strong>Grounding rationale:</strong> LLMs are forbidden from answering from training knowledge. The Q&amp;A path forces at least one tool call so every number in the answer traces back to data in the database. This makes the analyst auditable — wrong answers point to wrong data, not model hallucination.
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <h2>5. What I'd do differently with more time</h2>
+
+  <table>
+    <thead>
+      <tr><th>Area</th><th>Current state</th><th>Better approach</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Multi-tenancy</td>
+        <td>Single SQLite file, single user account</td>
+        <td>Schema-per-tenant or separate SQLite files per org; session scoped to tenant ID</td>
+      </tr>
+      <tr>
+        <td>Formula engine security</td>
+        <td>mathjs sandboxed eval — good but not isolated</td>
+        <td>Run formula evaluation in a Worker thread or Wasm sandbox to prevent prototype pollution</td>
+      </tr>
+      <tr>
+        <td>Forecast recalculation</td>
+        <td>Synchronous full-pass on every assumption change</td>
+        <td>Background job queue; only recalculate affected (scenario, department) combos; push progress via SSE</td>
+      </tr>
+      <tr>
+        <td>Gemini analyst</td>
+        <td>Dumps all scenario summaries into one prompt; no tool-use loop</td>
+        <td>Implement proper agentic loop via Gemini function calling once the SDK stabilises; share the same tool definitions as Claude</td>
+      </tr>
+      <tr>
+        <td>LLM citations</td>
+        <td>Fixed citations (revenue + gross margin) regardless of question</td>
+        <td>Parse tool calls from the Claude message history to build citations dynamically from actual tool results</td>
+      </tr>
+      <tr>
+        <td>Testing</td>
+        <td>Minimal — one domain test file</td>
+        <td>Integration tests against a real SQLite fixture; MSW for API mocking in frontend tests; property-based tests for the formula engine</td>
+      </tr>
+      <tr>
+        <td>Observability</td>
+        <td>Console.warn only</td>
+        <td>Structured logging (Pino), Railway log drain, LLM cost/latency metrics per request</td>
+      </tr>
+      <tr>
+        <td>Import pipeline</td>
+        <td>Single CSV POST, all-or-nothing</td>
+        <td>Streaming import with progress, column-mapping UI, incremental upsert, and duplicate detection</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider" />
+  <p style="font-size: 12px; color: #94a3b8;">planWell &mdash; internal architecture doc &mdash; not for distribution</p>
+
+</div>
+</body>
+</html>
