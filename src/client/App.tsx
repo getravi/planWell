@@ -236,7 +236,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
       : view === "Forecast Model" && forecastDepartment !== "__all__"
         ? summarizeRows(filteredForecastRows)
         : selectedYear !== "__all__"
-          ? summarizeRows(view === "Forecast Model" ? yearForecastRows : yearActualRows)
+          ? summarizeRows(view === "Actuals" ? yearActualRows : yearForecastRows)
           : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenario Comparison" || view === "Analyst";
