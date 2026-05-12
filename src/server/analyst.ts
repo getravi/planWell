@@ -26,16 +26,15 @@ export type Analyst = {
   ): Promise<AnalystAnswer>;
 };
 
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro";
+export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
+
 export function createAnalyst(repo: Repository): Analyst {
   if (process.env.ANTHROPIC_API_KEY) {
     return new ClaudeAnalyst(repo, process.env.ANTHROPIC_API_KEY);
   }
   if (process.env.GEMINI_API_KEY) {
-    return new GeminiAnalyst(
-      repo,
-      process.env.GEMINI_API_KEY,
-      process.env.GEMINI_MODEL ?? "gemini-3.1-pro",
-    );
+    return new GeminiAnalyst(repo, process.env.GEMINI_API_KEY);
   }
   return {
     async ask() {
@@ -52,12 +51,14 @@ export function createAnalyst(repo: Repository): Analyst {
 class GeminiAnalyst implements Analyst {
   private readonly client: GoogleGenAI;
   private readonly repo: Repository;
-  private readonly model: string;
 
-  constructor(repo: Repository, apiKey: string, model: string) {
+  constructor(repo: Repository, apiKey: string) {
     this.repo = repo;
-    this.model = model;
     this.client = new GoogleGenAI({ apiKey });
+  }
+
+  private getModel(): string {
+    return this.repo.getSettings().aiModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
   }
 
   async ask(
@@ -68,7 +69,7 @@ class GeminiAnalyst implements Analyst {
     const systemContext = `You are a guarded FP&A analyst. You MUST call getMetricSummary to retrieve data before answering. Current context: scenario="${context.scenario ?? "actuals"}"${context.compareScenario ? `, compareScenario="${context.compareScenario}"` : ""}.`;
 
     const answer = await this.client.models.generateContent({
-      model: this.model,
+      model: this.getModel(),
       contents: [
         {
           role: "user",
@@ -91,8 +92,6 @@ class GeminiAnalyst implements Analyst {
     };
   }
 }
-
-const CLAUDE_MODEL = "claude-sonnet-4-6";
 
 const CLAUDE_TOOLS: Anthropic.Tool[] = [
   {
@@ -138,6 +137,10 @@ class ClaudeAnalyst implements Analyst {
     this.client = new Anthropic({ apiKey });
   }
 
+  private getModel(): string {
+    return this.repo.getSettings().aiModel ?? DEFAULT_CLAUDE_MODEL;
+  }
+
   private callTool(name: string, input: Record<string, unknown>): unknown {
     if (name === "getMetricSummary") {
       return this.repo.getMetricSummary(input.scenario as string | undefined);
@@ -168,7 +171,7 @@ class ClaudeAnalyst implements Analyst {
 
     for (let i = 0; i < 5; i++) {
       const response = await this.client.messages.create({
-        model: CLAUDE_MODEL,
+        model: this.getModel(),
         max_tokens: 1024,
         system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         tools: CLAUDE_TOOLS.map((t) => ({ ...t, cache_control: { type: "ephemeral" } as const })),
@@ -251,7 +254,7 @@ async function generateNarrativeClaude(
   const prompt = buildNarrativePrompt(ctx);
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: DEFAULT_CLAUDE_MODEL,
     max_tokens: 2048,
     system: [
       {

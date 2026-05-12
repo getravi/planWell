@@ -59,7 +59,31 @@ const customVarUpdateSchema = z.object({
 
 const settingsPatchSchema = z.object({
   forecastHorizon: z.number().int().min(1).max(60).optional(),
+  aiModel: z.string().optional(),
 });
+
+const AI_MODEL_CATALOG = [
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    envKey: "ANTHROPIC_API_KEY",
+    models: [
+      { id: "claude-opus-4-7", label: "Claude Opus 4.7" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+      { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+    ],
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    envKey: "GEMINI_API_KEY",
+    models: [
+      { id: "gemini-3.1-pro", label: "Gemini 3.1 Pro" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+    ],
+  },
+] as const;
 
 const customVarValidateSchema = z.object({
   formula: z.string().min(1),
@@ -420,10 +444,16 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     }
   });
 
-  app.get("/api/settings", (context) => {
-    const raw = repo.getSettings();
+  function parseSettings(raw: Record<string, string>) {
     const horizon = raw.forecastHorizon ? parseInt(raw.forecastHorizon, 10) : 12;
-    return context.json({ forecastHorizon: Number.isFinite(horizon) ? horizon : 12 });
+    return {
+      forecastHorizon: Number.isFinite(horizon) ? horizon : 12,
+      aiModel: raw.aiModel ?? null,
+    };
+  }
+
+  app.get("/api/settings", (context) => {
+    return context.json(parseSettings(repo.getSettings()));
   });
 
   app.patch("/api/settings", async (context) => {
@@ -433,16 +463,27 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
       if (payload.forecastHorizon !== undefined) {
         patch.forecastHorizon = String(payload.forecastHorizon);
       }
+      if (payload.aiModel !== undefined) {
+        patch.aiModel = payload.aiModel;
+      }
       if (Object.keys(patch).length > 0) {
         repo.updateSettings(patch);
-        repo.recalculateAllScenarios();
+        if (payload.forecastHorizon !== undefined) {
+          repo.recalculateAllScenarios();
+        }
       }
-      const raw = repo.getSettings();
-      const horizon = raw.forecastHorizon ? parseInt(raw.forecastHorizon, 10) : 12;
-      return context.json({ forecastHorizon: Number.isFinite(horizon) ? horizon : 12 });
+      return context.json(parseSettings(repo.getSettings()));
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
+  });
+
+  app.get("/api/settings/ai-providers", (context) => {
+    const raw = repo.getSettings();
+    const providers = AI_MODEL_CATALOG
+      .filter((p) => !!process.env[p.envKey])
+      .map((p) => ({ id: p.id, label: p.label, models: p.models as unknown as { id: string; label: string }[] }));
+    return context.json({ providers, selectedModel: raw.aiModel ?? null });
   });
 
   app.get("/api/admin/backup", (context) => {

@@ -173,12 +173,17 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ question, scenario, compareScenario, history }),
     }),
-  settings: () => api<{ forecastHorizon: number }>("/api/settings"),
-  updateSettings: (patch: { forecastHorizon?: number }) =>
-    api<{ forecastHorizon: number }>("/api/settings", {
+  settings: () => api<{ forecastHorizon: number; aiModel: string | null }>("/api/settings"),
+  updateSettings: (patch: { forecastHorizon?: number; aiModel?: string }) =>
+    api<{ forecastHorizon: number; aiModel: string | null }>("/api/settings", {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
+  aiProviders: () =>
+    api<{
+      providers: { id: string; label: string; models: { id: string; label: string }[] }[];
+      selectedModel: string | null;
+    }>("/api/settings/ai-providers"),
   backupUrl: "/api/admin/backup",
   restoreUrl: "/api/admin/restore",
   anomalies: () => api<{ anomalies: import("../domain/anomaly.ts").AnomalyFlag[] }>("/api/anomalies"),
