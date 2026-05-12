@@ -213,6 +213,17 @@ describe("summarizeRows", () => {
     expect(summary.kpis.grossMarginPct).toBeNull();
     expect(summary.kpis.opexRatio).toBeNull();
   });
+
+  it("uses closing balance (last month) for headcount, not cumulative sum", () => {
+    const multiMonth = [
+      row("2026-01", "A", "Headcount", 10),
+      row("2026-02", "A", "Headcount", 12),
+      row("2026-03", "A", "Headcount", 15),
+    ];
+    const summary = summarizeRows(multiMonth);
+    expect(summary.kpis.headcount).toBe(15);
+    expect(summary.departments[0].headcount).toBe(15);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -133,6 +133,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [rightScenario, setRightScenario] = useState("Aggressive Growth");
   const [forecastDepartment, setForecastDepartment] = useState("__all__");
   const [actualsDepartment, setActualsDepartment] = useState("__all__");
+  const [selectedYear, setSelectedYear] = useState<string>("__all__");
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
   const actuals = useQuery({ queryKey: ["actuals"], queryFn: client.actuals });
   const customVariables = useQuery({
@@ -167,6 +168,23 @@ function Workbench({ userEmail }: { userEmail: string }) {
   });
   const scenarioNames = scenarios.data?.scenarios.map((scenario) => scenario.name) ?? [];
   const forecastRows = forecast.data?.rows ?? [];
+  const actualRows = actuals.data?.rows ?? [];
+  const availableYears = useMemo(() => {
+    const months = [...actualRows.map((r) => r.month), ...forecastRows.map((r) => r.month)];
+    return [...new Set(months.map((m) => m.slice(0, 4)))].sort();
+  }, [actualRows, forecastRows]);
+  const yearForecastRows = useMemo(
+    () => selectedYear === "__all__" ? forecastRows : forecastRows.filter((r) => r.month.startsWith(selectedYear)),
+    [forecastRows, selectedYear],
+  );
+  const yearActualRows = useMemo(
+    () => selectedYear === "__all__" ? actualRows : actualRows.filter((r) => r.month.startsWith(selectedYear)),
+    [actualRows, selectedYear],
+  );
+  const yearVarianceRows = useMemo(
+    () => selectedYear === "__all__" ? (variance.data?.rows ?? []) : (variance.data?.rows ?? []).filter((r) => r.month.startsWith(selectedYear)),
+    [variance.data?.rows, selectedYear],
+  );
   const departmentDescendants = useMemo(
     () => buildDescendantLookup(dimensions.data?.department ?? []),
     [dimensions.data?.department],
@@ -185,40 +203,41 @@ function Workbench({ userEmail }: { userEmail: string }) {
   );
   const filteredForecastRows = useMemo(() => {
     if (forecastDepartment === "__all__") {
-      return forecastRows;
+      return yearForecastRows;
     }
     const allowedDepartments = departmentDescendants.get(forecastDepartment) ?? [
       forecastDepartment,
     ];
-    return forecastRows.filter((row) => allowedDepartments.includes(row.department));
-  }, [departmentDescendants, forecastDepartment, forecastRows]);
-  const actualRows = actuals.data?.rows ?? [];
+    return yearForecastRows.filter((row) => allowedDepartments.includes(row.department));
+  }, [departmentDescendants, forecastDepartment, yearForecastRows]);
   const actualsDepartmentOptions = useMemo(
     () =>
       orderedOptionsFromMembers(dimensions.data?.department ?? [], [
-        ...actualRows.map((row) => row.department),
+        ...yearActualRows.map((row) => row.department),
       ]),
-    [dimensions.data?.department, actualRows],
+    [dimensions.data?.department, yearActualRows],
   );
   const actualsDepartments = useMemo(
     () => actualsDepartmentOptions.map((d) => d.name),
     [actualsDepartmentOptions],
   );
   const filteredActualRows = useMemo(() => {
-    if (actualsDepartment === "__all__") return actualRows;
+    if (actualsDepartment === "__all__") return yearActualRows;
     const allowed = departmentDescendants.get(actualsDepartment) ?? [actualsDepartment];
-    return actualRows.filter((row) => allowed.includes(row.department));
-  }, [departmentDescendants, actualsDepartment, actualRows]);
+    return yearActualRows.filter((row) => allowed.includes(row.department));
+  }, [departmentDescendants, actualsDepartment, yearActualRows]);
   const varianceSummary = useMemo(
-    () => summarizeVarianceRows(variance.data?.rows ?? []),
-    [variance.data?.rows],
+    () => summarizeVarianceRows(yearVarianceRows),
+    [yearVarianceRows],
   );
   const currentSummary =
     view === "Scenario Comparison"
       ? varianceSummary
       : view === "Forecast Model" && forecastDepartment !== "__all__"
         ? summarizeRows(filteredForecastRows)
-        : (forecast.data?.summary ?? actuals.data?.summary);
+        : selectedYear !== "__all__"
+          ? summarizeRows(view === "Forecast Model" ? yearForecastRows : yearActualRows)
+          : (forecast.data?.summary ?? actuals.data?.summary);
   const showScenarioPicker =
     view === "Forecast Model" || view === "Scenario Comparison" || view === "Analyst";
   const showComparisonLabels = view === "Scenario Comparison";
@@ -362,6 +381,20 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <h1>{view}</h1>
           </div>
           <div className="scenario-pickers">
+            {availableYears.length > 0 ? (
+              <label className="page-selector">
+                <Select
+                  aria-label="Year"
+                  value={selectedYear}
+                  onChange={(event) => setSelectedYear(event.target.value)}
+                >
+                  <option value="__all__">All years</option>
+                  {availableYears.map((year) => (
+                    <option key={year}>{year}</option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
             {view === "Actuals" ? (
               <label className="page-selector">
                 <Select
@@ -469,7 +502,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
         {view === "Scenario Comparison" ? (
           <ScenarioComparisonPage
-            rows={variance.data?.rows ?? []}
+            rows={yearVarianceRows}
             left={leftScenario}
             right={rightScenario}
             departmentHierarchy={dimensions.data?.department ?? []}

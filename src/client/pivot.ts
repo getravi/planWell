@@ -292,26 +292,32 @@ export function summarizeRows(rows: ActualRow[]): MetricSummary {
   const revenue = sumAccount(rows, "Revenue");
   const cogs = sumAccount(rows, "COGS");
   const opex = sumAccount(rows, "OpEx");
-  const headcount = sumAccount(rows, "Headcount");
+  const headcount = closingBalanceAccount(rows, "Headcount");
   const grossMargin = revenue - cogs;
-  const departments = new Map<
+  const deptAccum = new Map<
     string,
-    { department: string; revenue: number; cogs: number; opex: number; headcount: number }
+    { department: string; revenue: number; cogs: number; opex: number; headcountRows: ActualRow[] }
   >();
   for (const row of rows) {
-    const current = departments.get(row.department) ?? {
+    const current = deptAccum.get(row.department) ?? {
       department: row.department,
       revenue: 0,
       cogs: 0,
       opex: 0,
-      headcount: 0,
+      headcountRows: [],
     };
     if (row.account === "Revenue") current.revenue += row.value;
     if (row.account === "COGS") current.cogs += row.value;
     if (row.account === "OpEx") current.opex += row.value;
-    if (row.account === "Headcount") current.headcount += row.value;
-    departments.set(row.department, current);
+    if (row.account === "Headcount") current.headcountRows.push(row);
+    deptAccum.set(row.department, current);
   }
+  const departments = [...deptAccum.values()]
+    .map(({ headcountRows, ...rest }) => ({
+      ...rest,
+      headcount: closingBalance(headcountRows),
+    }))
+    .sort((left, right) => left.department.localeCompare(right.department));
   return {
     kpis: {
       revenue,
@@ -325,9 +331,7 @@ export function summarizeRows(rows: ActualRow[]): MetricSummary {
     accounts: [...new Set(rows.map((row) => row.account))]
       .sort((left, right) => left.localeCompare(right))
       .map((account) => ({ account, value: sumAccount(rows, account) })),
-    departments: [...departments.values()].sort((left, right) =>
-      left.department.localeCompare(right.department),
-    ),
+    departments,
     months: getMonths(rows),
   };
 }
@@ -343,6 +347,16 @@ export function summarizeVarianceRows(rows: VarianceRow[]): MetricSummary {
 
 function sumAccount(rows: ActualRow[], account: string): number {
   return rows.filter((row) => row.account === account).reduce((total, row) => total + row.value, 0);
+}
+
+function closingBalance(rows: ActualRow[]): number {
+  if (rows.length === 0) return 0;
+  const lastMonth = rows.map((r) => r.month).sort().at(-1)!;
+  return rows.filter((r) => r.month === lastMonth).reduce((t, r) => t + r.value, 0);
+}
+
+function closingBalanceAccount(rows: ActualRow[], account: string): number {
+  return closingBalance(rows.filter((r) => r.account === account));
 }
 
 // ---------------------------------------------------------------------------
