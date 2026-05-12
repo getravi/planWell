@@ -78,11 +78,11 @@ const AI_MODEL_CATALOG = [
     label: "Google Gemini",
     envKey: "GEMINI_API_KEY",
     models: [
-      { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro" },
-      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+      { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
+      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview" },
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-pro-preview-06-05", label: "Gemini 2.5 Pro Preview 06-05" },
+      { id: "gemini-2.5-pro-preview-05-06", label: "Gemini 2.5 Pro Preview 05-06" },
     ],
   },
 ] as const;
