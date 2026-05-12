@@ -306,7 +306,7 @@ export function createApp({
   app.get("/api/cube/forecast", (context) => {
     const scenario = context.req.query("scenario");
     return context.json({
-      rows: repo.listForecast(scenario),
+      rows: repo.listForecast(scenario ?? ""),
       summary: repo.getMetricSummary(scenario),
     });
   });
@@ -436,7 +436,6 @@ export function createApp({
           Object.entries(payload.formulas).filter(([, v]) => v !== undefined),
         ) as ScenarioFormulas,
       );
-      bgRecalcAll();
       return context.json({ formulas: repo.readActualsFormulas(), recalculating: true });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);

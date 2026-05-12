@@ -6,7 +6,7 @@ import { listNamedDimension } from "./dimensions.ts";
 import { withTransaction } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
 import { listCustomVariables, replaceVarValues } from "./customVariables.ts";
-import { readActualsFormulas } from "./versions.ts";
+import { readActualsFormulas, readActualsAssumptions } from "./versions.ts";
 import { logger } from "../../logger.ts";
 
 export function updateScenarioAssumptions(
@@ -102,6 +102,24 @@ export function recalculateScenario(db: DatabaseSync, name: string): void {
   withTransaction(db, () => {
     db.prepare("delete from forecast_values where scenario_id = ?").run(scenario.id);
     insertForecastRows(db, scenario.id, forecast);
+  });
+}
+
+export function recalculateActuals(db: DatabaseSync): void {
+  const assumptions = readActualsAssumptions(db);
+  const actualsFormulas = readActualsFormulas(db);
+  const forecast = buildForecast(
+    selectCubeRows(db, "actuals"),
+    assumptions,
+    listNamedDimension(db, "department"),
+    listPlanningForecastMonths(db),
+    listCustomVariables(db),
+    listNamedDimension(db, "account"),
+    actualsFormulas,
+  );
+  withTransaction(db, () => {
+    db.prepare("delete from forecast_values where scenario_id = ?").run("actuals");
+    insertForecastRows(db, "actuals", forecast);
   });
 }
 

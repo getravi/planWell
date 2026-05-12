@@ -897,6 +897,51 @@ describe("PlanWell API", () => {
     const body = await result.json();
     expect(body.ok).toBe(false);
   });
+
+  it("saves actuals formulas and recalculates forecasts with new account", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    await app.request("/api/imports/csv", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({
+        csv: `month,department,account,value
+2025-12,GPU Cloud,Revenue,1000
+2025-12,GPU Cloud,COGS,450
+2025-12,GPU Cloud,Headcount,10
+2025-12,GPU Cloud,OpEx,200
+`,
+      }),
+    });
+
+    repo.createDimensionMember("account", "Net Profit", null);
+
+    const saveResult = await app.request("/api/actuals/formulas", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ formulas: { "Net Profit": "Revenue - COGS - OpEx" } }),
+    });
+    expect(saveResult.status).toBe(200);
+
+    const savedFormulas = repo.readActualsFormulas();
+    expect(savedFormulas["Net Profit"]).toBe("Revenue - COGS - OpEx");
+
+    const forecast = await app.request("/api/cube/forecast?scenario=Base%20Case", {
+      headers: { cookie },
+    });
+    expect(forecast.status).toBe(200);
+    const forecastBody = await forecast.json();
+    const accounts = [...new Set(forecastBody.rows.map((r: { account: string }) => r.account))];
+    expect(accounts).toContain("Net Profit");
+
+    const netProfitRows = forecastBody.rows.filter(
+      (r: { account: string }) => r.account === "Net Profit",
+    );
+    expect(netProfitRows.length).toBeGreaterThan(0);
+    expect(netProfitRows[0].value).not.toBe(0);
+  });
 });
 
 async function loginCookie(app: ReturnType<typeof createApp>): Promise<string> {

@@ -248,6 +248,13 @@ export function readScenarios(db: DatabaseSync): ScenarioRecord[] {
   });
 }
 
+export function readActualsAssumptions(db: DatabaseSync): ScenarioAssumptions {
+  const formulas = readActualsFormulas(db);
+  const assumptions: ScenarioAssumptions = { name: "Actuals" };
+  if (Object.keys(formulas).length > 0) assumptions.formulas = formulas;
+  return assumptions;
+}
+
 export function backfillVersionOrder(db: DatabaseSync): void {
   const versions = db
     .prepare("select id, name, kind, sort_order from versions order by kind, name")

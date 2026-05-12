@@ -47,7 +47,7 @@ import {
 } from "./db/versions.ts";
 import type { ScenarioRecord, VersionRecord } from "./db/versions.ts";
 import { selectCubeRows, summarizeAccounts, summarizeDepartments } from "./db/actuals.ts";
-import { recalculateScenario, recalculateAll } from "./db/forecasts.ts";
+import { recalculateScenario, recalculateAll, recalculateActuals } from "./db/forecasts.ts";
 import { withTransaction } from "./db/utils.ts";
 import type { UserRow } from "./db/utils.ts";
 import { DimensionReferenceError } from "./db/dimensions.ts";
@@ -357,6 +357,8 @@ function createRepository(db: DatabaseSync): Repository {
           }
         }
       });
+      recalculateActuals(db);
+      recalculateAll(db);
     },
     readActualsFormulas() {
       const rows = db

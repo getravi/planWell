@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import { buildForecast, compareSeries, nextMonths, resolveVarValues } from "./forecast.ts";
 import { parseActualsCsv } from "./importer.ts";
-import { evaluateFormula, topoSortCustomVars, CycleError } from "./formulaEngine.ts";
+import {
+  evaluateFormula,
+  topoSortAccounts,
+  topoSortCustomVars,
+  CycleError,
+} from "./formulaEngine.ts";
 import type { CustomVariableDef, ScenarioAssumptions } from "./types.ts";
 
 describe("formulaEngine sandbox", () => {
@@ -448,5 +453,186 @@ describe("topoSortCustomVars", () => {
       { id: "b", label: "B", kind: "calculated", formula: "a + 1" },
     ];
     expect(() => topoSortCustomVars(defs)).toThrow(CycleError);
+  });
+});
+
+describe("buildForecast with actuals formulas", () => {
+  it("creates forecast rows for accounts defined only in actuals formulas", () => {
+    const actuals = [
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 450 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+      { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 200 },
+    ];
+    const assumptions: ScenarioAssumptions = { name: "Test" };
+    const accountHierarchy = [
+      { name: "Revenue", parentName: null, sortOrder: 0, referenceCount: 1, children: [] },
+      { name: "COGS", parentName: null, sortOrder: 1, referenceCount: 1, children: [] },
+      { name: "Headcount", parentName: null, sortOrder: 2, referenceCount: 1, children: [] },
+      { name: "OpEx", parentName: null, sortOrder: 3, referenceCount: 1, children: [] },
+      { name: "Net Profit", parentName: null, sortOrder: 4, referenceCount: 0, children: [] },
+    ];
+    const actualsFormulas = { "Net Profit": "Revenue - COGS - OpEx" };
+    const builtinDefs: CustomVariableDef[] = [
+      { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
+      { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0.45 },
+      { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+      { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 15000 },
+    ];
+
+    const forecast = buildForecast(
+      actuals,
+      assumptions,
+      [],
+      ["2026-01"],
+      builtinDefs,
+      accountHierarchy,
+      actualsFormulas,
+    );
+
+    const netProfitRows = forecast.filter((r) => r.account === "Net Profit");
+    expect(netProfitRows.length).toBeGreaterThan(0);
+    expect(netProfitRows[0].value).toBe(1000 - 450 - 150000);
+  });
+
+  it("topo sorts accounts with actuals formula dependencies", () => {
+    const accounts = ["Revenue", "COGS", "Headcount", "OpEx", "Net Profit"];
+    const formulas = {
+      Revenue: "base * pow(1 + revenueGrowthRate, month)",
+      COGS: "revenue * cogsPctOfRevenue",
+      Headcount: "base * pow(1 + headcountGrowthRate, month)",
+      OpEx: "headcount * costPerHead",
+      "Net Profit": "Revenue - COGS - OpEx",
+    };
+    const sorted = topoSortAccounts(accounts, formulas);
+    const netProfitIdx = sorted.indexOf("Net Profit");
+    const revenueIdx = sorted.indexOf("Revenue");
+    const cogsIdx = sorted.indexOf("COGS");
+    const opexIdx = sorted.indexOf("OpEx");
+    expect(netProfitIdx).toBeGreaterThan(revenueIdx);
+    expect(netProfitIdx).toBeGreaterThan(cogsIdx);
+    expect(netProfitIdx).toBeGreaterThan(opexIdx);
+  });
+
+  it("evaluates cross-account formula with uppercase names", () => {
+    const ctx = {
+      base: 0,
+      month: 1,
+      revenue: 1000,
+      headcount: 10,
+      Revenue: 1000,
+      COGS: 450,
+      OpEx: 200,
+    };
+    const result = evaluateFormula("Revenue - COGS - OpEx", ctx);
+    expect(result).toBe(350);
+  });
+
+  it("buildForecast evaluates Net Profit formula correctly", () => {
+    const actuals = [
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 450 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+      { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 200 },
+    ];
+    const assumptions: ScenarioAssumptions = { name: "Test" };
+    const accountHierarchy = [
+      { name: "Revenue", parentName: null, sortOrder: 0, referenceCount: 1, children: [] },
+      { name: "COGS", parentName: null, sortOrder: 1, referenceCount: 1, children: [] },
+      { name: "Headcount", parentName: null, sortOrder: 2, referenceCount: 1, children: [] },
+      { name: "OpEx", parentName: null, sortOrder: 3, referenceCount: 1, children: [] },
+      { name: "Net Profit", parentName: null, sortOrder: 4, referenceCount: 0, children: [] },
+    ];
+    const actualsFormulas = { "Net Profit": "Revenue - COGS - OpEx" };
+    const builtinDefs: CustomVariableDef[] = [
+      { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
+      { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
+      { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+      { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
+    ];
+
+    const forecast = buildForecast(
+      actuals,
+      assumptions,
+      [],
+      ["2026-01"],
+      builtinDefs,
+      accountHierarchy,
+      actualsFormulas,
+    );
+
+    const revenueRow = forecast.find((r) => r.account === "Revenue");
+    const cogsRow = forecast.find((r) => r.account === "COGS");
+    const opexRow = forecast.find((r) => r.account === "OpEx");
+    const netProfitRow = forecast.find((r) => r.account === "Net Profit");
+
+    expect(revenueRow?.value).toBe(1000);
+    expect(cogsRow?.value).toBe(0);
+    expect(opexRow?.value).toBe(0);
+    expect(netProfitRow?.value).toBe(1000);
+  });
+
+  it("buildForecast includes formula account with correct value", () => {
+    const actuals = [
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 450 },
+      { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
+      { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 200 },
+    ];
+    const assumptions: ScenarioAssumptions = { name: "Test" };
+    const accountHierarchy = [
+      { name: "Revenue", parentName: null, sortOrder: 0, referenceCount: 1, children: [] },
+      { name: "COGS", parentName: null, sortOrder: 1, referenceCount: 1, children: [] },
+      { name: "Headcount", parentName: null, sortOrder: 2, referenceCount: 1, children: [] },
+      { name: "OpEx", parentName: null, sortOrder: 3, referenceCount: 1, children: [] },
+      { name: "Net Profit", parentName: null, sortOrder: 4, referenceCount: 0, children: [] },
+    ];
+    const actualsFormulas = { "Net Profit": "Revenue - COGS - OpEx" };
+    const builtinDefs: CustomVariableDef[] = [
+      {
+        id: "revenueGrowthRate",
+        label: "Revenue Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
+      {
+        id: "cogsPctOfRevenue",
+        label: "COGS % of Revenue",
+        kind: "input" as const,
+        defaultValue: 0.45,
+      },
+      {
+        id: "headcountGrowthRate",
+        label: "Headcount Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
+      { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 15000 },
+    ];
+
+    const forecast = buildForecast(
+      actuals,
+      assumptions,
+      [],
+      ["2026-01"],
+      builtinDefs,
+      accountHierarchy,
+      actualsFormulas,
+    );
+
+    const accountsInForecast = [...new Set(forecast.map((r) => r.account))];
+    expect(accountsInForecast).toContain("Net Profit");
+
+    const netProfitRows = forecast.filter((r) => r.account === "Net Profit");
+    expect(netProfitRows.length).toBe(1);
+
+    const revenueRow = forecast.find((r) => r.account === "Revenue");
+    const cogsRow = forecast.find((r) => r.account === "COGS");
+    const opexRow = forecast.find((r) => r.account === "OpEx");
+
+    expect(revenueRow?.value).toBe(1000);
+    expect(cogsRow?.value).toBe(450);
+    expect(opexRow?.value).toBe(150000);
+    expect(netProfitRows[0].value).toBe(1000 - 450 - 150000);
   });
 });
