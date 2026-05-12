@@ -41,7 +41,7 @@ const scenarioSchema: z.ZodType<ScenarioAssumptions> = z.object({
       }),
     )
     .optional(),
-  formulas: z.record(coreAccountEnum, z.string().min(1)).optional(),
+  formulas: z.record(z.string(), z.string().min(1)).optional(),
 });
 
 const customVarCreateSchema = z.object({
@@ -436,6 +436,7 @@ export function createApp({
           Object.entries(payload.formulas).filter(([, v]) => v !== undefined),
         ) as ScenarioFormulas,
       );
+      notifyRecalcDone("*");
       return context.json({ formulas: repo.readActualsFormulas(), recalculating: true });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);

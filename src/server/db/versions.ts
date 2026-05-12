@@ -6,6 +6,7 @@ import { selectCubeRows } from "./actuals.ts";
 import { insertForecastRows, selectForecastRowsByScenarioId } from "./forecasts.ts";
 import { validateFormula } from "../../domain/formulaEngine.ts";
 import { recalculateScenario } from "./forecasts.ts";
+import { flattenDimensionNames, listNamedDimension } from "./dimensions.ts";
 import {
   readVarValues,
   replaceVarValues,
@@ -295,6 +296,11 @@ export function saveScenarioAssumptions(
   const id = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
   const customVarSentinels = Object.fromEntries(listCustomVariables(db).map((v) => [v.id, 1]));
+  const accounts = flattenDimensionNames(listNamedDimension(db, "account"));
+  for (const acc of accounts) {
+    customVarSentinels[acc] = 1;
+    customVarSentinels[acc.toLowerCase()] = 1;
+  }
   for (const [account, formula] of Object.entries(assumptions.formulas ?? {})) {
     if (!formula) continue;
     const result = validateFormula(formula, account as CoreAccount, customVarSentinels);
