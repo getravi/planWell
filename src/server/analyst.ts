@@ -26,7 +26,7 @@ export type Analyst = {
   ): Promise<AnalystAnswer>;
 };
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3-pro-preview";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 
 export function createAnalyst(repo: Repository): Analyst {
