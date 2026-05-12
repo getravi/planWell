@@ -70,7 +70,7 @@ const AI_MODEL_CATALOG = [
     models: [
       { id: "claude-opus-4-7", label: "Claude Opus 4.7" },
       { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-      { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
     ],
   },
   {
@@ -78,9 +78,10 @@ const AI_MODEL_CATALOG = [
     label: "Google Gemini",
     envKey: "GEMINI_API_KEY",
     models: [
-      { id: "gemini-2.5-pro-preview-06-05", label: "Gemini 2.5 Pro" },
-      { id: "gemini-2.5-flash-preview-05-20", label: "Gemini 2.5 Flash" },
-      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro" },
+      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
     ],
   },
 ] as const;
