@@ -106,10 +106,11 @@ export function buildForecast(
     return [];
   }
 
+  const mergedFormulas = { ...actualsFormulas, ...assumptions.formulas };
   const accountsList = orderedAccounts(
     actuals,
     accountHierarchy,
-    (assumptions.formulas ?? {}) as Record<string, string>,
+    mergedFormulas as Record<string, string>,
   );
   const formulasForSort: Record<string, string> = {};
   for (const acc of accountsList) {
