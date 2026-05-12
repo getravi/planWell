@@ -346,6 +346,55 @@ function parseNarrativeJson(text: string): Omit<NarrativeReport, "provider"> {
 }
 
 
+type ProviderModel = { id: string; label: string };
+type ProviderEntry = { id: string; label: string; models: ProviderModel[] };
+
+export async function listAvailableModels(): Promise<{ providers: ProviderEntry[] }> {
+  const providers: ProviderEntry[] = [];
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const page = await client.models.list({ limit: 100 });
+      const models = page.data
+        .filter((m) => m.id.startsWith("claude") && !m.id.includes("thinking"))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((m) => ({ id: m.id, label: m.display_name }));
+      if (models.length > 0) providers.push({ id: "anthropic", label: "Anthropic", models });
+    } catch { /* invalid key or API down */ }
+  }
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}&pageSize=100`,
+      );
+      if (res.ok) {
+        const data = await res.json() as {
+          models?: { name: string; displayName: string; supportedGenerationMethods?: string[] }[];
+        };
+        const models = (data.models ?? [])
+          .filter((m) => {
+            const id = m.name.replace("models/", "");
+            return (
+              m.supportedGenerationMethods?.includes("generateContent") &&
+              id.includes("-pro") &&
+              !id.includes("image") &&
+              !id.includes("tts") &&
+              !id.includes("embedding") &&
+              !id.includes("customtools")
+            );
+          })
+          .map((m) => ({ id: m.name.replace("models/", ""), label: m.displayName }))
+          .sort((a, b) => b.id.localeCompare(a.id));
+        if (models.length > 0) providers.push({ id: "google", label: "Google Gemini", models });
+      }
+    } catch { /* invalid key or API down */ }
+  }
+
+  return { providers };
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",

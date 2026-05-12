@@ -6,7 +6,7 @@ import { parseActualsCsv } from "../domain/importer.ts";
 import { detectAnomalies } from "../domain/anomaly.ts";
 import { suggestDrivers } from "../domain/baseline.ts";
 import { coreAccounts, type ScenarioAssumptions } from "../domain/types.ts";
-import { createAnalyst, generateNarrative } from "./analyst.ts";
+import { createAnalyst, generateNarrative, listAvailableModels } from "./analyst.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
 import { sampleLongCsv, sampleWideCsv } from "./sample-data.ts";
 
@@ -62,30 +62,6 @@ const settingsPatchSchema = z.object({
   aiModel: z.string().optional(),
 });
 
-const AI_MODEL_CATALOG = [
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    envKey: "ANTHROPIC_API_KEY",
-    models: [
-      { id: "claude-opus-4-7", label: "Claude Opus 4.7" },
-      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
-    ],
-  },
-  {
-    id: "google",
-    label: "Google Gemini",
-    envKey: "GEMINI_API_KEY",
-    models: [
-      { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview" },
-      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro Preview" },
-      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-      { id: "gemini-2.5-pro-preview-06-05", label: "Gemini 2.5 Pro Preview 06-05" },
-      { id: "gemini-2.5-pro-preview-05-06", label: "Gemini 2.5 Pro Preview 05-06" },
-    ],
-  },
-] as const;
 
 const customVarValidateSchema = z.object({
   formula: z.string().min(1),
@@ -480,11 +456,9 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     }
   });
 
-  app.get("/api/settings/ai-providers", (context) => {
+  app.get("/api/settings/ai-providers", async (context) => {
     const raw = repo.getSettings();
-    const providers = AI_MODEL_CATALOG
-      .filter((p) => !!process.env[p.envKey])
-      .map((p) => ({ id: p.id, label: p.label, models: p.models as unknown as { id: string; label: string }[] }));
+    const { providers } = await listAvailableModels();
     return context.json({ providers, selectedModel: raw.aiModel ?? null });
   });
 
