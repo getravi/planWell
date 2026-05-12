@@ -2,6 +2,8 @@
 
 Financial planning and forecasting tool for growing teams. Import actuals, model scenarios, compare forecasts, and ask an AI analyst questions — all in a self-hosted SQLite-backed app.
 
+Deployment refresh: 2026-05-12.
+
 ## Features
 
 - **Actuals import** — paste long or wide CSV; auto-detects shape, aggregates duplicates
