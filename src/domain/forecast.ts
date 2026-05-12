@@ -94,6 +94,7 @@ export function buildForecast(
   forecastMonths?: string[],
   varDefs: CustomVariableDef[] = [],
   accountHierarchy: DimensionMember[] = [],
+  actualsFormulas: Record<string, string> = {},
 ): ForecastRow[] {
   if (actuals.length === 0) {
     return [];
@@ -113,7 +114,10 @@ export function buildForecast(
   const formulasForSort: Record<string, string> = {};
   for (const acc of accountsList) {
     formulasForSort[acc] =
-      assumptions.formulas?.[acc] ?? DEFAULT_FORMULAS[acc as CoreAccount] ?? "base";
+      assumptions.formulas?.[acc] ??
+      actualsFormulas[acc] ??
+      DEFAULT_FORMULAS[acc as CoreAccount] ??
+      "base";
   }
   const sortedAccounts = topoSortAccounts(accountsList, formulasForSort);
 
@@ -258,7 +262,9 @@ function orderedAccounts(
   const hierarchyOrder = flattenHierarchyNames(accountHierarchy);
 
   const known = new Set(hierarchyOrder);
-  const unknown = [...new Set([...rowAccounts, ...formulaAccounts, "Revenue", "COGS", "Headcount", "OpEx"])]
+  const unknown = [
+    ...new Set([...rowAccounts, ...formulaAccounts, "Revenue", "COGS", "Headcount", "OpEx"]),
+  ]
     .filter((a) => !known.has(a))
     .sort((a, b) => a.localeCompare(b));
 

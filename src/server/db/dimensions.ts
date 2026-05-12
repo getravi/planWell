@@ -39,7 +39,12 @@ export function createDimensionMember(
   const name = normalizeDimensionName(kind, rawName);
   const parentName = normalizeOptionalName(rawParentName);
   ensureNamedDimensionCanSave(db, kind, name, parentName, null);
-  insertNamedDimensionIfMissing(db, kind, name, parentName);
+  withTransaction(db, () => {
+    insertNamedDimensionIfMissing(db, kind, name, parentName);
+    if (kind === "account") {
+      propagateNewAccount(db, name);
+    }
+  });
 }
 
 export function updateDimensionMember(
@@ -481,4 +486,32 @@ export function upsertDimensions(db: DatabaseSync, rows: ActualRow[]): void {
 
 export function flattenDimensionNames(members: DimensionMember[]): string[] {
   return members.flatMap((member) => [member.name, ...flattenDimensionNames(member.children)]);
+}
+
+function propagateNewAccount(db: DatabaseSync, accountName: string): void {
+  const months = db.prepare("select distinct id from time_month order by id").all() as {
+    id: string;
+  }[];
+  const departments = db.prepare("select distinct name from department order by name").all() as {
+    name: string;
+  }[];
+  const scenarios = db.prepare("select id from scenarios").all() as { id: string }[];
+
+  const insertActual = db.prepare(
+    "insert or ignore into actuals (month, department, account, value) values (?, ?, ?, 0)",
+  );
+  for (const month of months) {
+    for (const dept of departments) {
+      insertActual.run(month.id, dept.name, accountName);
+    }
+  }
+
+  const insertFormula = db.prepare(
+    "insert or ignore into scenario_formulas (scenario_id, account, formula) values (?, ?, 'base')",
+  );
+  for (const scenario of scenarios) {
+    insertFormula.run(scenario.id, accountName);
+  }
+
+  recalculateAll(db);
 }

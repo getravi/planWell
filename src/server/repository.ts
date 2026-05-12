@@ -3,9 +3,11 @@ import { mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { compareSeries, summarizeKpis } from "../domain/forecast.ts";
-import { validateFormula } from "../domain/formulaEngine.ts";
+import { extractSymbolNames, validateFormula } from "../domain/formulaEngine.ts";
+import { create, all } from "mathjs";
 import type {
   ActualRow,
+  CoreAccount,
   CustomVariableDef,
   DimensionImpact,
   DimensionKind,
@@ -13,6 +15,7 @@ import type {
   ForecastRow,
   KpiSummary,
   ScenarioAssumptions,
+  ScenarioFormulas,
   VarianceRow,
 } from "../domain/types.ts";
 import { hashPassword } from "./security.ts";
@@ -128,6 +131,8 @@ export type Repository = {
   getSettings(): Record<string, string>;
   updateSettings(patch: Record<string, string>): void;
   backup(): Uint8Array;
+  saveActualsFormulas(formulas: ScenarioFormulas): void;
+  readActualsFormulas(): ScenarioFormulas;
 };
 
 export function createFileRepository(
@@ -199,7 +204,10 @@ function createRepository(db: DatabaseSync): Repository {
       recalculateAll(db);
     },
     listActuals() {
-      return selectCubeRows(db, "actuals");
+      const rows = selectCubeRows(db, "actuals");
+      const formulas = this.readActualsFormulas();
+      if (Object.keys(formulas).length === 0) return rows;
+      return applyActualsFormulas(rows, formulas);
     },
     listForecast(scenarioName) {
       if (!scenarioName) {
@@ -322,5 +330,103 @@ function createRepository(db: DatabaseSync): Repository {
         months: [...new Set(rows.map((row) => row.month))].sort(),
       };
     },
+    saveActualsFormulas(formulas) {
+      const customVarSentinels = Object.fromEntries(
+        dbListCustomVariables(db).map((v) => [v.id, 1]),
+      );
+      for (const [account, formula] of Object.entries(formulas)) {
+        if (!formula) continue;
+        const result = validateFormula(formula, account as CoreAccount, customVarSentinels);
+        if (!result.ok) {
+          throw new Error(`Invalid formula for ${account}: ${result.error}`);
+        }
+      }
+      withTransaction(db, () => {
+        db.prepare("delete from scenario_formulas where scenario_id = ?").run("actuals");
+        for (const [account, formula] of Object.entries(formulas)) {
+          if (formula) {
+            db.prepare(
+              "insert into scenario_formulas (scenario_id, account, formula) values (?, ?, ?)",
+            ).run("actuals", account, formula);
+          }
+        }
+      });
+    },
+    readActualsFormulas() {
+      const rows = db
+        .prepare("select account, formula from scenario_formulas where scenario_id = ?")
+        .all("actuals") as { account: string; formula: string }[];
+      const result: Record<string, string> = {};
+      for (const row of rows) {
+        result[row.account] = row.formula;
+      }
+      return result;
+    },
   };
+}
+
+function applyActualsFormulas(rows: ActualRow[], formulas: ScenarioFormulas): ActualRow[] {
+  const math = create(all);
+  const rowMap = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const key = `${row.month}|${row.department}`;
+    if (!rowMap.has(key)) {
+      rowMap.set(key, new Map());
+    }
+    rowMap.get(key)!.set(row.account, row.value);
+  }
+
+  const result: ActualRow[] = [];
+  for (const row of rows) {
+    const key = `${row.month}|${row.department}`;
+    const accountValues = rowMap.get(key)!;
+    const formula = formulas[row.account];
+    if (formula) {
+      const deps = extractSymbolNames(formula);
+      const ctx: Record<string, number> = {};
+      for (const dep of deps) {
+        ctx[dep] = accountValues.get(dep) ?? 0;
+      }
+      try {
+        const value = math.evaluate(formula, ctx);
+        if (typeof value === "number" && Number.isFinite(value)) {
+          result.push({ ...row, value: Math.round(value * 100) / 100 });
+        } else {
+          result.push(row);
+        }
+      } catch {
+        result.push(row);
+      }
+    } else {
+      result.push(row);
+    }
+  }
+
+  const formulaAccounts = Object.keys(formulas);
+  const existingKeys = new Set(rows.map((r) => `${r.month}|${r.department}|${r.account}`));
+  for (const account of formulaAccounts) {
+    const formula = formulas[account];
+    if (!formula) continue;
+    for (const [key, accountValues] of rowMap) {
+      const rowKey = `${key}|${account}`;
+      if (!existingKeys.has(rowKey)) {
+        const [month, department] = key.split("|");
+        const deps = extractSymbolNames(formula);
+        const ctx: Record<string, number> = {};
+        for (const dep of deps) {
+          ctx[dep] = accountValues.get(dep) ?? 0;
+        }
+        try {
+          const value = math.evaluate(formula, ctx);
+          if (typeof value === "number" && Number.isFinite(value)) {
+            result.push({ month, department, account, value: Math.round(value * 100) / 100 });
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+
+  return result;
 }

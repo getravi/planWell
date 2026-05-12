@@ -7,21 +7,42 @@ import type { CoreAccount, ScenarioFormulas } from "../../domain/types.ts";
 import { client } from "../api.ts";
 import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "../ui.tsx";
 
+type VersionOption = {
+  id: string;
+  name: string;
+  type: "actuals" | "scenario";
+  locked: boolean;
+  assumptions: { formulas?: ScenarioFormulas };
+};
+
 export function FormulasPage() {
   const dimensions = useQuery({ queryKey: ["dimensions"], queryFn: client.dimensions });
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
+  const actualsFormulas = useQuery({
+    queryKey: ["actuals-formulas"],
+    queryFn: () => client.readActualsFormulas().then((r) => r.formulas ?? {}),
+  });
   const scenarioList = scenarios.data?.scenarios ?? [];
-  const [selectedName, setSelectedName] = useState<string>("");
-  const selected = scenarioList.find((s) => s.name === (selectedName || scenarioList[0]?.name));
+  const [selectedName, setSelectedName] = useState<string>("__actuals__");
 
-  if (scenarios.isLoading || dimensions.isLoading) return null;
-  if (scenarioList.length === 0) {
+  const versions: VersionOption[] = [
+    {
+      id: "actuals",
+      name: "Actuals",
+      type: "actuals",
+      locked: false,
+      assumptions: { formulas: actualsFormulas.data ?? {} },
+    },
+    ...scenarioList.map((s) => ({ ...s, type: "scenario" as const })),
+  ];
+
+  const selected = versions.find((v) => v.name === (selectedName || versions[0]?.name));
+
+  if (scenarios.isLoading || dimensions.isLoading || actualsFormulas.isLoading) return null;
+  if (versions.length === 0) {
     return (
       <Panel>
-        <EmptyState
-          title="No scenarios"
-          body="Import actuals to create the default scenario set."
-        />
+        <EmptyState title="No versions" body="Import actuals to create the default scenario set." />
       </Panel>
     );
   }
@@ -32,20 +53,20 @@ export function FormulasPage() {
         <h2>Formula overrides</h2>
       </div>
       <p className="muted driver-note">
-        Override the forecasting formula for any account in a scenario. Leave blank to use the
+        Override the forecasting formula for any account in a version. Leave blank to use the
         default. Visit Formula Reference for available variables and examples.
       </p>
       <div className="driver-controls">
         <label>
-          <Label>Scenario</Label>
+          <Label>Version</Label>
           <Select
-            aria-label="Scenario"
+            aria-label="Version"
             value={selected?.name ?? ""}
             onChange={(e) => setSelectedName(e.target.value)}
           >
-            {scenarioList.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
+            {versions.map((v) => (
+              <option key={v.id} value={v.name}>
+                {v.name}
               </option>
             ))}
           </Select>
@@ -54,7 +75,7 @@ export function FormulasPage() {
       {selected ? (
         <FormulaEditor
           key={selected.id}
-          scenario={selected}
+          version={selected}
           accounts={
             dimensions.data
               ? orderedNamesFromMembers(dimensions.data.account, [
@@ -71,29 +92,23 @@ export function FormulasPage() {
   );
 }
 
-function FormulaEditor({
-  scenario,
-  accounts,
-}: {
-  scenario: {
-    id: string;
-    name: string;
-    locked: boolean;
-    assumptions: import("../../domain/types.ts").ScenarioAssumptions;
-  };
-  accounts: string[];
-}) {
+function FormulaEditor({ version, accounts }: { version: VersionOption; accounts: string[] }) {
   const queryClient = useQueryClient();
-  const [formulas, setFormulas] = useState<ScenarioFormulas>(scenario.assumptions.formulas ?? {});
+  const [formulas, setFormulas] = useState<ScenarioFormulas>(version.assumptions.formulas ?? {});
   const [validationState, setValidationState] = useState<
     Record<string, { ok: boolean; error?: string; pending: boolean }>
   >({});
-  const isLocked = scenario.locked;
+  const isLocked = version.locked;
   const hasError = Object.values(validationState).some((s) => s && !s.ok && !s.pending);
-  const isDirty = JSON.stringify(formulas) !== JSON.stringify(scenario.assumptions.formulas ?? {});
+  const isDirty = JSON.stringify(formulas) !== JSON.stringify(version.assumptions.formulas ?? {});
 
   const save = useMutation({
-    mutationFn: () => client.saveScenario({ ...scenario.assumptions, formulas }),
+    mutationFn: async () => {
+      if (version.type === "actuals") {
+        return client.saveActualsFormulas(formulas);
+      }
+      return client.saveScenario({ name: version.name, formulas });
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries();
     },
@@ -120,7 +135,7 @@ function FormulaEditor({
     <div style={{ marginTop: 16 }}>
       {isLocked ? (
         <p className="muted driver-note">
-          {scenario.name} is locked. Unlock it in Versions to edit formulas.
+          {version.name} is locked. Unlock it in Versions to edit formulas.
         </p>
       ) : null}
       <div className="formulas-table-wrap">

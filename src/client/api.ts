@@ -139,6 +139,12 @@ export const client = {
       method: "POST",
       body: JSON.stringify({ formula, account }),
     }),
+  readActualsFormulas: () => api<{ formulas: Record<string, string> }>("/api/actuals/formulas"),
+  saveActualsFormulas: (formulas: Record<string, string | undefined>) =>
+    api<{ formulas: Record<string, string> }>("/api/actuals/formulas", {
+      method: "PUT",
+      body: JSON.stringify({ formulas }),
+    }),
   listCustomVariables: () => api<{ customVariables: CustomVariableDef[] }>("/api/custom-variables"),
   createCustomVariable: (def: CustomVariableDef) =>
     api<{ customVariable: CustomVariableDef; customVariables: CustomVariableDef[] }>(

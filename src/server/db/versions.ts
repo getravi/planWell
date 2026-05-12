@@ -210,6 +210,17 @@ export function readScenarioFormulas(db: DatabaseSync, scenarioId: string): Scen
   return result;
 }
 
+export function readActualsFormulas(db: DatabaseSync): Record<string, string> {
+  const rows = db
+    .prepare("select account, formula from scenario_formulas where scenario_id = ?")
+    .all("actuals") as { account: string; formula: string }[];
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    result[row.account] = row.formula;
+  }
+  return result;
+}
+
 export function readScenarios(db: DatabaseSync): ScenarioRecord[] {
   const rows = db
     .prepare(`

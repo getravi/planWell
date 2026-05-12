@@ -6,7 +6,7 @@ import { z } from "zod";
 import { parseActualsCsv } from "../domain/importer.ts";
 import { detectAnomalies } from "../domain/anomaly.ts";
 import { suggestDrivers } from "../domain/baseline.ts";
-import { coreAccounts, type ScenarioAssumptions } from "../domain/types.ts";
+import { coreAccounts, type ScenarioAssumptions, type ScenarioFormulas } from "../domain/types.ts";
 import { createAnalyst, generateNarrative, listAvailableModels, type Analyst } from "./analyst.ts";
 import { logger } from "../logger.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
@@ -77,6 +77,10 @@ const customVarValidateSchema = z.object({
 const formulaValidateSchema = z.object({
   formula: z.string().min(1),
   account: z.string(),
+});
+
+const formulaSchema = z.object({
+  formulas: z.record(z.string(), z.string().optional()),
 });
 
 const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string() });
@@ -415,6 +419,24 @@ export function createApp({
     try {
       const payload = formulaValidateSchema.parse(await context.req.json());
       return context.json(repo.validateFormulaExpression(payload.formula, payload.account));
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  app.get("/api/actuals/formulas", (context) => {
+    return context.json({ formulas: repo.readActualsFormulas() });
+  });
+
+  app.put("/api/actuals/formulas", async (context) => {
+    try {
+      const payload = formulaSchema.parse(await context.req.json());
+      repo.saveActualsFormulas(
+        Object.fromEntries(
+          Object.entries(payload.formulas).filter(([, v]) => v !== undefined),
+        ) as ScenarioFormulas,
+      );
+      return context.json({ formulas: repo.readActualsFormulas() });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
