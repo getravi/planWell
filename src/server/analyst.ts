@@ -63,31 +63,37 @@ class GeminiAnalyst implements Analyst {
 
   async ask(
     question: string,
-    context: { scenario?: string; compareScenario?: string },
+    _context: { scenario?: string; compareScenario?: string },
   ): Promise<AnalystAnswer> {
-    const summary = this.repo.getMetricSummary(context.scenario);
-    const systemContext = `You are a guarded FP&A analyst. You MUST call getMetricSummary to retrieve data before answering. Current context: scenario="${context.scenario ?? "actuals"}"${context.compareScenario ? `, compareScenario="${context.compareScenario}"` : ""}.`;
+    const scenarios = this.repo.listScenarios().map((s) => s.name);
+    const actualsData = { scenario: "actuals", summary: this.repo.getMetricSummary(undefined) };
+    const scenarioData = scenarios.map((name) => ({
+      scenario: name,
+      summary: this.repo.getMetricSummary(name),
+    }));
+    const allData = [actualsData, ...scenarioData];
+
+    const prompt = `You are a guarded FP&A analyst with full access to all planning data. Answer ONLY from the data provided. Be concise and cite specific numbers.
+
+Available data:
+${JSON.stringify(allData)}
+
+User question: ${question}
+
+Answer concisely using only the data above.`;
 
     const answer = await this.client.models.generateContent({
       model: this.getModel(),
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `${systemContext}\n\nTool result from getMetricSummary: ${JSON.stringify(summary)}\n\nUser question: ${question}\n\nAnswer concisely using only the tool data above.`,
-            },
-          ],
-        },
-      ],
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
+    const firstSummary = actualsData.summary;
     return {
-      answer: answer.text ?? "The analyst could not produce an answer from the available metrics.",
+      answer: answer.text ?? "The analyst could not produce an answer from the available data.",
       provider: "gemini",
       citations: [
-        { tool: "getMetricSummary", label: "Total revenue", value: summary.kpis.revenue },
-        { tool: "getMetricSummary", label: "Gross margin", value: summary.kpis.grossMargin },
+        { tool: "getMetricSummary", label: "Total revenue (actuals)", value: firstSummary.kpis.revenue },
+        { tool: "getMetricSummary", label: "Gross margin (actuals)", value: firstSummary.kpis.grossMargin },
       ],
     };
   }
@@ -161,7 +167,9 @@ class ClaudeAnalyst implements Analyst {
     question: string,
     context: { scenario?: string; compareScenario?: string; history?: ChatMessage[] },
   ): Promise<AnalystAnswer> {
-    const systemPrompt = `You are a guarded FP&A analyst. Answer ONLY from tool results. Be concise and cite specific numbers. Current context: scenario="${context.scenario ?? "actuals"}"${context.compareScenario ? `, compareScenario="${context.compareScenario}"` : ""}.`;
+    const availableScenarios = this.repo.listScenarios().map((s) => s.name);
+    const scenarioList = availableScenarios.length > 0 ? availableScenarios.join(", ") : "none";
+    const systemPrompt = `You are a guarded FP&A analyst with access to all planning data. Answer ONLY from tool results. Be concise and cite specific numbers. Available scenarios: ${scenarioList}. Use getMetricSummary(scenario), listActuals, compareScenarios, or detectAnomalies to retrieve whatever data is relevant to the question.`;
 
     const priorMessages: Anthropic.MessageParam[] = (context.history ?? []).map((m) => ({
       role: m.role,
