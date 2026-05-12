@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { detectAnomalies } from "../domain/anomaly.ts";
-import type { VarianceRow } from "../domain/types.ts";
 import type { Repository } from "./repository.ts";
 
 export type AnalystAnswer = {
@@ -35,7 +34,7 @@ export function createAnalyst(repo: Repository): Analyst {
     return new GeminiAnalyst(
       repo,
       process.env.GEMINI_API_KEY,
-      process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
+      process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
     );
   }
   return {
@@ -65,66 +64,17 @@ class GeminiAnalyst implements Analyst {
     question: string,
     context: { scenario?: string; compareScenario?: string },
   ): Promise<AnalystAnswer> {
-    if (context.scenario && context.compareScenario && asksForVariance(question)) {
-      const varianceAnswer = answerScenarioVariance(
-        this.repo,
-        context.scenario,
-        context.compareScenario,
-      );
-      if (varianceAnswer.citations.length > 0) {
-        return varianceAnswer;
-      }
-    }
-
-    const getMetricSummaryDeclaration = {
-      name: "getMetricSummary",
-      description: "Return grounded aggregate FP&A metrics from the imported planning cube.",
-      parameters: {
-        type: Type.OBJECT,
-        properties: {
-          scenario: {
-            type: Type.STRING,
-            description: "Optional scenario name. Omit for historical actuals.",
-          },
-        },
-      },
-    };
     const summary = this.repo.getMetricSummary(context.scenario);
-    const response = await this.client.models.generateContent({
+    const systemContext = `You are a guarded FP&A analyst. You MUST call getMetricSummary to retrieve data before answering. Current context: scenario="${context.scenario ?? "actuals"}"${context.compareScenario ? `, compareScenario="${context.compareScenario}"` : ""}.`;
+
+    const answer = await this.client.models.generateContent({
       model: this.model,
       contents: [
         {
           role: "user",
           parts: [
             {
-              text: `You are a guarded FP&A analyst. Answer only from tool results. If you need data, call getMetricSummary. User question: ${question}`,
-            },
-          ],
-        },
-      ],
-      config: {
-        tools: [{ functionDeclarations: [getMetricSummaryDeclaration] }],
-      },
-    });
-
-    const requestedTool = response.functionCalls?.[0]?.name === "getMetricSummary";
-    if (!requestedTool) {
-      return {
-        answer: "The AI analyst could not produce a grounded answer. Please try rephrasing your question.",
-        provider: "gemini",
-        citations: [],
-      };
-    }
-
-    const second = await this.client.models.generateContent({
-      model: this.model,
-      contents: [
-        { role: "user", parts: [{ text: question }] },
-        {
-          role: "user",
-          parts: [
-            {
-              text: `Tool result from getMetricSummary: ${JSON.stringify(summary)}. Write a concise answer and mention only these metrics.`,
+              text: `${systemContext}\n\nTool result from getMetricSummary: ${JSON.stringify(summary)}\n\nUser question: ${question}\n\nAnswer concisely using only the tool data above.`,
             },
           ],
         },
@@ -132,7 +82,7 @@ class GeminiAnalyst implements Analyst {
     });
 
     return {
-      answer: second.text ?? "The analyst could not produce an answer from the available metrics.",
+      answer: answer.text ?? "The analyst could not produce an answer from the available metrics.",
       provider: "gemini",
       citations: [
         { tool: "getMetricSummary", label: "Total revenue", value: summary.kpis.revenue },
@@ -388,47 +338,6 @@ function parseNarrativeJson(text: string): Omit<NarrativeReport, "provider"> {
   }
 }
 
-function asksForVariance(question: string): boolean {
-  return /versus|variance|compare|difference|changed|change|vs\.?/i.test(question);
-}
-
-function answerScenarioVariance(
-  repo: Repository,
-  leftName: string,
-  rightName: string,
-): AnalystAnswer {
-  const rows = repo.compare(leftName, rightName).filter((row) => row.variance !== 0);
-  const largest = [...rows].sort(
-    (left, right) => Math.abs(right.variance) - Math.abs(left.variance),
-  );
-  const top = largest[0];
-  if (!top) {
-    return {
-      answer: `${leftName} vs ${rightName}: there are no material variances in the current forecast rows.`,
-      provider: "local",
-      citations: [{ tool: "compareScenarios", label: "Variance rows", value: 0 }],
-    };
-  }
-
-  return {
-    answer: `${leftName} vs ${rightName}: the largest variance is ${describeVariance(top)}. The next largest changes are ${
-      largest.slice(1, 3).map(describeVariance).join("; ") || "not material"
-    }.`,
-    provider: "local",
-    citations: largest.slice(0, 3).map((row) => ({
-      tool: "compareScenarios",
-      label: `${row.month} ${row.department} ${row.account}`,
-      value: row.variance,
-    })),
-  };
-}
-
-function describeVariance(row: VarianceRow): string {
-  const direction = row.variance >= 0 ? "increased" : "decreased";
-  return `${row.account} for ${row.department} in ${row.month} ${direction} by ${formatCurrency(
-    Math.abs(row.variance),
-  )}`;
-}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
