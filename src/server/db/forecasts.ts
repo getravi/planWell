@@ -94,6 +94,7 @@ export function recalculateScenario(db: DatabaseSync, name: string): void {
     listNamedDimension(db, "department"),
     listPlanningForecastMonths(db),
     listCustomVariables(db),
+    listNamedDimension(db, "account"),
   );
   withTransaction(db, () => {
     db.prepare("delete from forecast_values where scenario_id = ?").run(scenario.id);

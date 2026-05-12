@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { useState } from "react";
-import { flattenMembers } from "../dimension-utils.ts";
+import { orderedNamesFromMembers } from "../dimension-utils.ts";
 import { DEFAULT_FORMULAS } from "../../domain/formulaEngine.ts";
 import type { CoreAccount, ScenarioFormulas } from "../../domain/types.ts";
 import { client } from "../api.ts";
@@ -57,7 +57,12 @@ export function FormulasPage() {
           scenario={selected}
           accounts={
             dimensions.data
-              ? flattenMembers(dimensions.data.account).map((m) => m.name)
+              ? orderedNamesFromMembers(dimensions.data.account, [
+                  "Revenue",
+                  "COGS",
+                  "Headcount",
+                  "OpEx",
+                ])
               : ["Revenue", "COGS", "Headcount", "OpEx"]
           }
         />
@@ -155,7 +160,7 @@ function FormulaEditor({
                         setFormulas(next);
                       }}
                       onBlur={() => {
-                        if (formula) validate(account, formula);
+                        if (formula) void validate(account, formula);
                       }}
                       className={state && !state.ok && !state.pending ? "input-error" : undefined}
                       style={{ fontFamily: "monospace", width: "100%" }}

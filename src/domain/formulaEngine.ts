@@ -56,7 +56,7 @@ export class CycleError extends Error {
   }
 }
 
-function extractSymbolNames(formula: string): string[] {
+export function extractSymbolNames(formula: string): string[] {
   try {
     const node = math.parse(formula);
     const names: string[] = [];
@@ -70,6 +70,62 @@ function extractSymbolNames(formula: string): string[] {
   } catch {
     return [];
   }
+}
+
+export function topoSortAccounts(accounts: string[], formulas: Record<string, string>): string[] {
+  const accountSet = new Set(accounts);
+  const inDegree = new Map<string, number>(accounts.map((a) => [a, 0]));
+  const edges = new Map<string, string[]>(accounts.map((a) => [a, []]));
+
+  for (const account of accounts) {
+    const formula = formulas[account];
+    if (!formula) continue;
+    const deps = [
+      ...new Set(
+        extractSymbolNames(formula).filter((s) => {
+          if (accountSet.has(s)) return true;
+          if (s === "revenue" && accountSet.has("Revenue")) return true;
+          if (s === "headcount" && accountSet.has("Headcount")) return true;
+          return false;
+        }),
+      ),
+    ];
+    for (const dep of deps) {
+      let resolvedDep = dep;
+      if (dep === "revenue" && accountSet.has("Revenue")) resolvedDep = "Revenue";
+      if (dep === "headcount" && accountSet.has("Headcount")) resolvedDep = "Headcount";
+
+      if (resolvedDep === account) continue;
+
+      edges.get(resolvedDep)!.push(account);
+      inDegree.set(account, (inDegree.get(account) ?? 0) + 1);
+    }
+  }
+
+  const queue = accounts.filter((a) => (inDegree.get(a) ?? 0) === 0);
+  const sorted: string[] = [];
+
+  while (queue.length > 0) {
+    const acc = queue.shift()!;
+    sorted.push(acc);
+    for (const dependent of edges.get(acc) ?? []) {
+      const newDegree = (inDegree.get(dependent) ?? 1) - 1;
+      inDegree.set(dependent, newDegree);
+      if (newDegree === 0) {
+        queue.push(dependent);
+      }
+    }
+  }
+
+  // If there's a cycle, just append the remaining accounts (or throw)
+  // For forecasting, it's better to just append them and they'll evaluate to an error or default
+  for (const account of accounts) {
+    if (!sorted.includes(account)) {
+      sorted.push(account);
+    }
+  }
+
+  return sorted;
 }
 
 export function topoSortCustomVars(defs: CustomVariableDef[]): CustomVariableDef[] {

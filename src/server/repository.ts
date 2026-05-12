@@ -30,6 +30,7 @@ import {
   getDimensionImpact,
   deleteDimensionMember,
   upsertDimensions,
+  flattenDimensionNames,
 } from "./db/dimensions.ts";
 import {
   listVersions,
@@ -268,6 +269,10 @@ function createRepository(db: DatabaseSync): Repository {
     },
     validateFormulaExpression(formula, account) {
       const extraVars = Object.fromEntries(dbListCustomVariables(db).map((v) => [v.id, 1]));
+      const accounts = flattenDimensionNames(listNamedDimension(db, "account"));
+      for (const acc of accounts) {
+        extraVars[acc] = 1;
+      }
       return validateFormula(formula, account, extraVars);
     },
     listCustomVariables() {

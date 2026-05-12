@@ -1,6 +1,7 @@
 import {
   DEFAULT_FORMULAS,
   evaluateFormula,
+  topoSortAccounts,
   topoSortCustomVars,
   type FormulaContext,
 } from "./formulaEngine.ts";
@@ -16,19 +17,26 @@ import type {
   VarianceRow,
 } from "./types.ts";
 
-function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccount): number {
+function safeEvaluate(formula: string, ctx: FormulaContext, fallbackAccount?: string): number {
   try {
     return evaluateFormula(formula, ctx);
   } catch (err) {
-    logger.warn(
-      { account: fallback, err: err instanceof Error ? err.message : String(err) },
-      "formula.eval.failed",
-    );
-    return evaluateFormula(DEFAULT_FORMULAS[fallback], ctx);
+    if (fallbackAccount) {
+      logger.warn(
+        { account: fallbackAccount, err: err instanceof Error ? err.message : String(err) },
+        "formula.eval.failed",
+      );
+    }
+    const fallbackFormula = fallbackAccount
+      ? (DEFAULT_FORMULAS[fallbackAccount as CoreAccount] ?? "base")
+      : "base";
+    try {
+      return evaluateFormula(fallbackFormula, ctx);
+    } catch {
+      return 0;
+    }
   }
 }
-
-const forecastAccounts = ["Revenue", "COGS", "Headcount", "OpEx"] as const;
 
 export function resolveVarValues(
   defs: CustomVariableDef[],
@@ -85,6 +93,7 @@ export function buildForecast(
   departmentHierarchy: DimensionMember[] = [],
   forecastMonths?: string[],
   varDefs: CustomVariableDef[] = [],
+  accountHierarchy: DimensionMember[] = [],
 ): ForecastRow[] {
   if (actuals.length === 0) {
     return [];
@@ -95,6 +104,18 @@ export function buildForecast(
   if (!lastMonth) {
     return [];
   }
+
+  const accountsList = orderedAccounts(
+    actuals,
+    accountHierarchy,
+    (assumptions.formulas ?? {}) as Record<string, string>,
+  );
+  const formulasForSort: Record<string, string> = {};
+  for (const acc of accountsList) {
+    formulasForSort[acc] =
+      assumptions.formulas?.[acc] ?? DEFAULT_FORMULAS[acc as CoreAccount] ?? "base";
+  }
+  const sortedAccounts = topoSortAccounts(accountsList, formulasForSort);
 
   const rows: ForecastRow[] = [];
   const ancestorsByDepartment = buildAncestorLookup(departmentHierarchy);
@@ -110,70 +131,31 @@ export function buildForecast(
         monthIndex,
         ancestorsByDepartment,
       );
-      const formulaFor = (account: CoreAccount) =>
-        assumptions.formulas?.[account] ?? DEFAULT_FORMULAS[account];
-      const revenue = roundCurrency(
-        safeEvaluate(
-          formulaFor("Revenue"),
-          {
-            base: findLatestValue(actuals, department, "Revenue", lastMonth),
-            month: monthIndex,
-            revenue: 0,
-            headcount: 0,
-            ...vars,
-          },
-          "Revenue",
-        ),
-      );
-      const cogs = roundCurrency(
-        safeEvaluate(
-          formulaFor("COGS"),
-          {
-            base: findLatestValue(actuals, department, "COGS", lastMonth),
-            month: monthIndex,
-            revenue,
-            headcount: 0,
-            ...vars,
-          },
-          "COGS",
-        ),
-      );
-      const headcount = roundMetric(
-        safeEvaluate(
-          formulaFor("Headcount"),
-          {
-            base: findLatestValue(actuals, department, "Headcount", lastMonth),
-            month: monthIndex,
-            revenue,
-            headcount: 0,
-            ...vars,
-          },
-          "Headcount",
-        ),
-      );
-      const opex = roundCurrency(
-        safeEvaluate(
-          formulaFor("OpEx"),
-          {
-            base: findLatestValue(actuals, department, "OpEx", lastMonth),
-            month: monthIndex,
-            revenue,
-            headcount,
-            ...vars,
-          },
-          "OpEx",
-        ),
-      );
 
-      const values: Record<(typeof forecastAccounts)[number], number> = {
-        Revenue: revenue,
-        COGS: cogs,
-        Headcount: headcount,
-        OpEx: opex,
+      const ctx: FormulaContext = {
+        base: 0,
+        month: monthIndex,
+        revenue: 0,
+        headcount: 0,
+        ...vars,
       };
 
-      for (const account of forecastAccounts) {
-        rows.push({ month, department, account, value: values[account] });
+      for (const account of sortedAccounts) {
+        const formula = formulasForSort[account];
+        ctx.base = findLatestValue(actuals, department, account, lastMonth);
+
+        let val = safeEvaluate(formula, ctx, account);
+        if (account === "Headcount") {
+          val = roundMetric(val);
+        } else {
+          val = roundCurrency(val);
+        }
+
+        ctx[account] = val;
+        if (account === "Revenue") ctx.revenue = val;
+        if (account === "Headcount") ctx.headcount = val;
+
+        rows.push({ month, department, account, value: val });
       }
     }
   }
@@ -264,6 +246,23 @@ function orderedDepartments(rows: ActualRow[], departmentHierarchy: DimensionMem
     .filter((department) => !knownDepartments.has(department))
     .sort((left, right) => left.localeCompare(right));
   return [...hierarchyOrder, ...unknownDepartments];
+}
+
+function orderedAccounts(
+  rows: ActualRow[],
+  accountHierarchy: DimensionMember[],
+  formulas: Record<string, string>,
+): string[] {
+  const rowAccounts = new Set(rows.map((row) => row.account));
+  const formulaAccounts = new Set(Object.keys(formulas));
+  const hierarchyOrder = flattenHierarchyNames(accountHierarchy);
+
+  const known = new Set(hierarchyOrder);
+  const unknown = [...new Set([...rowAccounts, ...formulaAccounts, "Revenue", "COGS", "Headcount", "OpEx"])]
+    .filter((a) => !known.has(a))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...hierarchyOrder, ...unknown];
 }
 
 function flattenHierarchyNames(members: DimensionMember[]): string[] {

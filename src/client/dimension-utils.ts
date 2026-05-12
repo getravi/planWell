@@ -56,7 +56,7 @@ export function orderedNamesFromMembers(
   members: DimensionMember[],
   fallbackNames: string[],
 ): string[] {
-  const memberNames = members.map((member) => member.name);
+  const memberNames = flattenMembers(members).map((member) => member.name);
   const knownNames = new Set(memberNames);
   const unknownNames = [...new Set(fallbackNames)]
     .filter((name) => !knownNames.has(name))
