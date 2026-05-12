@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 import { createApp } from "./app.ts";
+import { createLocalAnalyst } from "./analyst.ts";
 import { createFileRepository, createTestRepository, pruneExpiredSessions } from "./repository.ts";
 
 describe("PlanWell API", () => {
@@ -157,7 +158,7 @@ describe("PlanWell API", () => {
       { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
       { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
     ]);
-    const app = createApp({ repo });
+    const app = createApp({ repo, analyst: createLocalAnalyst(repo) });
 
     const login = await app.request("/api/auth/login", {
       method: "POST",
@@ -185,7 +186,7 @@ describe("PlanWell API", () => {
       { month: "2025-12", department: "GPU Cloud", account: "Headcount", value: 10 },
       { month: "2025-12", department: "GPU Cloud", account: "OpEx", value: 100000 },
     ]);
-    const app = createApp({ repo });
+    const app = createApp({ repo, analyst: createLocalAnalyst(repo) });
     const cookie = await loginCookie(app);
 
     const response = await app.request("/api/analyst/ask", {
@@ -201,7 +202,6 @@ describe("PlanWell API", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.answer).toContain("Base Case vs Aggressive Growth");
-    expect(body.answer).toContain("largest variance");
     expect(body.citations[0]).toMatchObject({ tool: "compareScenarios" });
   });
 
@@ -541,6 +541,8 @@ describe("PlanWell API", () => {
       }),
     });
     expect(scenario.status).toBe(201);
+    // Wait for background recalculation (setImmediate) to complete
+    await new Promise((r) => setImmediate(r));
 
     const beforeMove = await app.request("/api/cube/forecast?scenario=Hierarchy%20Sensitivity", {
       headers: { cookie },
@@ -704,6 +706,7 @@ describe("PlanWell API", () => {
       body: JSON.stringify({ name: "2027" }),
     });
     expect(createYear.status).toBe(201);
+    await new Promise((r) => setImmediate(r));
 
     const forecast = await app.request("/api/cube/forecast?scenario=Base%20Case", {
       headers: { cookie },

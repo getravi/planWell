@@ -271,7 +271,10 @@ export function scenarioOrder(name: string): number {
     : ["Base Case", "Aggressive Growth", "Conservative"].indexOf(name);
 }
 
-export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumptions): ScenarioRecord {
+export function saveScenarioAssumptions(
+  db: DatabaseSync,
+  assumptions: ScenarioAssumptions,
+): ScenarioRecord {
   const existing = db
     .prepare("select id, locked from versions where name = ?")
     .get(assumptions.name) as { id: string; locked: number } | undefined;
@@ -302,6 +305,11 @@ export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumption
     replaceVarValues(db, id, assumptions);
     replaceScenarioFormulas(db, id, assumptions.formulas);
   });
-  recalculateScenario(db, assumptions.name);
   return readScenarios(db).find((scenario) => scenario.name === assumptions.name)!;
+}
+
+export function upsertScenario(db: DatabaseSync, assumptions: ScenarioAssumptions): ScenarioRecord {
+  const record = saveScenarioAssumptions(db, assumptions);
+  recalculateScenario(db, assumptions.name);
+  return record;
 }

@@ -93,7 +93,7 @@ const VIEWS = [
   "Custom Variables",
   "Schema",
   "Formula Reference",
-  "Admin",
+  "Site Settings",
 ];
 
 function slugify(text: string) {
@@ -230,7 +230,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
     view === "Custom Variables" ||
     view === "Schema" ||
     view === "Formula Reference" ||
-    view === "Admin";
+    view === "Site Settings";
 
   useEffect(() => {
     if (!dimensions.isSuccess) {
@@ -255,6 +255,16 @@ function Workbench({ userEmail }: { userEmail: string }) {
       setActualsDepartment(defaultDepartment);
     }
   }, [dimensions.isSuccess, actualsDepartment, actualsDepartments]);
+
+  useEffect(() => {
+    const es = new EventSource("/api/forecast-updates");
+    es.addEventListener("recalc-done", () => {
+      void queryClient.invalidateQueries({ queryKey: ["forecast"] });
+      void queryClient.invalidateQueries({ queryKey: ["variance"] });
+      void queryClient.invalidateQueries({ queryKey: ["cube"] });
+    });
+    return () => es.close();
+  }, []);
 
   return (
     <SidebarProvider className="app-shell">
@@ -317,7 +327,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
                     ["Formulas", SquareFunction],
                     ["Custom Variables", Variable],
                     ["Schema", Database],
-                    ["Admin", Settings2],
+                    ["Site Settings", Settings2],
                   ].map(([label, Icon]) => (
                     <SidebarMenuItem key={label as string}>
                       <SidebarMenuButton
@@ -499,7 +509,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
         {view === "Schema" ? <SchemaPage /> : null}
         {view === "Formula Reference" ? <FormulaReferencePage /> : null}
-        {view === "Admin" ? <AdminPage /> : null}
+        {view === "Site Settings" ? <AdminPage /> : null}
       </SidebarInset>
     </SidebarProvider>
   );

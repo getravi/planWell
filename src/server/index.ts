@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp } from "./app.ts";
 import { createFileRepository } from "./repository.ts";
+import { logger } from "../logger.ts";
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 8787);
 const app = createApp({ repo: createFileRepository(process.env.SQLITE_PATH) });
@@ -22,5 +23,5 @@ app.get("/*", (c) => {
 });
 
 serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`PlanWell API listening on http://localhost:${info.port}`);
+  logger.info({ port: info.port }, "server.start");
 });

@@ -1,12 +1,14 @@
 import { writeFileSync } from "node:fs";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { parseActualsCsv } from "../domain/importer.ts";
 import { detectAnomalies } from "../domain/anomaly.ts";
 import { suggestDrivers } from "../domain/baseline.ts";
 import { coreAccounts, type ScenarioAssumptions } from "../domain/types.ts";
-import { createAnalyst, generateNarrative, listAvailableModels } from "./analyst.ts";
+import { createAnalyst, generateNarrative, listAvailableModels, type Analyst } from "./analyst.ts";
+import { logger } from "../logger.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
 import { sampleLongCsv, sampleWideCsv } from "./sample-data.ts";
 
@@ -113,9 +115,46 @@ const versionUpdateSchema = z
     },
   );
 
-export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
+export function createApp({ repo, analyst: injectedAnalyst }: { repo: Repository; analyst?: Analyst }): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
-  const analyst = createAnalyst(repo);
+  const analyst = injectedAnalyst ?? createAnalyst(repo);
+
+  const recalcSubs = new Set<(scenarioName: string) => void>();
+  function notifyRecalcDone(scenarioName: string) {
+    for (const fn of recalcSubs) {
+      try { fn(scenarioName); } catch { /* subscriber closed */ }
+    }
+  }
+  function bgRecalcScenario(scenarioName: string) {
+    setImmediate(() => {
+      try {
+        repo.recalculateScenario(scenarioName);
+        notifyRecalcDone(scenarioName);
+        logger.info({ scenario: scenarioName }, "bg-recalc.scenario.done");
+      } catch (err) {
+        logger.error({ err, scenario: scenarioName }, "bg-recalc.scenario.failed");
+      }
+    });
+  }
+  function bgRecalcAll() {
+    setImmediate(() => {
+      try {
+        repo.recalculateAllScenarios();
+        notifyRecalcDone("*");
+        logger.info("bg-recalc.all.done");
+      } catch (err) {
+        logger.error({ err }, "bg-recalc.all.failed");
+      }
+    });
+  }
+
+  app.use("*", secureHeaders());
+
+  app.use("/api/*", async (context, next) => {
+    const t0 = Date.now();
+    await next();
+    logger.info({ method: context.req.method, path: new URL(context.req.url).pathname, status: context.res.status, ms: Date.now() - t0 }, "http");
+  });
 
   app.get("/api/health", (context) => context.json({ ok: true }));
 
@@ -136,6 +175,7 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
       sameSite: "Lax",
       path: "/",
       maxAge: 60 * 60 * 8,
+      secure: new URL(context.req.url).protocol === "https:",
     });
     return context.json({ user });
   });
@@ -179,10 +219,14 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   app.get("/api/auth/me", (context) => context.json({ user: context.get("user") }));
 
   app.post("/api/imports/csv", async (context) => {
-    const payload = csvImportSchema.parse(await context.req.json());
-    const result = parseActualsCsv(payload.csv);
-    repo.replaceActuals(result.rows);
-    return context.json({ diagnostics: result.diagnostics });
+    try {
+      const payload = csvImportSchema.parse(await context.req.json());
+      const result = parseActualsCsv(payload.csv);
+      repo.replaceActuals(result.rows);
+      return context.json({ diagnostics: result.diagnostics });
+    } catch (error) {
+      return context.json({ error: errorMessage(error) }, 400);
+    }
   });
 
   app.get("/api/cube/actuals", (context) => {
@@ -191,6 +235,40 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.get("/api/anomalies", (context) => {
     return context.json({ anomalies: detectAnomalies(repo.listActuals()) });
+  });
+
+  app.get("/api/forecast-updates", (_c) => {
+    const encoder = new TextEncoder();
+    let sub: ((name: string) => void) | null = null;
+    let heartbeatId: ReturnType<typeof setInterval> | null = null;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        sub = (scenarioName: string) => {
+          try {
+            controller.enqueue(encoder.encode(`event: recalc-done\ndata: ${scenarioName}\n\n`));
+          } catch { /* stream closed */ }
+        };
+        recalcSubs.add(sub);
+        heartbeatId = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+          } catch {
+            if (heartbeatId) clearInterval(heartbeatId);
+          }
+        }, 25000);
+      },
+      cancel() {
+        if (sub) recalcSubs.delete(sub);
+        if (heartbeatId) clearInterval(heartbeatId);
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   });
 
   app.get("/api/forecast/baseline-suggestions", (context) => {
@@ -264,6 +342,7 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     const payload = dimensionMemberSchema.parse(await context.req.json());
     try {
       repo.createDimensionMember(kind, payload.name, payload.parentName ?? null);
+      if (kind === "time") bgRecalcAll();
       return context.json({ dimensions: repo.listDimensions() }, 201);
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
@@ -362,7 +441,9 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
   app.post("/api/scenarios", async (context) => {
     const scenario = scenarioSchema.parse(await context.req.json());
     try {
-      return context.json({ scenario: repo.upsertScenario(scenario) }, 201);
+      const record = repo.saveScenarioAssumptions(scenario);
+      bgRecalcScenario(record.name);
+      return context.json({ scenario: record, recalculating: true }, 201);
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
@@ -370,8 +451,13 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
 
   app.put("/api/scenarios/:id", async (context) => {
     const scenario = scenarioSchema.parse(await context.req.json());
+    if (context.req.param("id") !== scenario.name) {
+      return context.json({ error: "URL id must match scenario name in body." }, 400);
+    }
     try {
-      return context.json({ scenario: repo.upsertScenario(scenario) });
+      const record = repo.saveScenarioAssumptions(scenario);
+      bgRecalcScenario(record.name);
+      return context.json({ scenario: record, recalculating: true });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }
@@ -447,7 +533,7 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
       if (Object.keys(patch).length > 0) {
         repo.updateSettings(patch);
         if (payload.forecastHorizon !== undefined) {
-          repo.recalculateAllScenarios();
+          bgRecalcAll();
         }
       }
       return context.json(parseSettings(repo.getSettings()));
@@ -460,6 +546,14 @@ export function createApp({ repo }: { repo: Repository }): Hono<AppEnv> {
     const raw = repo.getSettings();
     const { providers } = await listAvailableModels();
     return context.json({ providers, selectedModel: raw.aiModel ?? null });
+  });
+
+  app.use("/api/admin/*", async (context, next) => {
+    const adminKey = process.env.ADMIN_KEY;
+    if (adminKey && context.req.header("x-admin-key") !== adminKey) {
+      return context.json({ error: "Forbidden." }, 403);
+    }
+    await next();
   });
 
   app.get("/api/admin/backup", (context) => {

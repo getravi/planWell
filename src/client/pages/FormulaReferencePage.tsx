@@ -1,7 +1,7 @@
 import { DEFAULT_FORMULAS } from "../../domain/formulaEngine.ts";
 import { Panel } from "../ui.tsx";
 
-const VARIABLES = [
+const CONTEXT_VARS = [
   {
     name: "base",
     type: "number",
@@ -28,6 +28,29 @@ const VARIABLES = [
     description:
       "Computed headcount for this department and month. Available in OpEx formula only.",
     example: "Use in OpEx: headcount * costPerHead",
+  },
+];
+
+const DRIVER_VARS = [
+  {
+    name: "revenueGrowthRate",
+    description: "Monthly revenue growth rate (fraction). 0.05 = 5% per month.",
+    usedIn: "Revenue",
+  },
+  {
+    name: "cogsPctOfRevenue",
+    description: "COGS as a fraction of revenue. 0.4 = 40% cost ratio.",
+    usedIn: "COGS",
+  },
+  {
+    name: "headcountGrowthRate",
+    description: "Monthly headcount growth rate (fraction). 0.02 = 2% per month.",
+    usedIn: "Headcount",
+  },
+  {
+    name: "costPerHead",
+    description: "Fully-loaded cost per employee per month (dollars).",
+    usedIn: "OpEx",
   },
 ];
 
@@ -119,14 +142,20 @@ const EXAMPLES = [
 const PRECEDENCE_LEVELS = [
   {
     level: 1,
-    scope: "Ancestor dept monthly",
-    when: "Set on a parent/grandparent department for a specific month — closer ancestors beat more distant ones",
-    example: "Engineering.monthly['2025-06'].headcountGrowthRate = 0.02",
+    scope: "Default value",
+    when: "The variable's configured default_value — applies when no override is set anywhere",
+    example: "revenueGrowthRate default = 0.03",
   },
   {
     level: 2,
+    scope: "Ancestor dept monthly",
+    when: "Override set on a parent/grandparent department for a specific month — closer ancestors beat more distant ones",
+    example: "Engineering.monthly['2025-06'].headcountGrowthRate = 0.02",
+  },
+  {
+    level: 3,
     scope: "This dept monthly",
-    when: "Set on the exact department for a specific month — highest priority",
+    when: "Override set on the exact department for a specific month — highest priority",
     example: "GPU Cloud.monthly['2025-06'].revenueGrowthRate = 0.05",
   },
 ];
@@ -166,11 +195,10 @@ export function FormulaReferencePage() {
 
       <Panel>
         <div className="panel-heading">
-          <h2>Variables</h2>
+          <h2>Context variables</h2>
         </div>
         <p className="muted">
-          These variables are available in every formula expression. Values are resolved per
-          department and month using the scenario's driver assumptions.
+          These read-only values are injected into every formula expression at evaluation time.
         </p>
         <table className="ref-table">
           <thead>
@@ -182,7 +210,7 @@ export function FormulaReferencePage() {
             </tr>
           </thead>
           <tbody>
-            {VARIABLES.map((v) => (
+            {CONTEXT_VARS.map((v) => (
               <tr key={v.name}>
                 <td>
                   <code>{v.name}</code>
@@ -190,6 +218,34 @@ export function FormulaReferencePage() {
                 <td className="muted">{v.type}</td>
                 <td>{v.description}</td>
                 <td className="muted">{v.example}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+
+      <Panel>
+        <div className="panel-heading">
+          <h2>Built-in driver variables</h2>
+        </div>
+        <p className="muted">
+          These are the four built-in input drivers. You set their values per department and month
+          in the Driver assumptions table. They are available in formulas by name.
+        </p>
+        <table className="ref-table">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Description</th>
+              <th>Used in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DRIVER_VARS.map((v) => (
+              <tr key={v.name}>
+                <td><code>{v.name}</code></td>
+                <td>{v.description}</td>
+                <td className="muted">{v.usedIn}</td>
               </tr>
             ))}
           </tbody>

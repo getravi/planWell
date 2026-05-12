@@ -6,6 +6,7 @@ import { listNamedDimension } from "./dimensions.ts";
 import { withTransaction } from "./utils.ts";
 import { selectCubeRows } from "./actuals.ts";
 import { listCustomVariables, replaceVarValues } from "./customVariables.ts";
+import { logger } from "../../logger.ts";
 
 export function updateScenarioAssumptions(
   db: DatabaseSync,
@@ -74,10 +75,7 @@ export function recalculateAll(db: DatabaseSync): void {
     }
   }
   if (errors.length > 0) {
-    console.error(
-      `recalculateAll: failed for ${errors.length} scenario(s):\n` +
-        errors.map((e) => `  ${e.name}: ${e.message}`).join("\n"),
-    );
+    logger.error({ errors }, "recalc.all.partial-failure");
   }
 }
 

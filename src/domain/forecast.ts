@@ -1,4 +1,5 @@
 import { DEFAULT_FORMULAS, evaluateFormula, topoSortCustomVars, type FormulaContext } from "./formulaEngine.ts";
+import { logger } from "../logger.ts";
 import type {
   ActualRow,
   CoreAccount,
@@ -14,9 +15,7 @@ function safeEvaluate(formula: string, ctx: FormulaContext, fallback: CoreAccoun
   try {
     return evaluateFormula(formula, ctx);
   } catch (err) {
-    console.warn(
-      `[planwell] Formula for ${fallback} failed: ${err instanceof Error ? err.message : String(err)}. Using default formula.`,
-    );
+    logger.warn({ account: fallback, err: err instanceof Error ? err.message : String(err) }, "formula.eval.failed");
     return evaluateFormula(DEFAULT_FORMULAS[fallback], ctx);
   }
 }

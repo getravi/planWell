@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Save, Settings2, Wand2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   CustomVariableDef,
   DimensionMember,
@@ -118,6 +118,8 @@ function ScenarioEditor({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const recalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const active = draft ?? scenario?.assumptions;
   const isLocked = Boolean(scenario?.locked);
   const ancestorLookup = useMemo(
@@ -147,7 +149,12 @@ function ScenarioEditor({
     mutationFn: client.saveScenario,
     onSuccess: async () => {
       setDraft(null);
-      await queryClient.invalidateQueries();
+      setRecalculating(true);
+      // Invalidate scenarios list immediately; forecast/variance update via SSE recalc-done event
+      await queryClient.invalidateQueries({ queryKey: ["scenarios"] });
+      // Safety fallback: clear recalculating after 10s even if SSE doesn't arrive
+      if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
+      recalcTimerRef.current = setTimeout(() => setRecalculating(false), 10000);
     },
   });
 
@@ -362,12 +369,17 @@ function ScenarioEditor({
           </tbody>
         </table>
       </div>
-      <Button
-        disabled={isLocked || !draft || save.isPending}
-        onClick={() => active && save.mutate(active)}
-      >
-        <Save size={16} /> Save scenario
-      </Button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Button
+          disabled={isLocked || !draft || save.isPending}
+          onClick={() => active && save.mutate(active)}
+        >
+          <Save size={16} /> {save.isPending ? "Saving…" : "Save scenario"}
+        </Button>
+        {recalculating && !save.isPending ? (
+          <span className="muted" style={{ fontSize: 13 }}>Recalculating forecast…</span>
+        ) : null}
+      </div>
       {save.error ? <p className="error">{save.error.message}</p> : null}
     </Panel>
   );

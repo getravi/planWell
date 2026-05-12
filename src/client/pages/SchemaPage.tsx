@@ -120,6 +120,7 @@ export function SchemaPage() {
               ["", "kind"],
               ["", "input or calculated"],
               ["", "formula"],
+              ["", "default_value"],
               ["", "sort_order"],
             ]}
           />
@@ -138,7 +139,7 @@ export function SchemaPage() {
           />
           <div className="schema-note-card">
             <strong>Custom variable resolution</strong>
-            <span>6-level precedence: default → global → monthly → ancestor dept global → ancestor dept monthly → dept global → dept monthly</span>
+            <span>Precedence (lowest → highest): default_value → ancestor dept monthly → this dept monthly</span>
             <span>Calculated vars evaluated in topological order after inputs</span>
             <code>input</code>
             <code>calculated</code>

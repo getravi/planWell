@@ -6,6 +6,7 @@ import type { ScenarioRow, LegacyScenarioRow } from "./utils.ts";
 import { backfillDimensionOrder } from "./dimensions.ts";
 import { backfillVersionOrder } from "./versions.ts";
 import { replaceVarValues } from "./customVariables.ts";
+import { logger } from "../../logger.ts";
 
 export function migrate(db: DatabaseSync): void {
   db.exec(`
@@ -236,7 +237,7 @@ export function seedEnvUser(db: DatabaseSync): void {
     hashPassword.create(password),
     new Date().toISOString(),
   );
-  console.log(`[seed] created user: ${email}`);
+  logger.info({ email }, "seed.user.created");
 }
 
 export function ensureDefaultScenarios(db: DatabaseSync): void {

@@ -39,6 +39,7 @@ import {
   deleteVersion,
   readScenarios,
   readScenarioById,
+  saveScenarioAssumptions,
   upsertScenario,
 } from "./db/versions.ts";
 import type { ScenarioRecord, VersionRecord } from "./db/versions.ts";
@@ -99,6 +100,7 @@ export type Repository = {
   deleteDimensionMember(kind: DimensionKind, name: string, force: boolean): DimensionImpact;
   listScenarios(): ScenarioRecord[];
   getScenarioById(id: string): ScenarioRecord;
+  saveScenarioAssumptions(assumptions: ScenarioAssumptions): ScenarioRecord;
   upsertScenario(assumptions: ScenarioAssumptions): ScenarioRecord;
   listVersions(): VersionRecord[];
   createVersion(name: string, sourceId: string): VersionRecord;
@@ -220,9 +222,6 @@ function createRepository(db: DatabaseSync): Repository {
     },
     createDimensionMember(kind, name, parentName = null) {
       createDimensionMember(db, kind, name, parentName);
-      if (kind === "time") {
-        recalculateAll(db);
-      }
     },
     updateDimensionMember(kind, name, changes) {
       updateDimensionMember(db, kind, name, changes);
@@ -238,6 +237,9 @@ function createRepository(db: DatabaseSync): Repository {
     },
     getScenarioById(id) {
       return readScenarioById(db, id);
+    },
+    saveScenarioAssumptions(assumptions) {
+      return saveScenarioAssumptions(db, assumptions);
     },
     upsertScenario(assumptions) {
       return upsertScenario(db, assumptions);

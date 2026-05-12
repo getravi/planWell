@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
+import type { FunctionDeclaration } from "@google/genai";
 import { detectAnomalies } from "../domain/anomaly.ts";
 import type { Repository } from "./repository.ts";
+import { logger } from "../logger.ts";
 
 export type AnalystAnswer = {
   answer: string;
@@ -29,6 +31,29 @@ export type Analyst = {
 export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 
+export function createLocalAnalyst(repo: Repository): Analyst {
+  return {
+    async ask(question, context) {
+      if (context.scenario && context.compareScenario) {
+        const rows = repo.compare(context.scenario, context.compareScenario).filter((r) => r.variance !== 0);
+        const top = [...rows].sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))[0];
+        const answer = top
+          ? `${context.scenario} vs ${context.compareScenario}: largest variance is ${top.account} for ${top.department} in ${top.month} (${top.variance >= 0 ? "+" : ""}${top.variance.toFixed(0)}).`
+          : `${context.scenario} vs ${context.compareScenario}: no material variances found.`;
+        return { answer, provider: "local", citations: [{ tool: "compareScenarios", label: `${context.scenario} vs ${context.compareScenario}`, value: rows.length }] };
+      }
+      const summary = repo.getMetricSummary(context.scenario);
+      const lowered = question.toLowerCase();
+      const dept = summary.departments.find((d) => lowered.includes(d.department.toLowerCase()));
+      const label = context.scenario ?? "actuals";
+      const answer = dept
+        ? `${dept.department} (${label}): revenue ${dept.revenue.toFixed(0)}, COGS ${dept.cogs.toFixed(0)}, gross margin ${(dept.revenue - dept.cogs).toFixed(0)}.`
+        : `${label}: total revenue ${summary.kpis.revenue.toFixed(0)}, gross margin ${summary.kpis.grossMargin.toFixed(0)}.`;
+      return { answer, provider: "local", citations: [{ tool: "getMetricSummary", label: dept?.department ?? label, value: dept?.revenue ?? summary.kpis.revenue }] };
+    },
+  };
+}
+
 export function createAnalyst(repo: Repository): Analyst {
   if (process.env.ANTHROPIC_API_KEY) {
     return new ClaudeAnalyst(repo, process.env.ANTHROPIC_API_KEY);
@@ -48,6 +73,41 @@ export function createAnalyst(repo: Repository): Analyst {
 }
 
 
+const GEMINI_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
+  {
+    name: "getMetricSummary",
+    description: "Return aggregate FP&A KPIs and department breakdown for a scenario or actuals.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        scenario: { type: Type.STRING, description: "Scenario name. Omit for historical actuals." },
+      },
+    },
+  },
+  {
+    name: "listActuals",
+    description: "Return all historical actual rows (month, department, account, value).",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "compareScenarios",
+    description: "Return variance rows between two scenarios.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        left: { type: Type.STRING, description: "Left scenario name (or 'actuals')." },
+        right: { type: Type.STRING, description: "Right scenario name." },
+      },
+      required: ["left", "right"],
+    },
+  },
+  {
+    name: "detectAnomalies",
+    description: "Return anomaly flags from historical actuals.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+];
+
 class GeminiAnalyst implements Analyst {
   private readonly client: GoogleGenAI;
   private readonly repo: Repository;
@@ -61,40 +121,62 @@ class GeminiAnalyst implements Analyst {
     return this.repo.getSettings().aiModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL;
   }
 
+  private callTool(name: string, args: Record<string, unknown>): unknown {
+    if (name === "getMetricSummary") return this.repo.getMetricSummary(args.scenario as string | undefined);
+    if (name === "listActuals") return this.repo.listActuals();
+    if (name === "compareScenarios") return this.repo.compare(args.left as string, args.right as string);
+    if (name === "detectAnomalies") return detectAnomalies(this.repo.listActuals());
+    return null;
+  }
+
   async ask(
     question: string,
     _context: { scenario?: string; compareScenario?: string },
   ): Promise<AnalystAnswer> {
-    const scenarios = this.repo.listScenarios().map((s) => s.name);
-    const actualsData = { scenario: "actuals", summary: this.repo.getMetricSummary(undefined) };
-    const scenarioData = scenarios.map((name) => ({
-      scenario: name,
-      summary: this.repo.getMetricSummary(name),
-    }));
-    const allData = [actualsData, ...scenarioData];
+    const model = this.getModel();
+    const availableScenarios = this.repo.listScenarios().map((s) => s.name);
+    const systemInstruction = `You are a guarded FP&A analyst with access to all planning data. Answer ONLY from tool results. Be concise and cite specific numbers. Available scenarios: ${availableScenarios.join(", ") || "none"}.`;
 
-    const prompt = `You are a guarded FP&A analyst with full access to all planning data. Answer ONLY from the data provided. Be concise and cite specific numbers.
+    const contents: { role: string; parts: Record<string, unknown>[] }[] = [
+      { role: "user", parts: [{ text: question }] },
+    ];
 
-Available data:
-${JSON.stringify(allData)}
+    const citationsCollected: AnalystAnswer["citations"] = [];
+    const t0 = Date.now();
 
-User question: ${question}
+    for (let i = 0; i < 5; i++) {
+      const response = await this.client.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations: GEMINI_FUNCTION_DECLARATIONS }],
+        },
+      });
 
-Answer concisely using only the data above.`;
+      const calls = response.functionCalls;
+      if (!calls || calls.length === 0) {
+        const text = response.text ?? "The analyst could not produce an answer.";
+        logger.info({ provider: "gemini", model, iterations: i + 1, ms: Date.now() - t0 }, "analyst.ask");
+        return { answer: text, provider: "gemini", citations: citationsCollected };
+      }
 
-    const answer = await this.client.models.generateContent({
-      model: this.getModel(),
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-    });
+      const modelParts = calls.map((c) => ({ functionCall: { name: c.name, args: c.args } }));
+      contents.push({ role: "model", parts: modelParts });
 
-    const firstSummary = actualsData.summary;
+      const responseParts = calls.map((c) => {
+        const result = this.callTool(c.name ?? "", (c.args ?? {}) as Record<string, unknown>);
+        citationsCollected.push(...extractGeminiCitations(c.name ?? "", (c.args ?? {}) as Record<string, unknown>, result));
+        return { functionResponse: { name: c.name, response: { result } } };
+      });
+      contents.push({ role: "user", parts: responseParts });
+    }
+
+    logger.warn({ provider: "gemini", model, ms: Date.now() - t0 }, "analyst.ask max iterations reached");
     return {
-      answer: answer.text ?? "The analyst could not produce an answer from the available data.",
+      answer: "The analyst could not produce a grounded answer. Please try again.",
       provider: "gemini",
-      citations: [
-        { tool: "getMetricSummary", label: "Total revenue (actuals)", value: firstSummary.kpis.revenue },
-        { tool: "getMetricSummary", label: "Gross margin (actuals)", value: firstSummary.kpis.grossMargin },
-      ],
+      citations: citationsCollected,
     };
   }
 }
@@ -167,6 +249,7 @@ class ClaudeAnalyst implements Analyst {
     question: string,
     context: { scenario?: string; compareScenario?: string; history?: ChatMessage[] },
   ): Promise<AnalystAnswer> {
+    const model = this.getModel();
     const availableScenarios = this.repo.listScenarios().map((s) => s.name);
     const scenarioList = availableScenarios.length > 0 ? availableScenarios.join(", ") : "none";
     const systemPrompt = `You are a guarded FP&A analyst with access to all planning data. Answer ONLY from tool results. Be concise and cite specific numbers. Available scenarios: ${scenarioList}. Use getMetricSummary(scenario), listActuals, compareScenarios, or detectAnomalies to retrieve whatever data is relevant to the question.`;
@@ -176,24 +259,31 @@ class ClaudeAnalyst implements Analyst {
       content: m.content,
     }));
     const messages: Anthropic.MessageParam[] = [...priorMessages, { role: "user", content: question }];
+    const toolUseBlocks: Anthropic.ToolUseBlock[] = [];
+    const t0 = Date.now();
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
 
     for (let i = 0; i < 5; i++) {
       const response = await this.client.messages.create({
-        model: this.getModel(),
+        model,
         max_tokens: 1024,
         system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         tools: CLAUDE_TOOLS.map((t) => ({ ...t, cache_control: { type: "ephemeral" } as const })),
         messages,
-        // Force at least one tool call on the first turn so answers are grounded in real data
         ...(i === 0 ? { tool_choice: { type: "any" as const } } : {}),
       });
 
+      totalInputTokens += response.usage.input_tokens;
+      totalOutputTokens += response.usage.output_tokens;
+
       if (response.stop_reason === "end_turn") {
         const textBlock = response.content.find((b) => b.type === "text");
+        logger.info({ provider: "claude", model, iterations: i + 1, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, ms: Date.now() - t0 }, "analyst.ask");
         return {
           answer: textBlock?.type === "text" ? textBlock.text : "No answer produced.",
           provider: "claude",
-          citations: [],
+          citations: buildClaudeCitations(toolUseBlocks),
         };
       }
 
@@ -201,13 +291,14 @@ class ClaudeAnalyst implements Analyst {
         const assistantContent: Anthropic.ContentBlock[] = response.content;
         messages.push({ role: "assistant", content: assistantContent });
 
-        const toolResults: Anthropic.ToolResultBlockParam[] = response.content
-          .filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
-          .map((b) => ({
-            type: "tool_result" as const,
-            tool_use_id: b.id,
-            content: JSON.stringify(this.callTool(b.name, b.input as Record<string, unknown>)),
-          }));
+        const newToolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+        toolUseBlocks.push(...newToolUses);
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = newToolUses.map((b) => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id,
+          content: JSON.stringify(this.callTool(b.name, b.input as Record<string, unknown>)),
+        }));
 
         messages.push({ role: "user", content: toolResults });
         continue;
@@ -216,12 +307,47 @@ class ClaudeAnalyst implements Analyst {
       break;
     }
 
+    logger.warn({ provider: "claude", model, ms: Date.now() - t0 }, "analyst.ask max iterations reached");
     return {
       answer: "The AI analyst could not produce a grounded answer. Please try again.",
       provider: "claude",
-      citations: [],
+      citations: buildClaudeCitations(toolUseBlocks),
     };
   }
+}
+
+function buildClaudeCitations(toolUses: Anthropic.ToolUseBlock[]): AnalystAnswer["citations"] {
+  return toolUses.map((b) => {
+    const input = b.input as Record<string, unknown>;
+    return { tool: b.name, label: citationLabel(b.name, input), value: citationValue(b.name, input) };
+  });
+}
+
+function extractGeminiCitations(
+  name: string,
+  args: Record<string, unknown>,
+  result: unknown,
+): AnalystAnswer["citations"] {
+  return [{ tool: name, label: citationLabel(name, args), value: citationValue(name, args, result) }];
+}
+
+function citationLabel(tool: string, input: Record<string, unknown>): string {
+  if (tool === "getMetricSummary") return input.scenario ? `${input.scenario} summary` : "Actuals summary";
+  if (tool === "compareScenarios") return `${String(input.left)} vs ${String(input.right)}`;
+  if (tool === "listActuals") return "Historical actuals";
+  if (tool === "detectAnomalies") return "Anomaly scan";
+  return tool;
+}
+
+function citationValue(tool: string, _input: Record<string, unknown>, result?: unknown): string | number {
+  if (tool === "getMetricSummary" && result && typeof result === "object") {
+    const r = result as { kpis?: { revenue?: number } };
+    return r.kpis?.revenue ?? "—";
+  }
+  if (tool === "compareScenarios" && Array.isArray(result)) return `${result.length} variance rows`;
+  if (tool === "listActuals" && Array.isArray(result)) return `${result.length} rows`;
+  if (tool === "detectAnomalies" && Array.isArray(result)) return `${result.length} flags`;
+  return "—";
 }
 
 export async function generateNarrative(

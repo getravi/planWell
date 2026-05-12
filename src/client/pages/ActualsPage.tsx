@@ -71,9 +71,9 @@ export function ActualsPage({
       <Panel className="span-two">
         <div className="panel-heading">
           <h2>Actuals by department and account</h2>
-          {anomalyQuery.data && anomalyQuery.data.anomalies.length > 0 && (
+          {(anomalyQuery.data?.anomalies?.length ?? 0) > 0 && (
             <span style={{ color: "var(--warning, #d97706)", fontSize: 13 }}>
-              {anomalyQuery.data.anomalies.length} anomaly{anomalyQuery.data.anomalies.length !== 1 ? "s" : ""} detected
+              {anomalyQuery.data!.anomalies.length} anomaly{anomalyQuery.data!.anomalies.length !== 1 ? "s" : ""} detected
             </span>
           )}
         </div>
