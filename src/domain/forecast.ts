@@ -174,7 +174,7 @@ export function summarizeKpis(rows: ActualRow[]): KpiSummary {
   const revenue = sumByAccount(rows, "Revenue");
   const cogs = sumByAccount(rows, "COGS");
   const opex = sumByAccount(rows, "OpEx");
-  const headcount = sumByAccount(rows, "Headcount");
+  const headcount = closingBalance(rows, "Headcount");
   const grossMargin = revenue - cogs;
   return {
     revenue,
@@ -267,6 +267,15 @@ function rowKey(row: ActualRow): string {
 function sumByAccount(rows: ActualRow[], account: string): number {
   return roundCurrency(
     rows.filter((row) => row.account === account).reduce((sum, row) => sum + row.value, 0),
+  );
+}
+
+function closingBalance(rows: ActualRow[], account: string): number {
+  const accountRows = rows.filter((row) => row.account === account);
+  if (accountRows.length === 0) return 0;
+  const lastMonth = accountRows.map((row) => row.month).sort().at(-1)!;
+  return roundCurrency(
+    accountRows.filter((row) => row.month === lastMonth).reduce((sum, row) => sum + row.value, 0),
   );
 }
 

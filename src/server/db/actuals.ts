@@ -66,7 +66,7 @@ export function summarizeDepartments(
         revenue: sum(scoped, "Revenue"),
         cogs: sum(scoped, "COGS"),
         opex: sum(scoped, "OpEx"),
-        headcount: sum(scoped, "Headcount"),
+        headcount: closingBalance(scoped, "Headcount"),
       };
     })
     .filter(
@@ -107,4 +107,15 @@ export function summarizeAccounts(
 
 export function sumAll(rows: ActualRow[]): number {
   return Math.round(rows.reduce((total, row) => total + row.value, 0) * 100) / 100;
+}
+
+function closingBalance(rows: ActualRow[], account: string): number {
+  const accountRows = rows.filter((row) => row.account === account);
+  if (accountRows.length === 0) return 0;
+  const lastMonth = accountRows.map((row) => row.month).sort().at(-1)!;
+  return (
+    Math.round(
+      accountRows.filter((row) => row.month === lastMonth).reduce((total, row) => total + row.value, 0) * 100,
+    ) / 100
+  );
 }
