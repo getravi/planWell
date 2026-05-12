@@ -157,6 +157,7 @@ export function buildForecast(
         }
 
         ctx[account] = val;
+        ctx[account.toLowerCase()] = val;
         if (account === "Revenue") ctx.revenue = val;
         if (account === "Headcount") ctx.headcount = val;
 

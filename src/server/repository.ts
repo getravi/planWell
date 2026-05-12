@@ -376,17 +376,31 @@ function applyActualsFormulas(rows: ActualRow[], formulas: ScenarioFormulas): Ac
     rowMap.get(key)!.set(row.account, row.value);
   }
 
+  const accountByLower = new Map<string, string>();
+  for (const row of rows) {
+    accountByLower.set(row.account.toLowerCase(), row.account);
+  }
+
+  function buildCtx(accountValues: Map<string, number>, formula: string): Record<string, number> {
+    const deps = extractSymbolNames(formula);
+    const ctx: Record<string, number> = {};
+    for (const dep of deps) {
+      const resolved = accountByLower.get(dep.toLowerCase()) ?? dep;
+      ctx[dep] = accountValues.get(resolved) ?? 0;
+      if (dep.toLowerCase() !== resolved.toLowerCase()) {
+        ctx[dep.toLowerCase()] = ctx[dep];
+      }
+    }
+    return ctx;
+  }
+
   const result: ActualRow[] = [];
   for (const row of rows) {
     const key = `${row.month}|${row.department}`;
     const accountValues = rowMap.get(key)!;
     const formula = formulas[row.account];
     if (formula) {
-      const deps = extractSymbolNames(formula);
-      const ctx: Record<string, number> = {};
-      for (const dep of deps) {
-        ctx[dep] = accountValues.get(dep) ?? 0;
-      }
+      const ctx = buildCtx(accountValues, formula);
       try {
         const value = math.evaluate(formula, ctx);
         if (typeof value === "number" && Number.isFinite(value)) {
@@ -411,11 +425,7 @@ function applyActualsFormulas(rows: ActualRow[], formulas: ScenarioFormulas): Ac
       const rowKey = `${key}|${account}`;
       if (!existingKeys.has(rowKey)) {
         const [month, department] = key.split("|");
-        const deps = extractSymbolNames(formula);
-        const ctx: Record<string, number> = {};
-        for (const dep of deps) {
-          ctx[dep] = accountValues.get(dep) ?? 0;
-        }
+        const ctx = buildCtx(accountValues, formula);
         try {
           const value = math.evaluate(formula, ctx);
           if (typeof value === "number" && Number.isFinite(value)) {

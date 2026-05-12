@@ -436,7 +436,8 @@ export function createApp({
           Object.entries(payload.formulas).filter(([, v]) => v !== undefined),
         ) as ScenarioFormulas,
       );
-      return context.json({ formulas: repo.readActualsFormulas() });
+      bgRecalcAll();
+      return context.json({ formulas: repo.readActualsFormulas(), recalculating: true });
     } catch (error) {
       return context.json({ error: errorMessage(error) }, 400);
     }

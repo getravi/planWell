@@ -74,6 +74,10 @@ export function extractSymbolNames(formula: string): string[] {
 
 export function topoSortAccounts(accounts: string[], formulas: Record<string, string>): string[] {
   const accountSet = new Set(accounts);
+  const accountByLower = new Map<string, string>();
+  for (const a of accounts) {
+    accountByLower.set(a.toLowerCase(), a);
+  }
   const inDegree = new Map<string, number>(accounts.map((a) => [a, 0]));
   const edges = new Map<string, string[]>(accounts.map((a) => [a, []]));
 
@@ -84,16 +88,16 @@ export function topoSortAccounts(accounts: string[], formulas: Record<string, st
       ...new Set(
         extractSymbolNames(formula).filter((s) => {
           if (accountSet.has(s)) return true;
-          if (s === "revenue" && accountSet.has("Revenue")) return true;
-          if (s === "headcount" && accountSet.has("Headcount")) return true;
+          const resolved = accountByLower.get(s.toLowerCase());
+          if (resolved && resolved !== account) return true;
           return false;
         }),
       ),
     ];
     for (const dep of deps) {
       let resolvedDep = dep;
-      if (dep === "revenue" && accountSet.has("Revenue")) resolvedDep = "Revenue";
-      if (dep === "headcount" && accountSet.has("Headcount")) resolvedDep = "Headcount";
+      const lowerResolved = accountByLower.get(dep.toLowerCase());
+      if (lowerResolved) resolvedDep = lowerResolved;
 
       if (resolvedDep === account) continue;
 
@@ -218,12 +222,19 @@ export function validateFormula(
       error: `Syntax error: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+  const expandedVars: Record<string, number> = {};
+  if (extraVars) {
+    for (const [key, val] of Object.entries(extraVars)) {
+      expandedVars[key] = val;
+      expandedVars[key.toLowerCase()] = val;
+    }
+  }
   const dryRunContext: FormulaContext = {
     base: 1000,
     month: 1,
     revenue: account === "COGS" || account === "OpEx" ? 1000 : 0,
     headcount: account === "OpEx" ? 20 : 0,
-    ...extraVars,
+    ...expandedVars,
   };
   try {
     const value = evaluateFormula(formula, dryRunContext);
