@@ -16,10 +16,12 @@ import { RevenueChart } from "../components/RevenueChart.tsx";
 import {
   buildActualGridMatrix,
   buildActualGridTsv,
+  collapsePivotActualRowsToQuarters,
   copyGrid,
   getMonths,
   pivotActualRows,
   summarizeRows,
+  type Granularity,
 } from "../pivot.ts";
 import { compactCurrency, currency, formatCell } from "../format.ts";
 import { EmptyState, ExportMenu, GhostButton, Panel } from "../ui.tsx";
@@ -29,10 +31,12 @@ export function ActualsPage({
   actuals,
   departmentHierarchy,
   accountHierarchy,
+  granularity,
 }: {
   actuals: ActualRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
 }) {
   const filteredSummary = summarizeRows(actuals);
   const anomalyQuery = useQuery({ queryKey: ["anomalies"], queryFn: client.anomalies });
@@ -80,6 +84,7 @@ export function ActualsPage({
           accountHierarchy={accountHierarchy}
           anomalySet={anomalySet}
           anomalyMap={anomalyMap}
+          granularity={granularity}
         />
       </Panel>
     </div>
@@ -92,32 +97,38 @@ function ActualsGrid({
   accountHierarchy,
   anomalySet,
   anomalyMap,
+  granularity,
 }: {
   rows: ActualRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
   anomalySet: Set<string>;
   anomalyMap: Map<string, AnomalyFlag>;
+  granularity: Granularity;
 }) {
   const months = getMonths(rows);
-  const pivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
-  if (pivotRows.length === 0) {
+  const rawPivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
+  if (rawPivotRows.length === 0) {
     return <EmptyState title="No actuals" body="Import actuals to populate the table." />;
   }
+  const { rows: pivotRows, periods } =
+    granularity === "quarter"
+      ? collapsePivotActualRowsToQuarters(rawPivotRows, months)
+      : { rows: rawPivotRows, periods: months };
   return (
     <>
       <div className="grid-toolbar">
         <GhostButton
           type="button"
           aria-label="Copy grid"
-          onClick={() => copyGrid(buildActualGridTsv(months, pivotRows))}
+          onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
         <ExportMenu
-          onCsv={() => { const m = buildActualGridMatrix(months, pivotRows); exportCsv("actuals.csv", m.headers, m.rows); }}
-          onXlsx={() => { const m = buildActualGridMatrix(months, pivotRows); void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows); }}
-          onPdf={() => { const m = buildActualGridMatrix(months, pivotRows); exportPdf("actuals.pdf", "Actuals", m.headers, m.rows); }}
+          onCsv={() => { const m = buildActualGridMatrix(periods, pivotRows); exportCsv("actuals.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildActualGridMatrix(periods, pivotRows); void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows); }}
+          onPdf={() => { const m = buildActualGridMatrix(periods, pivotRows); exportPdf("actuals.pdf", "Actuals", m.headers, m.rows); }}
         />
       </div>
       <div className="spreadsheet-wrap">
@@ -126,8 +137,8 @@ function ActualsGrid({
           <tr>
             <th>Department</th>
             <th>Account</th>
-            {months.map((month) => (
-              <th key={month}>{month}</th>
+            {periods.map((period) => (
+              <th key={period}>{period}</th>
             ))}
           </tr>
         </thead>
@@ -141,18 +152,18 @@ function ActualsGrid({
                 {row.department}
               </th>
               <td>{row.account}</td>
-              {months.map((month) => {
-                const cellKey = `${row.department}|${row.account}|${month}`;
-                const isAnomaly = anomalySet.has(cellKey);
-                const flag = anomalyMap.get(cellKey);
+              {periods.map((period) => {
+                const cellKey = `${row.department}|${row.account}|${period}`;
+                const isAnomaly = granularity === "month" && anomalySet.has(cellKey);
+                const flag = granularity === "month" ? anomalyMap.get(cellKey) : undefined;
                 return (
                   <td
-                    key={month}
+                    key={period}
                     className="numeric-cell"
                     style={isAnomaly ? { background: "rgba(217,119,6,0.08)" } : undefined}
                     title={flag ? `Anomaly: ${flag.reason}` : undefined}
                   >
-                    {formatCell(row.account, row.values[month] ?? 0)}
+                    {formatCell(row.account, row.values[period] ?? 0)}
                     {isAnomaly && (
                       <span
                         style={{

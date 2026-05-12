@@ -11,12 +11,14 @@ import { client, type ScenarioRecord } from "../api.ts";
 import {
   buildActualGridMatrix,
   buildActualGridTsv,
+  collapsePivotActualRowsToQuarters,
   copyGrid,
   formatHorizonLabel,
   getMonths,
   isMultiCellGrid,
   parsePastedGrid,
   pivotActualRows,
+  type Granularity,
 } from "../pivot.ts";
 import {
   buildAncestorLookup,
@@ -44,6 +46,7 @@ export function ForecastPage({
   departmentHierarchy,
   accountHierarchy,
   customVarDefs = [],
+  granularity,
 }: {
   scenarios: ScenarioRecord[];
   selected: string;
@@ -52,6 +55,7 @@ export function ForecastPage({
   departments: string[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
   customVarDefs?: CustomVariableDef[];
 }) {
   const scenario = scenarios.find((item) => item.name === selected);
@@ -95,6 +99,7 @@ export function ForecastPage({
           rows={rows}
           departmentHierarchy={departmentHierarchy}
           accountHierarchy={accountHierarchy}
+          granularity={granularity}
         />
       </Panel>
     </div>
@@ -389,32 +394,38 @@ function ForecastGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
+  granularity,
 }: {
   rows: ForecastRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
 }) {
   const months = getMonths(rows);
-  const pivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
-  if (pivotRows.length === 0) {
+  const rawPivotRows = pivotActualRows(rows, departmentHierarchy, accountHierarchy);
+  if (rawPivotRows.length === 0) {
     return (
       <EmptyState title="No forecast cells" body="Import actuals or select another scenario." />
     );
   }
+  const { rows: pivotRows, periods } =
+    granularity === "quarter"
+      ? collapsePivotActualRowsToQuarters(rawPivotRows, months)
+      : { rows: rawPivotRows, periods: months };
   return (
     <>
       <div className="grid-toolbar">
         <GhostButton
           type="button"
           aria-label="Copy grid"
-          onClick={() => copyGrid(buildActualGridTsv(months, pivotRows))}
+          onClick={() => copyGrid(buildActualGridTsv(periods, pivotRows))}
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
         <ExportMenu
-          onCsv={() => { const m = buildActualGridMatrix(months, pivotRows); exportCsv("forecast.csv", m.headers, m.rows); }}
-          onXlsx={() => { const m = buildActualGridMatrix(months, pivotRows); void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows); }}
-          onPdf={() => { const m = buildActualGridMatrix(months, pivotRows); exportPdf("forecast.pdf", "Forecast", m.headers, m.rows); }}
+          onCsv={() => { const m = buildActualGridMatrix(periods, pivotRows); exportCsv("forecast.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildActualGridMatrix(periods, pivotRows); void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows); }}
+          onPdf={() => { const m = buildActualGridMatrix(periods, pivotRows); exportPdf("forecast.pdf", "Forecast", m.headers, m.rows); }}
         />
       </div>
       <div className="spreadsheet-wrap">
@@ -423,8 +434,8 @@ function ForecastGrid({
           <tr>
             <th>Department</th>
             <th>Account</th>
-            {months.map((month) => (
-              <th key={month}>{month}</th>
+            {periods.map((period) => (
+              <th key={period}>{period}</th>
             ))}
           </tr>
         </thead>
@@ -438,9 +449,9 @@ function ForecastGrid({
                 {row.department}
               </th>
               <td>{row.account}</td>
-              {months.map((month) => (
-                <td key={month} className="numeric-cell">
-                  {formatCell(row.account, row.values[month] ?? 0)}
+              {periods.map((period) => (
+                <td key={period} className="numeric-cell">
+                  {formatCell(row.account, row.values[period] ?? 0)}
                 </td>
               ))}
             </tr>

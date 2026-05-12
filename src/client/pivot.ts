@@ -242,6 +242,80 @@ function sortPivotRows(accountOrder: Map<string, number>) {
 }
 
 // ---------------------------------------------------------------------------
+// Quarter helpers
+// ---------------------------------------------------------------------------
+
+export type Granularity = "month" | "quarter";
+
+export function monthToQuarter(month: string): string {
+  const m = Number(month.slice(5, 7));
+  return `${month.slice(0, 4)}-Q${Math.ceil(m / 3)}`;
+}
+
+export function getQuarters(months: string[]): string[] {
+  return [...new Set(months.map(monthToQuarter))].sort();
+}
+
+/** Collapses pivoted actual/forecast rows to quarter buckets. Headcount uses closing balance (last month in quarter); all other accounts are summed. */
+export function collapsePivotActualRowsToQuarters(
+  rows: PivotActualRow[],
+  months: string[],
+): { rows: PivotActualRow[]; periods: string[] } {
+  const periods = getQuarters(months);
+  const quarterToMonths = new Map<string, string[]>();
+  for (const m of months) {
+    const q = monthToQuarter(m);
+    const arr = quarterToMonths.get(q) ?? [];
+    arr.push(m);
+    quarterToMonths.set(q, arr);
+  }
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      values: Object.fromEntries(
+        periods.map((q) => {
+          const ms = quarterToMonths.get(q) ?? [];
+          const value =
+            row.account === "Headcount"
+              ? (row.values[ms.at(-1)!] ?? 0)
+              : ms.reduce((sum, m) => sum + (row.values[m] ?? 0), 0);
+          return [q, value];
+        }),
+      ),
+    })),
+    periods,
+  };
+}
+
+/** Collapses pivoted variance rows to quarter buckets. Variance is summed; variancePct is set to null at quarter level. */
+export function collapsePivotVarianceRowsToQuarters(
+  rows: PivotVarianceRow[],
+  months: string[],
+): { rows: PivotVarianceRow[]; periods: string[] } {
+  const periods = getQuarters(months);
+  const quarterToMonths = new Map<string, string[]>();
+  for (const m of months) {
+    const q = monthToQuarter(m);
+    const arr = quarterToMonths.get(q) ?? [];
+    arr.push(m);
+    quarterToMonths.set(q, arr);
+  }
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      values: Object.fromEntries(
+        periods.map((q) => {
+          const ms = quarterToMonths.get(q) ?? [];
+          const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
+          return [q, { variance, variancePct: null }];
+        }),
+      ),
+    })),
+    periods,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Aggregation
 // ---------------------------------------------------------------------------
 

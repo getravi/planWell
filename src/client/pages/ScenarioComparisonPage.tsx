@@ -17,10 +17,12 @@ import {
   buildVarianceGridMatrix,
   buildVarianceGridTsv,
   buildVarianceInsights,
+  collapsePivotVarianceRowsToQuarters,
   copyGrid,
   describeVarianceInsight,
   getMonths,
   pivotVarianceRows,
+  type Granularity,
   type VarianceInsight,
 } from "../pivot.ts";
 import { compactCurrency, currency, formatCell } from "../format.ts";
@@ -34,12 +36,14 @@ export function ScenarioComparisonPage({
   right,
   departmentHierarchy,
   accountHierarchy,
+  granularity,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
 }) {
   const [report, setReport] = useState<NarrativeReport | null>(null);
   const [narrativeLoading, setNarrativeLoading] = useState(false);
@@ -74,6 +78,7 @@ export function ScenarioComparisonPage({
         right={right}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
+        granularity={granularity}
       />
     </div>
   );
@@ -181,12 +186,14 @@ function VarianceView({
   right,
   departmentHierarchy,
   accountHierarchy,
+  granularity,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
 }) {
   const insights = buildVarianceInsights(rows);
   return (
@@ -205,6 +212,7 @@ function VarianceView({
         rows={rows}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
+        granularity={granularity}
       />
     </Panel>
   );
@@ -228,30 +236,36 @@ function VarianceGrid({
   rows,
   departmentHierarchy,
   accountHierarchy,
+  granularity,
 }: {
   rows: VarianceRow[];
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
+  granularity: Granularity;
 }) {
   const months = getMonths(rows);
-  const pivotRows = pivotVarianceRows(rows, departmentHierarchy, accountHierarchy);
-  if (pivotRows.length === 0) {
+  const rawPivotRows = pivotVarianceRows(rows, departmentHierarchy, accountHierarchy);
+  if (rawPivotRows.length === 0) {
     return <EmptyState title="No variance rows" body="Select scenarios with forecast values." />;
   }
+  const { rows: pivotRows, periods } =
+    granularity === "quarter"
+      ? collapsePivotVarianceRowsToQuarters(rawPivotRows, months)
+      : { rows: rawPivotRows, periods: months };
   return (
     <>
       <div className="grid-toolbar">
         <GhostButton
           type="button"
           aria-label="Copy grid"
-          onClick={() => copyGrid(buildVarianceGridTsv(months, pivotRows))}
+          onClick={() => copyGrid(buildVarianceGridTsv(periods, pivotRows))}
         >
           <Copy size={15} /> Copy grid
         </GhostButton>
         <ExportMenu
-          onCsv={() => { const m = buildVarianceGridMatrix(months, pivotRows); exportCsv("variance.csv", m.headers, m.rows); }}
-          onXlsx={() => { const m = buildVarianceGridMatrix(months, pivotRows); void exportXlsx("variance.xlsx", "Variance", m.headers, m.rows); }}
-          onPdf={() => { const m = buildVarianceGridMatrix(months, pivotRows); exportPdf("variance.pdf", "Scenario Variance", m.headers, m.rows); }}
+          onCsv={() => { const m = buildVarianceGridMatrix(periods, pivotRows); exportCsv("variance.csv", m.headers, m.rows); }}
+          onXlsx={() => { const m = buildVarianceGridMatrix(periods, pivotRows); void exportXlsx("variance.xlsx", "Variance", m.headers, m.rows); }}
+          onPdf={() => { const m = buildVarianceGridMatrix(periods, pivotRows); exportPdf("variance.pdf", "Scenario Variance", m.headers, m.rows); }}
         />
       </div>
       <div className="spreadsheet-wrap">
@@ -260,8 +274,8 @@ function VarianceGrid({
           <tr>
             <th>Department</th>
             <th>Account</th>
-            {months.map((month) => (
-              <th key={month}>{month}</th>
+            {periods.map((period) => (
+              <th key={period}>{period}</th>
             ))}
           </tr>
         </thead>
@@ -275,11 +289,11 @@ function VarianceGrid({
                 {row.department}
               </th>
               <td>{row.account}</td>
-              {months.map((month) => {
-                const cell = row.values[month];
+              {periods.map((period) => {
+                const cell = row.values[period];
                 return (
                   <td
-                    key={month}
+                    key={period}
                     className={`numeric-cell ${(cell?.variance ?? 0) >= 0 ? "positive" : "negative"}`}
                   >
                     {formatCell(row.account, cell?.variance ?? 0)}
