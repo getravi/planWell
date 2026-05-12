@@ -59,7 +59,7 @@ export function ActualsPage({
           />
         )}
       </Panel>
-      <Panel className="span-two">
+      <Panel>
         <div className="panel-heading">
           <h2>Historical revenue</h2>
         </div>
