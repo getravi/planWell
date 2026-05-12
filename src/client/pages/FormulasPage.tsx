@@ -1,20 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Save } from "lucide-react";
 import { useState } from "react";
+import { flattenMembers } from "../dimension-utils.ts";
 import { DEFAULT_FORMULAS } from "../../domain/formulaEngine.ts";
 import type { CoreAccount, ScenarioFormulas } from "../../domain/types.ts";
 import { client } from "../api.ts";
 import { Button, EmptyState, GhostButton, Input, Label, Panel, Select } from "../ui.tsx";
 
-const FORMULA_ACCOUNTS: CoreAccount[] = ["Revenue", "COGS", "Headcount", "OpEx"];
-
 export function FormulasPage() {
+  const dimensions = useQuery({ queryKey: ["dimensions"], queryFn: client.dimensions });
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
   const scenarioList = scenarios.data?.scenarios ?? [];
   const [selectedName, setSelectedName] = useState<string>("");
   const selected = scenarioList.find((s) => s.name === (selectedName || scenarioList[0]?.name));
 
-  if (scenarios.isLoading) return null;
+  if (scenarios.isLoading || dimensions.isLoading) return null;
   if (scenarioList.length === 0) {
     return (
       <Panel>
@@ -51,13 +51,24 @@ export function FormulasPage() {
           </Select>
         </label>
       </div>
-      {selected ? <FormulaEditor key={selected.id} scenario={selected} /> : null}
+      {selected ? (
+        <FormulaEditor
+          key={selected.id}
+          scenario={selected}
+          accounts={
+            dimensions.data
+              ? flattenMembers(dimensions.data.account).map((m) => m.name)
+              : ["Revenue", "COGS", "Headcount", "OpEx"]
+          }
+        />
+      ) : null}
     </Panel>
   );
 }
 
 function FormulaEditor({
   scenario,
+  accounts,
 }: {
   scenario: {
     id: string;
@@ -65,11 +76,12 @@ function FormulaEditor({
     locked: boolean;
     assumptions: import("../../domain/types.ts").ScenarioAssumptions;
   };
+  accounts: string[];
 }) {
   const queryClient = useQueryClient();
   const [formulas, setFormulas] = useState<ScenarioFormulas>(scenario.assumptions.formulas ?? {});
   const [validationState, setValidationState] = useState<
-    Partial<Record<CoreAccount, { ok: boolean; error?: string; pending: boolean }>>
+    Record<string, { ok: boolean; error?: string; pending: boolean }>
   >({});
   const isLocked = scenario.locked;
   const hasError = Object.values(validationState).some((s) => s && !s.ok && !s.pending);
@@ -82,7 +94,7 @@ function FormulaEditor({
     },
   });
 
-  const validate = async (account: CoreAccount, formula: string) => {
+  const validate = async (account: string, formula: string) => {
     setValidationState((prev) => ({ ...prev, [account]: { ok: false, pending: true } }));
     try {
       const result = await client.validateFormula(formula, account);
@@ -116,7 +128,7 @@ function FormulaEditor({
             </tr>
           </thead>
           <tbody>
-            {FORMULA_ACCOUNTS.map((account) => {
+            {accounts.map((account) => {
               const formula = formulas[account] ?? "";
               const state = validationState[account];
               return (
@@ -125,7 +137,7 @@ function FormulaEditor({
                   <td>
                     <Input
                       aria-label={`${account} formula`}
-                      placeholder={DEFAULT_FORMULAS[account]}
+                      placeholder={DEFAULT_FORMULAS[account as CoreAccount]}
                       value={formula}
                       disabled={isLocked}
                       onChange={(e) => {

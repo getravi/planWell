@@ -11,7 +11,7 @@ export type ActualRow = {
 
 export type ForecastRow = ActualRow;
 
-export type ScenarioFormulas = Partial<Record<CoreAccount, string>>;
+export type ScenarioFormulas = Partial<Record<string, string>>;
 
 export type CustomVariableKind = "input" | "calculated";
 

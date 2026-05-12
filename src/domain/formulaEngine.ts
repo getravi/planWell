@@ -151,7 +151,7 @@ export function validateCustomFormula(
 
 export function validateFormula(
   formula: string,
-  account: CoreAccount,
+  account: string,
   extraVars?: Record<string, number>,
 ): FormulaValidationResult {
   try {

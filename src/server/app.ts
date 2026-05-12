@@ -76,7 +76,7 @@ const customVarValidateSchema = z.object({
 
 const formulaValidateSchema = z.object({
   formula: z.string().min(1),
-  account: coreAccountEnum,
+  account: z.string(),
 });
 
 const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string() });

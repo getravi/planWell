@@ -1,6 +1,5 @@
 import type {
   ActualRow,
-  CoreAccount,
   CustomVariableDef,
   DimensionImpact,
   DimensionKind,
@@ -135,7 +134,7 @@ export const client = {
       method: "POST",
       body: JSON.stringify(scenario),
     }),
-  validateFormula: (formula: string, account: CoreAccount) =>
+  validateFormula: (formula: string, account: string) =>
     api<{ ok: true } | { ok: false; error: string }>("/api/scenarios/validate-formula", {
       method: "POST",
       body: JSON.stringify({ formula, account }),

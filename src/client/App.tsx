@@ -404,8 +404,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             <h1>{view}</h1>
           </div>
           <div className="scenario-pickers">
-
-            {availableYears.length > 0 && view !== "Site Settings" ? (
+            {availableYears.length > 0 && !isAdminView ? (
               <label className="page-selector">
                 <Select
                   aria-label="Year"

@@ -6,7 +6,6 @@ import { compareSeries, summarizeKpis } from "../domain/forecast.ts";
 import { validateFormula } from "../domain/formulaEngine.ts";
 import type {
   ActualRow,
-  CoreAccount,
   CustomVariableDef,
   DimensionImpact,
   DimensionKind,
@@ -112,7 +111,7 @@ export type Repository = {
   getMetricSummary(scenarioName?: string): MetricSummary;
   validateFormulaExpression(
     formula: string,
-    account: CoreAccount,
+    account: string,
   ): { ok: true } | { ok: false; error: string };
   listCustomVariables(): CustomVariableDef[];
   createCustomVariable(def: CustomVariableDef): CustomVariableDef;
