@@ -6,7 +6,7 @@ import { z } from "zod";
 import { parseActualsCsv } from "../domain/importer.ts";
 import { detectAnomalies } from "../domain/anomaly.ts";
 import { suggestDrivers } from "../domain/baseline.ts";
-import { coreAccounts, type ScenarioAssumptions, type ScenarioFormulas } from "../domain/types.ts";
+import { type ScenarioAssumptions, type ScenarioFormulas } from "../domain/types.ts";
 import { createAnalyst, generateNarrative, listAvailableModels, type Analyst } from "./analyst.ts";
 import { logger } from "../logger.ts";
 import { DimensionReferenceError, type Repository } from "./repository.ts";
@@ -26,8 +26,6 @@ const loginSchema = z.object({
 const csvImportSchema = z.object({
   csv: z.string().min(1),
 });
-
-const coreAccountEnum = z.enum(coreAccounts);
 
 const partialVarValuesSchema = z.record(z.string(), z.number().optional());
 
