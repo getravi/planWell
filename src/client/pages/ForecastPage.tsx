@@ -15,6 +15,7 @@ import {
   copyGrid,
   formatHorizonLabel,
   getMonths,
+  isFYPeriod,
   isMultiCellGrid,
   parsePastedGrid,
   pivotActualRows,
@@ -31,11 +32,7 @@ import { Button, EmptyState, ExportMenu, GhostButton, Input, Panel } from "../ui
 import { exportCsv, exportPdf, exportXlsx } from "../export.ts";
 import { RevenueChart } from "../components/RevenueChart.tsx";
 
-const PERCENT_VAR_IDS = new Set([
-  "revenueGrowthRate",
-  "cogsPctOfRevenue",
-  "headcountGrowthRate",
-]);
+const PERCENT_VAR_IDS = new Set(["revenueGrowthRate", "cogsPctOfRevenue", "headcountGrowthRate"]);
 
 export function ForecastPage({
   scenarios,
@@ -47,6 +44,7 @@ export function ForecastPage({
   accountHierarchy,
   customVarDefs = [],
   granularity,
+  selectedYear,
 }: {
   scenarios: ScenarioRecord[];
   selected: string;
@@ -56,6 +54,7 @@ export function ForecastPage({
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
   granularity: Granularity;
+  selectedYear: string;
   customVarDefs?: CustomVariableDef[];
 }) {
   const scenario = scenarios.find((item) => item.name === selected);
@@ -71,7 +70,9 @@ export function ForecastPage({
   const modelDepartments = orderedNamesFromMembers(flattenMembers(departmentHierarchy), [
     ...departments,
     ...rows.map((row) => row.department),
-    ...(departmentFilter === "__all__" ? Object.keys(scenario?.assumptions.varOverrides ?? {}) : []),
+    ...(departmentFilter === "__all__"
+      ? Object.keys(scenario?.assumptions.varOverrides ?? {})
+      : []),
   ]);
   return (
     <div className="grid two">
@@ -82,6 +83,7 @@ export function ForecastPage({
         departmentHierarchy={departmentHierarchy}
         departmentFilter={departmentFilter}
         varDefs={customVarDefs}
+        selectedYear={selectedYear}
       />
       <Panel className="span-two">
         <div className="panel-heading">
@@ -113,6 +115,7 @@ function ScenarioEditor({
   departmentHierarchy,
   departmentFilter,
   varDefs,
+  selectedYear,
 }: {
   scenario?: ScenarioRecord;
   months: string[];
@@ -120,6 +123,7 @@ function ScenarioEditor({
   departmentHierarchy: DimensionMember[];
   departmentFilter: string;
   varDefs: CustomVariableDef[];
+  selectedYear: string;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
@@ -135,10 +139,13 @@ function ScenarioEditor({
     const scenarioMonths = Object.values(active?.varOverrides ?? {}).flatMap((override) =>
       Object.keys(override.monthly ?? {}),
     );
-    return [...new Set([...months, ...scenarioMonths])].sort((left, right) =>
+    const allMonths = [...new Set([...months, ...scenarioMonths])].sort((left, right) =>
       left.localeCompare(right),
     );
-  }, [active, months]);
+    return selectedYear === "__all__"
+      ? allMonths
+      : allMonths.filter((m) => m.startsWith(selectedYear));
+  }, [active, months, selectedYear]);
   const departmentOptions = useMemo(
     () =>
       orderedOptionsFromMembers(departmentHierarchy, [
@@ -163,7 +170,10 @@ function ScenarioEditor({
     },
   });
 
-  const suggestions = useQuery({ queryKey: ["baseline-suggestions"], queryFn: client.baselineSuggestions });
+  const suggestions = useQuery({
+    queryKey: ["baseline-suggestions"],
+    queryFn: client.baselineSuggestions,
+  });
 
   const applySuggestions = () => {
     const data = suggestions.data;
@@ -278,7 +288,11 @@ function ScenarioEditor({
         <h2>Driver assumptions</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {!isLocked && suggestions.data && (
-            <GhostButton type="button" onClick={applySuggestions} title="Populate drivers from historical actuals">
+            <GhostButton
+              type="button"
+              onClick={applySuggestions}
+              title="Populate drivers from historical actuals"
+            >
               <Wand2 size={15} /> Suggest from actuals
             </GhostButton>
           )}
@@ -357,7 +371,9 @@ function ScenarioEditor({
                           }
                           onPaste={(event) => {
                             const rowIndex = Number(event.currentTarget.dataset.rowIndex ?? 0);
-                            const columnIndex = Number(event.currentTarget.dataset.columnIndex ?? 0);
+                            const columnIndex = Number(
+                              event.currentTarget.dataset.columnIndex ?? 0,
+                            );
                             const text = event.clipboardData.getData("text");
                             const lines = parsePastedGrid(text);
                             if (!isMultiCellGrid(lines)) return;
@@ -382,7 +398,9 @@ function ScenarioEditor({
           <Save size={16} /> {save.isPending ? "Saving…" : "Save scenario"}
         </Button>
         {recalculating && !save.isPending ? (
-          <span className="muted" style={{ fontSize: 13 }}>Recalculating forecast…</span>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Recalculating forecast…
+          </span>
         ) : null}
       </div>
       {save.error ? <p className="error">{save.error.message}</p> : null}
@@ -423,41 +441,50 @@ function ForecastGrid({
           <Copy size={15} /> Copy grid
         </GhostButton>
         <ExportMenu
-          onCsv={() => { const m = buildActualGridMatrix(periods, pivotRows); exportCsv("forecast.csv", m.headers, m.rows); }}
-          onXlsx={() => { const m = buildActualGridMatrix(periods, pivotRows); void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows); }}
-          onPdf={() => { const m = buildActualGridMatrix(periods, pivotRows); exportPdf("forecast.pdf", "Forecast", m.headers, m.rows); }}
+          onCsv={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            exportCsv("forecast.csv", m.headers, m.rows);
+          }}
+          onXlsx={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            void exportXlsx("forecast.xlsx", "Forecast", m.headers, m.rows);
+          }}
+          onPdf={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            exportPdf("forecast.pdf", "Forecast", m.headers, m.rows);
+          }}
         />
       </div>
       <div className="spreadsheet-wrap">
-      <table className="spreadsheet-grid">
-        <thead>
-          <tr>
-            <th>Department</th>
-            <th>Account</th>
-            {periods.map((period) => (
-              <th key={period}>{period}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pivotRows.map((row) => (
-            <tr
-              key={`${row.department}-${row.account}`}
-              className={row.isParent ? "department-rollup-row" : undefined}
-            >
-              <th scope="row" style={{ paddingLeft: `${8 + row.hierarchyLevel * 16}px` }}>
-                {row.department}
-              </th>
-              <td>{row.account}</td>
+        <table className="spreadsheet-grid">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Account</th>
               {periods.map((period) => (
-                <td key={period} className="numeric-cell">
-                  {formatCell(row.account, row.values[period] ?? 0)}
-                </td>
+                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>{period}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pivotRows.map((row) => (
+              <tr
+                key={`${row.department}-${row.account}`}
+                className={row.isParent ? "department-rollup-row" : undefined}
+              >
+                <th scope="row" style={{ paddingLeft: `${8 + row.hierarchyLevel * 16}px` }}>
+                  {row.department}
+                </th>
+                <td>{row.account}</td>
+                {periods.map((period) => (
+                  <td key={period} className={`numeric-cell${isFYPeriod(period) ? " fy-total-col" : ""}`}>
+                    {formatCell(row.account, row.values[period] ?? 0)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   );

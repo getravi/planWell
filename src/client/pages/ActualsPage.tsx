@@ -19,6 +19,7 @@ import {
   collapsePivotActualRowsToQuarters,
   copyGrid,
   getMonths,
+  isFYPeriod,
   pivotActualRows,
   summarizeRows,
   type Granularity,
@@ -41,10 +42,10 @@ export function ActualsPage({
   const filteredSummary = summarizeRows(actuals);
   const anomalyQuery = useQuery({ queryKey: ["anomalies"], queryFn: client.anomalies });
   const anomalySet = new Set(
-    (anomalyQuery.data?.anomalies ?? []).map((f) => `${f.department}|${f.account}|${f.month}`)
+    (anomalyQuery.data?.anomalies ?? []).map((f) => `${f.department}|${f.account}|${f.month}`),
   );
   const anomalyMap = new Map(
-    (anomalyQuery.data?.anomalies ?? []).map((f) => [`${f.department}|${f.account}|${f.month}`, f])
+    (anomalyQuery.data?.anomalies ?? []).map((f) => [`${f.department}|${f.account}|${f.month}`, f]),
   );
 
   return (
@@ -74,7 +75,8 @@ export function ActualsPage({
           <h2>Actuals by department and account</h2>
           {(anomalyQuery.data?.anomalies?.length ?? 0) > 0 && (
             <span style={{ color: "var(--warning, #d97706)", fontSize: 13 }}>
-              {anomalyQuery.data!.anomalies.length} anomaly{anomalyQuery.data!.anomalies.length !== 1 ? "s" : ""} detected
+              {anomalyQuery.data!.anomalies.length} anomaly
+              {anomalyQuery.data!.anomalies.length !== 1 ? "s" : ""} detected
             </span>
           )}
         </div>
@@ -126,66 +128,76 @@ function ActualsGrid({
           <Copy size={15} /> Copy grid
         </GhostButton>
         <ExportMenu
-          onCsv={() => { const m = buildActualGridMatrix(periods, pivotRows); exportCsv("actuals.csv", m.headers, m.rows); }}
-          onXlsx={() => { const m = buildActualGridMatrix(periods, pivotRows); void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows); }}
-          onPdf={() => { const m = buildActualGridMatrix(periods, pivotRows); exportPdf("actuals.pdf", "Actuals", m.headers, m.rows); }}
+          onCsv={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            exportCsv("actuals.csv", m.headers, m.rows);
+          }}
+          onXlsx={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            void exportXlsx("actuals.xlsx", "Actuals", m.headers, m.rows);
+          }}
+          onPdf={() => {
+            const m = buildActualGridMatrix(periods, pivotRows);
+            exportPdf("actuals.pdf", "Actuals", m.headers, m.rows);
+          }}
         />
       </div>
       <div className="spreadsheet-wrap">
-      <table className="spreadsheet-grid">
-        <thead>
-          <tr>
-            <th>Department</th>
-            <th>Account</th>
-            {periods.map((period) => (
-              <th key={period}>{period}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pivotRows.map((row) => (
-            <tr
-              key={`${row.department}-${row.account}`}
-              className={row.isParent ? "department-rollup-row" : undefined}
-            >
-              <th scope="row" style={{ paddingLeft: `${8 + row.hierarchyLevel * 16}px` }}>
-                {row.department}
-              </th>
-              <td>{row.account}</td>
-              {periods.map((period) => {
-                const cellKey = `${row.department}|${row.account}|${period}`;
-                const isAnomaly = granularity === "month" && anomalySet.has(cellKey);
-                const flag = granularity === "month" ? anomalyMap.get(cellKey) : undefined;
-                return (
-                  <td
-                    key={period}
-                    className="numeric-cell"
-                    style={isAnomaly ? { background: "rgba(217,119,6,0.08)" } : undefined}
-                    title={flag ? `Anomaly: ${flag.reason}` : undefined}
-                  >
-                    {formatCell(row.account, row.values[period] ?? 0)}
-                    {isAnomaly && (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          background: "#d97706",
-                          marginLeft: 4,
-                          verticalAlign: "middle",
-                          flexShrink: 0,
-                        }}
-                        aria-label="anomaly"
-                      />
-                    )}
-                  </td>
-                );
-              })}
+        <table className="spreadsheet-grid">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Account</th>
+              {periods.map((period) => (
+                <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>{period}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pivotRows.map((row) => (
+              <tr
+                key={`${row.department}-${row.account}`}
+                className={row.isParent ? "department-rollup-row" : undefined}
+              >
+                <th scope="row" style={{ paddingLeft: `${8 + row.hierarchyLevel * 16}px` }}>
+                  {row.department}
+                </th>
+                <td>{row.account}</td>
+                {periods.map((period) => {
+                  const cellKey = `${row.department}|${row.account}|${period}`;
+                  const isAnomaly = granularity === "month" && anomalySet.has(cellKey);
+                  const flag = granularity === "month" ? anomalyMap.get(cellKey) : undefined;
+                  const isFY = isFYPeriod(period);
+                  return (
+                    <td
+                      key={period}
+                      className={`numeric-cell${isFY ? " fy-total-col" : ""}`}
+                      style={isAnomaly ? { background: "rgba(217,119,6,0.08)" } : undefined}
+                      title={flag ? `Anomaly: ${flag.reason}` : undefined}
+                    >
+                      {formatCell(row.account, row.values[period] ?? 0)}
+                      {isAnomaly && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: "#d97706",
+                            marginLeft: 4,
+                            verticalAlign: "middle",
+                            flexShrink: 0,
+                          }}
+                          aria-label="anomaly"
+                        />
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   );

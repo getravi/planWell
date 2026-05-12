@@ -256,30 +256,47 @@ export function getQuarters(months: string[]): string[] {
   return [...new Set(months.map(monthToQuarter))].sort();
 }
 
-/** Collapses pivoted actual/forecast rows to quarter buckets. Headcount uses closing balance (last month in quarter); all other accounts are summed. */
+export function isFYPeriod(period: string): boolean {
+  return period.endsWith("-FY");
+}
+
+/** Collapses pivoted actual/forecast rows to quarter buckets with year totals. Headcount uses closing balance; all other accounts are summed. */
 export function collapsePivotActualRowsToQuarters(
   rows: PivotActualRow[],
   months: string[],
 ): { rows: PivotActualRow[]; periods: string[] } {
-  const periods = getQuarters(months);
+  const quarters = getQuarters(months);
   const quarterToMonths = new Map<string, string[]>();
+  const yearToMonths = new Map<string, string[]>();
   for (const m of months) {
     const q = monthToQuarter(m);
-    const arr = quarterToMonths.get(q) ?? [];
-    arr.push(m);
-    quarterToMonths.set(q, arr);
+    const y = m.slice(0, 4);
+    const qa = quarterToMonths.get(q) ?? [];
+    qa.push(m);
+    quarterToMonths.set(q, qa);
+    const ya = yearToMonths.get(y) ?? [];
+    ya.push(m);
+    yearToMonths.set(y, ya);
   }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))].sort();
+  const periods: string[] = [];
+  for (const year of years) {
+    periods.push(...quarters.filter((q) => q.startsWith(year)));
+    periods.push(`${year}-FY`);
+  }
+  const getValue = (row: PivotActualRow, ms: string[]) =>
+    row.account === "Headcount"
+      ? (row.values[ms.at(-1)!] ?? 0)
+      : ms.reduce((sum, m) => sum + (row.values[m] ?? 0), 0);
   return {
     rows: rows.map((row) => ({
       ...row,
       values: Object.fromEntries(
-        periods.map((q) => {
-          const ms = quarterToMonths.get(q) ?? [];
-          const value =
-            row.account === "Headcount"
-              ? (row.values[ms.at(-1)!] ?? 0)
-              : ms.reduce((sum, m) => sum + (row.values[m] ?? 0), 0);
-          return [q, value];
+        periods.map((p) => {
+          const ms = isFYPeriod(p)
+            ? (yearToMonths.get(p.slice(0, 4)) ?? [])
+            : (quarterToMonths.get(p) ?? []);
+          return [p, getValue(row, ms)];
         }),
       ),
     })),
@@ -287,27 +304,40 @@ export function collapsePivotActualRowsToQuarters(
   };
 }
 
-/** Collapses pivoted variance rows to quarter buckets. Variance is summed; variancePct is set to null at quarter level. */
+/** Collapses pivoted variance rows to quarter buckets with year totals. Variance is summed; variancePct is null at aggregated level. */
 export function collapsePivotVarianceRowsToQuarters(
   rows: PivotVarianceRow[],
   months: string[],
 ): { rows: PivotVarianceRow[]; periods: string[] } {
-  const periods = getQuarters(months);
+  const quarters = getQuarters(months);
   const quarterToMonths = new Map<string, string[]>();
+  const yearToMonths = new Map<string, string[]>();
   for (const m of months) {
     const q = monthToQuarter(m);
-    const arr = quarterToMonths.get(q) ?? [];
-    arr.push(m);
-    quarterToMonths.set(q, arr);
+    const y = m.slice(0, 4);
+    const qa = quarterToMonths.get(q) ?? [];
+    qa.push(m);
+    quarterToMonths.set(q, qa);
+    const ya = yearToMonths.get(y) ?? [];
+    ya.push(m);
+    yearToMonths.set(y, ya);
+  }
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))].sort();
+  const periods: string[] = [];
+  for (const year of years) {
+    periods.push(...quarters.filter((q) => q.startsWith(year)));
+    periods.push(`${year}-FY`);
   }
   return {
     rows: rows.map((row) => ({
       ...row,
       values: Object.fromEntries(
-        periods.map((q) => {
-          const ms = quarterToMonths.get(q) ?? [];
+        periods.map((p) => {
+          const ms = isFYPeriod(p)
+            ? (yearToMonths.get(p.slice(0, 4)) ?? [])
+            : (quarterToMonths.get(p) ?? []);
           const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
-          return [q, { variance, variancePct: null }];
+          return [p, { variance, variancePct: null }];
         }),
       ),
     })),
@@ -425,7 +455,10 @@ function sumAccount(rows: ActualRow[], account: string): number {
 
 function closingBalance(rows: ActualRow[]): number {
   if (rows.length === 0) return 0;
-  const lastMonth = rows.map((r) => r.month).sort().at(-1)!;
+  const lastMonth = rows
+    .map((r) => r.month)
+    .sort()
+    .at(-1)!;
   return rows.filter((r) => r.month === lastMonth).reduce((t, r) => t + r.value, 0);
 }
 

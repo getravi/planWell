@@ -1515,6 +1515,11 @@ details[open] .export-menu-chevron {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.spreadsheet-grid .fy-total-col {
+  background: var(--sidebar-accent, #f1f5f9);
+  font-weight: 600;
+  border-left: 2px solid var(--border, #e2e8f0);
+}
 .spreadsheet-grid .input {
   border: 0;
   border-radius: 0;
