@@ -7,6 +7,12 @@ import { createFileRepository } from "./repository.ts";
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 8787);
 const app = createApp({ repo: createFileRepository(process.env.SQLITE_PATH) });
 
+app.get("/architecture", (c) => {
+  const path = "./docs/architecture.html";
+  if (existsSync(path)) return c.html(readFileSync(path, "utf-8"));
+  return c.notFound();
+});
+
 app.use("/*", serveStatic({ root: "./dist" }));
 app.get("/*", (c) => {
   if (existsSync("./dist/index.html")) {
