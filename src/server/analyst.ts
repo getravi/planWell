@@ -161,7 +161,9 @@ class GeminiAnalyst implements Analyst {
         return { answer: text, provider: "gemini", citations: citationsCollected };
       }
 
-      const modelParts = calls.map((c) => ({ functionCall: { name: c.name, args: c.args } }));
+      // Preserve raw parts (including thoughtSignature) so thinking models don't reject the next turn
+      const rawParts = response.candidates?.[0]?.content?.parts as Record<string, unknown>[] | undefined;
+      const modelParts = rawParts ?? calls.map((c) => ({ functionCall: { name: c.name, args: c.args } }));
       contents.push({ role: "model", parts: modelParts });
 
       const responseParts = calls.map((c) => {
