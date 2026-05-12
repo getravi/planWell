@@ -471,6 +471,38 @@ describe("PlanWell API", () => {
     ).toBe(2000);
   });
 
+  it("adds formula-only actuals accounts to dimensions", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    repo.replaceActuals([
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 400 },
+    ]);
+
+    const saveFormulas = await app.request("/api/actuals/formulas", {
+      method: "PUT",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ formulas: { "Net Profit": "Revenue - COGS" } }),
+    });
+    expect(saveFormulas.status).toBe(200);
+
+    const actuals = await app.request("/api/cube/actuals", { headers: { cookie } });
+    const actualsBody = await actuals.json();
+    expect(
+      actualsBody.rows.some((row: { account: string; value: number }) => {
+        return row.account === "Net Profit" && row.value === 600;
+      }),
+    ).toBe(true);
+
+    const dimensions = await app.request("/api/dimensions", { headers: { cookie } });
+    const dimensionsBody = await dimensions.json();
+    expect(
+      dimensionsBody.account.some((account: { name: string }) => account.name === "Net Profit"),
+    ).toBe(true);
+  });
+
   it("rejects hierarchy cycles and requires force before deleting referenced members", async () => {
     const repo = createTestRepository();
     const app = createApp({ repo });

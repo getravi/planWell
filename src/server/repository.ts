@@ -34,6 +34,7 @@ import {
   deleteDimensionMember,
   upsertDimensions,
   flattenDimensionNames,
+  insertNamedDimensionIfMissing,
 } from "./db/dimensions.ts";
 import {
   listVersions,
@@ -351,6 +352,7 @@ function createRepository(db: DatabaseSync): Repository {
         db.prepare("delete from scenario_formulas where scenario_id = ?").run("actuals");
         for (const [account, formula] of Object.entries(formulas)) {
           if (formula) {
+            insertNamedDimensionIfMissing(db, "account", account, null);
             db.prepare(
               "insert into scenario_formulas (scenario_id, account, formula) values (?, ?, ?)",
             ).run("actuals", account, formula);
