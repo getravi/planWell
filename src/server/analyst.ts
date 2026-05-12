@@ -398,8 +398,10 @@ function extractGeminiCitations(
 }
 
 function citationLabel(tool: string, input: Record<string, unknown>): string {
-  if (tool === "getMetricSummary")
-    return input.scenario ? `${input.scenario} summary` : "Actuals summary";
+  if (tool === "getMetricSummary") {
+    const scenario = input.scenario;
+    return typeof scenario === "string" && scenario ? `${scenario} summary` : "Actuals summary";
+  }
   if (tool === "compareScenarios") return `${String(input.left)} vs ${String(input.right)}`;
   if (tool === "listActuals") return "Historical actuals";
   if (tool === "detectAnomalies") return "Anomaly scan";

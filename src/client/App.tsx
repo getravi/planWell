@@ -40,6 +40,7 @@ import {
 import { summarizeRows, summarizeVarianceRows } from "./pivot.ts";
 import { buildDescendantLookup, orderedOptionsFromMembers } from "./dimension-utils.ts";
 import { currency, number, percent } from "./format.ts";
+import type { ActualRow } from "../domain/types.ts";
 
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
@@ -66,6 +67,62 @@ export default function App() {
       <PlanWellApp />
     </QueryClientProvider>
   );
+}
+
+type KpiYoy = {
+  grossMargin: string | null;
+  headcount: string | null;
+  opexRatio: string | null;
+  revenue: string | null;
+};
+
+function yearFromMonth(month: string): number | null {
+  const year = Number(month.slice(0, 4));
+  return Number.isFinite(year) ? year : null;
+}
+
+function sameMonthNumbers(rows: ActualRow[]): Set<string> {
+  return new Set(rows.map((row) => row.month.slice(5, 7)));
+}
+
+function formatRelativeYoy(current: number, prior: number): string | null {
+  if (prior === 0) return null;
+  const change = current / prior - 1;
+  return `${change >= 0 ? "+" : "-"}${percent(Math.abs(change))} YoY`;
+}
+
+function formatPointYoy(current: number | null | undefined, prior: number | null | undefined) {
+  if (current == null || prior == null) return null;
+  const delta = (current - prior) * 100;
+  return `${delta >= 0 ? "+" : "-"}${number(Math.abs(delta))} pts YoY`;
+}
+
+function buildForecastYoy(rows: ActualRow[], selectedYear: string): KpiYoy | undefined {
+  if (rows.length === 0) return undefined;
+  const years = [
+    ...new Set(rows.map((row) => yearFromMonth(row.month)).filter((y) => y != null)),
+  ].sort((left, right) => left - right);
+  const currentYearRaw =
+    selectedYear === "__all__" ? years.at(-1) : Number.parseInt(selectedYear, 10);
+  if (currentYearRaw === undefined || !Number.isFinite(currentYearRaw)) return undefined;
+  const currentYear = currentYearRaw;
+  const priorYear = currentYear - 1;
+  const currentRows = rows.filter((row) => row.month.startsWith(String(currentYear)));
+  const currentMonthNumbers = sameMonthNumbers(currentRows);
+  const priorRows = rows.filter(
+    (row) =>
+      row.month.startsWith(String(priorYear)) && currentMonthNumbers.has(row.month.slice(5, 7)),
+  );
+  if (currentRows.length === 0 || priorRows.length === 0) return undefined;
+
+  const current = summarizeRows(currentRows).kpis;
+  const prior = summarizeRows(priorRows).kpis;
+  return {
+    grossMargin: formatRelativeYoy(current.grossMargin, prior.grossMargin),
+    headcount: formatRelativeYoy(current.headcount, prior.headcount),
+    opexRatio: formatPointYoy(current.opexRatio, prior.opexRatio),
+    revenue: formatRelativeYoy(current.revenue, prior.revenue),
+  };
 }
 
 function PlanWellApp() {
@@ -230,6 +287,25 @@ function Workbench({ userEmail }: { userEmail: string }) {
     ];
     return yearForecastRows.filter((row) => allowedDepartments.includes(row.department));
   }, [departmentDescendants, forecastDepartment, yearForecastRows]);
+  const yoyForecastRows = useMemo(() => {
+    const rows =
+      selectedYear === "__all__"
+        ? blendedForecastRows
+        : blendedForecastRows.filter(
+            (row) =>
+              row.month.startsWith(selectedYear) ||
+              row.month.startsWith(String(Number(selectedYear) - 1)),
+          );
+    if (forecastDepartment === "__all__") return rows;
+    const allowedDepartments = departmentDescendants.get(forecastDepartment) ?? [
+      forecastDepartment,
+    ];
+    return rows.filter((row) => allowedDepartments.includes(row.department));
+  }, [blendedForecastRows, departmentDescendants, forecastDepartment, selectedYear]);
+  const forecastYoy = useMemo(
+    () => buildForecastYoy(yoyForecastRows, selectedYear),
+    [selectedYear, yoyForecastRows],
+  );
   const actualsDepartmentOptions = useMemo(
     () =>
       orderedOptionsFromMembers(
@@ -503,6 +579,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
           <KpiStrip
             summary={currentSummary}
             variant={view === "Scenario Comparison" ? "variance" : "standard"}
+            yoy={view === "Forecast Model" ? forecastYoy : undefined}
           />
         ) : null}
 
@@ -518,6 +595,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
             scenarios={scenarios.data?.scenarios ?? []}
             selected={leftScenario}
             rows={filteredForecastRows}
+            actualRows={yearActualRows}
             departmentFilter={forecastDepartment}
             departments={forecastDepartments}
             departmentHierarchy={dimensions.data?.department ?? []}
@@ -582,9 +660,11 @@ function Workbench({ userEmail }: { userEmail: string }) {
 function KpiStrip({
   summary,
   variant = "standard",
+  yoy,
 }: {
   summary?: MetricSummary;
   variant?: "standard" | "variance";
+  yoy?: KpiYoy;
 }) {
   const kpis = summary?.kpis;
   if (variant === "variance") {
@@ -599,19 +679,42 @@ function KpiStrip({
   }
   return (
     <section className="kpi-strip">
-      <Kpi label="Revenue" value={currency(kpis?.revenue ?? 0)} />
+      <Kpi
+        label="Revenue"
+        value={currency(kpis?.revenue ?? 0)}
+        detail={yoy?.revenue ?? undefined}
+      />
       <Kpi
         label="Gross margin"
         value={currency(kpis?.grossMargin ?? 0)}
         detail={percent(kpis?.grossMarginPct)}
+        subdetail={yoy?.grossMargin ?? undefined}
       />
-      <Kpi label="OpEx ratio" value={percent(kpis?.opexRatio)} />
-      <Kpi label="Headcount" value={number(kpis?.headcount ?? 0)} />
+      <Kpi
+        label="OpEx ratio"
+        value={percent(kpis?.opexRatio)}
+        detail={yoy?.opexRatio ?? undefined}
+      />
+      <Kpi
+        label="Headcount"
+        value={number(kpis?.headcount ?? 0)}
+        detail={yoy?.headcount ?? undefined}
+      />
     </section>
   );
 }
 
-function Kpi({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function Kpi({
+  label,
+  value,
+  detail,
+  subdetail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  subdetail?: string;
+}) {
   return (
     <Card className="kpi">
       <CardHeader>
@@ -620,6 +723,7 @@ function Kpi({ label, value, detail }: { label: string; value: string; detail?: 
       <CardContent>
         <CardTitle>{value}</CardTitle>
         {detail ? <small>{detail}</small> : null}
+        {subdetail ? <small>{subdetail}</small> : null}
       </CardContent>
     </Card>
   );

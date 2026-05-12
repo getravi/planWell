@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Save, Settings2, Wand2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type {
+  ActualRow,
   CustomVariableDef,
   DimensionMember,
   ForecastRow,
   ScenarioAssumptions,
+  VarValues,
 } from "../../domain/types.ts";
 import { client, type ScenarioRecord } from "../api.ts";
 import {
@@ -24,6 +26,7 @@ import {
 } from "../pivot.ts";
 import {
   buildAncestorLookup,
+  buildDescendantLookup,
   flattenMembers,
   orderedNamesFromMembers,
   orderedOptionsFromMembers,
@@ -35,10 +38,89 @@ import { RevenueChart } from "../components/RevenueChart.tsx";
 
 const PERCENT_VAR_IDS = new Set(["revenueGrowthRate", "cogsPctOfRevenue", "headcountGrowthRate"]);
 
+function driverCellKey(varId: string, month: string): string {
+  return `${varId}::${month}`;
+}
+
+function roundDriverValue(value: number): number {
+  return Math.round(value * 1_000_000_000_000) / 1_000_000_000_000;
+}
+
+function formatPercentDriver(value: number): string {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function formatDriverDisplay(value: number, isPercent: boolean): string {
+  return isPercent ? formatPercentDriver(value) : String(value);
+}
+
+function formatDriverEditValue(value: number, isPercent: boolean): string {
+  return isPercent ? String(value) : String(value);
+}
+
+function parseDriverInput(rawValue: string, isPercent: boolean): number | null {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+  const hasPercentSign = trimmed.includes("%");
+  const normalized = trimmed.replace(/[$,%]/g, "");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return isPercent && hasPercentSign ? parsed / 100 : parsed;
+}
+
+function buildActualDriverValues(
+  actualRows: ActualRow[],
+  selectedDepartment: string,
+  departmentHierarchy: DimensionMember[],
+): Record<string, Partial<VarValues>> {
+  if (actualRows.length === 0 || !selectedDepartment) return {};
+
+  const descendantLookup = buildDescendantLookup(departmentHierarchy);
+  const allowedDepartments =
+    selectedDepartment === "__all__"
+      ? null
+      : new Set(descendantLookup.get(selectedDepartment) ?? [selectedDepartment]);
+  const monthlyAccounts = new Map<string, Map<string, number>>();
+
+  for (const row of actualRows) {
+    if (allowedDepartments && !allowedDepartments.has(row.department)) continue;
+    const accounts = monthlyAccounts.get(row.month) ?? new Map<string, number>();
+    accounts.set(row.account, (accounts.get(row.account) ?? 0) + row.value);
+    monthlyAccounts.set(row.month, accounts);
+  }
+
+  const months = [...monthlyAccounts.keys()].sort((left, right) => left.localeCompare(right));
+  const values: Record<string, Partial<VarValues>> = {};
+
+  for (let index = 0; index < months.length; index += 1) {
+    const month = months[index]!;
+    const accounts = monthlyAccounts.get(month)!;
+    const previousAccounts = index > 0 ? monthlyAccounts.get(months[index - 1]!) : undefined;
+    const revenue = accounts.get("Revenue") ?? 0;
+    const cogs = accounts.get("COGS") ?? 0;
+    const headcount = accounts.get("Headcount") ?? 0;
+    const opex = accounts.get("OpEx") ?? 0;
+    const previousRevenue = previousAccounts?.get("Revenue") ?? 0;
+    const previousHeadcount = previousAccounts?.get("Headcount") ?? 0;
+
+    values[month] = {
+      revenueGrowthRate: roundDriverValue(previousRevenue > 0 ? revenue / previousRevenue - 1 : 0),
+      cogsPctOfRevenue: roundDriverValue(revenue > 0 ? cogs / revenue : 0),
+      headcountGrowthRate: roundDriverValue(
+        previousHeadcount > 0 ? headcount / previousHeadcount - 1 : 0,
+      ),
+      costPerHead: roundDriverValue(headcount > 0 ? opex / headcount : 0),
+    };
+  }
+
+  return values;
+}
+
 export function ForecastPage({
   scenarios,
   selected,
   rows,
+  actualRows,
   departmentFilter,
   departments,
   departmentHierarchy,
@@ -49,6 +131,7 @@ export function ForecastPage({
   scenarios: ScenarioRecord[];
   selected: string;
   rows: ForecastRow[];
+  actualRows: ActualRow[];
   departmentFilter: string;
   departments: string[];
   departmentHierarchy: DimensionMember[];
@@ -81,6 +164,7 @@ export function ForecastPage({
         departments={modelDepartments}
         departmentHierarchy={departmentHierarchy}
         departmentFilter={departmentFilter}
+        actualRows={actualRows}
         varDefs={customVarDefs}
         selectedYear={selectedYear}
       />
@@ -112,6 +196,7 @@ function ScenarioEditor({
   departments,
   departmentHierarchy,
   departmentFilter,
+  actualRows,
   varDefs,
   selectedYear,
 }: {
@@ -120,11 +205,13 @@ function ScenarioEditor({
   departments: string[];
   departmentHierarchy: DimensionMember[];
   departmentFilter: string;
+  actualRows: ActualRow[];
   varDefs: CustomVariableDef[];
   selectedYear: string;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<ScenarioAssumptions | null>(null);
+  const [editingCells, setEditingCells] = useState<Record<string, string>>({});
   const [recalculating, setRecalculating] = useState(false);
   const recalcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const active = draft ?? scenario?.assumptions;
@@ -155,6 +242,10 @@ function ScenarioEditor({
   const selectedDepartment = departmentOptions.includes(departmentFilter)
     ? departmentFilter
     : (departmentOptions[0] ?? "");
+  const actualDriverValues = useMemo(
+    () => buildActualDriverValues(actualRows, selectedDepartment, departmentHierarchy),
+    [actualRows, departmentHierarchy, selectedDepartment],
+  );
   const save = useMutation({
     mutationFn: client.saveScenario,
     onSuccess: async () => {
@@ -232,11 +323,8 @@ function ScenarioEditor({
       for (let columnIndex = 0; columnIndex < lines[rowIndex].length; columnIndex += 1) {
         const month = monthOptions[startColumn + columnIndex];
         if (!month) continue;
-        const rawValue = lines[rowIndex][columnIndex].trim().replace(/[$,%]/g, "");
-        if (!rawValue) continue;
-        const parsed = Number(rawValue);
-        if (!Number.isFinite(parsed)) continue;
-        const value = parsed / (isPercent ? 100 : 1);
+        const value = parseDriverInput(lines[rowIndex][columnIndex], isPercent);
+        if (value === null) continue;
         const deptOverride = next.varOverrides?.[selectedDepartment] ?? {};
         next.varOverrides = {
           ...next.varOverrides,
@@ -271,6 +359,9 @@ function ScenarioEditor({
   };
 
   const resolveVarDisplay = (varId: string, month: string): number => {
+    const actualValue = actualDriverValues[month]?.[varId];
+    if (actualValue !== undefined) return actualValue;
+
     const def = varDefs.find((d) => d.id === varId);
     let value = def?.defaultValue ?? 0;
     for (const ancestor of ancestorLookup.get(selectedDepartment) ?? []) {
@@ -278,6 +369,38 @@ function ScenarioEditor({
     }
     value = active.varOverrides?.[selectedDepartment]?.monthly?.[month]?.[varId] ?? value;
     return value;
+  };
+  const isActualizedDriver = (varId: string, month: string) =>
+    actualDriverValues[month]?.[varId] !== undefined;
+
+  const focusDriverCell = (rowIndex: number, columnIndex: number) => {
+    const selector = `.driver-matrix input[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]:not(:disabled)`;
+    const target = document.querySelector<HTMLInputElement>(selector);
+    target?.focus();
+    target?.select();
+  };
+
+  const handleDriverKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    columnIndex: number,
+  ) => {
+    const movements: Record<string, [number, number]> = {
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1],
+      ArrowUp: [-1, 0],
+    };
+    const movement = movements[event.key];
+    if (!movement) return;
+    event.preventDefault();
+    focusDriverCell(rowIndex + movement[0], columnIndex + movement[1]);
+  };
+
+  const displayVarInput = (varId: string, month: string, isPercent: boolean): string => {
+    const key = driverCellKey(varId, month);
+    if (editingCells[key] !== undefined) return editingCells[key];
+    return formatDriverDisplay(resolveVarDisplay(varId, month), isPercent);
   };
 
   return (
@@ -312,7 +435,7 @@ function ScenarioEditor({
               const isPercent = PERCENT_VAR_IDS.has(def.id);
               const cells = monthOptions.map((month) => {
                 const v = resolveVarDisplay(def.id, month);
-                return isPercent ? (v * 100).toFixed(1) : String(v);
+                return formatDriverDisplay(v, isPercent);
               });
               return [def.label, ...cells].join("\t");
             });
@@ -352,20 +475,37 @@ function ScenarioEditor({
                           aria-label={`${def.label} ${month}`}
                           data-column-index={colIndex}
                           data-row-index={inputVarDefs.indexOf(def)}
-                          disabled={isLocked}
-                          type="number"
-                          step={isPercent ? 0.1 : 100}
-                          value={
-                            isPercent
-                              ? resolveVarDisplay(def.id, month) * 100
-                              : resolveVarDisplay(def.id, month)
+                          disabled={isLocked || isActualizedDriver(def.id, month)}
+                          inputMode="decimal"
+                          type="text"
+                          value={displayVarInput(def.id, month, isPercent)}
+                          onBlur={() =>
+                            setEditingCells((current) => {
+                              const next = { ...current };
+                              delete next[driverCellKey(def.id, month)];
+                              return next;
+                            })
                           }
-                          onChange={(event) =>
-                            updateVar(
-                              month,
-                              def.id,
-                              Number(event.target.value) / (isPercent ? 100 : 1),
-                            )
+                          onChange={(event) => {
+                            const nextText = event.target.value;
+                            setEditingCells((current) => ({
+                              ...current,
+                              [driverCellKey(def.id, month)]: nextText,
+                            }));
+                            const value = parseDriverInput(nextText, isPercent);
+                            if (value !== null) updateVar(month, def.id, value);
+                          }}
+                          onFocus={() =>
+                            setEditingCells((current) => ({
+                              ...current,
+                              [driverCellKey(def.id, month)]: formatDriverEditValue(
+                                resolveVarDisplay(def.id, month),
+                                isPercent,
+                              ),
+                            }))
+                          }
+                          onKeyDown={(event) =>
+                            handleDriverKeyDown(event, inputVarDefs.indexOf(def), colIndex)
                           }
                           onPaste={(event) => {
                             const rowIndex = Number(event.currentTarget.dataset.rowIndex ?? 0);

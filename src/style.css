@@ -976,16 +976,22 @@ label {
 .driver-matrix-wrap {
   overflow-x: auto;
   margin-bottom: 16px;
+  max-width: 100%;
 }
 .driver-matrix {
-  min-width: 860px;
+  min-width: 1320px;
+  table-layout: fixed;
+  width: 100%;
 }
-.driver-matrix td {
-  min-width: 118px;
+.driver-matrix th:first-child {
+  width: 180px;
 }
 .driver-matrix .input {
+  font-variant-numeric: tabular-nums;
   min-height: 34px;
   padding: 6px 8px;
+  text-align: right;
+  width: 100%;
 }
 .sample-links {
   display: flex;
@@ -1538,6 +1544,9 @@ details[open] .export-menu-chevron {
   outline: 2px solid var(--blue);
   outline-offset: -2px;
   background: white;
+}
+.spreadsheet-grid.driver-matrix {
+  min-width: 1320px;
 }
 .formula-badge {
   display: inline-block;

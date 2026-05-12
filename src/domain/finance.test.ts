@@ -474,9 +474,24 @@ describe("buildForecast with actuals formulas", () => {
     ];
     const actualsFormulas = { "Net Profit": "Revenue - COGS - OpEx" };
     const builtinDefs: CustomVariableDef[] = [
-      { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
-      { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0.45 },
-      { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+      {
+        id: "revenueGrowthRate",
+        label: "Revenue Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
+      {
+        id: "cogsPctOfRevenue",
+        label: "COGS % of Revenue",
+        kind: "input" as const,
+        defaultValue: 0.45,
+      },
+      {
+        id: "headcountGrowthRate",
+        label: "Headcount Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
       { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 15000 },
     ];
 
@@ -545,9 +560,24 @@ describe("buildForecast with actuals formulas", () => {
     ];
     const actualsFormulas = { "Net Profit": "Revenue - COGS - OpEx" };
     const builtinDefs: CustomVariableDef[] = [
-      { id: "revenueGrowthRate", label: "Revenue Growth Rate", kind: "input" as const, defaultValue: 0 },
-      { id: "cogsPctOfRevenue", label: "COGS % of Revenue", kind: "input" as const, defaultValue: 0 },
-      { id: "headcountGrowthRate", label: "Headcount Growth Rate", kind: "input" as const, defaultValue: 0 },
+      {
+        id: "revenueGrowthRate",
+        label: "Revenue Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
+      {
+        id: "cogsPctOfRevenue",
+        label: "COGS % of Revenue",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
+      {
+        id: "headcountGrowthRate",
+        label: "Headcount Growth Rate",
+        kind: "input" as const,
+        defaultValue: 0,
+      },
       { id: "costPerHead", label: "Cost per Head", kind: "input" as const, defaultValue: 0 },
     ];
 

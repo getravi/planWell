@@ -47,6 +47,16 @@ describe("PlanWell workbench UI", () => {
                   },
                 },
                 varOverrides: {
+                  "Total Company": {
+                    monthly: {
+                      "2026-01": {
+                        revenueGrowthRate: 0.03,
+                        cogsPctOfRevenue: 0.44,
+                        headcountGrowthRate: 0.01,
+                        costPerHead: 19000,
+                      },
+                    },
+                  },
                   Engineering: {
                     monthly: {
                       "2026-01": {
@@ -241,6 +251,16 @@ describe("PlanWell workbench UI", () => {
                   },
                 },
                 varOverrides: {
+                  "Total Company": {
+                    monthly: {
+                      "2026-01": {
+                        revenueGrowthRate: 0.03,
+                        cogsPctOfRevenue: 0.44,
+                        headcountGrowthRate: 0.01,
+                        costPerHead: 19000,
+                      },
+                    },
+                  },
                   Engineering: {
                     monthly: {
                       "2026-01": {
@@ -309,8 +329,19 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getAllByRole("columnheader", { name: "2026-02" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("rowheader", { name: "Revenue Growth Rate" })).toBeTruthy();
 
-    await userEvent.clear(screen.getByLabelText("Revenue Growth Rate 2026-01"));
-    await userEvent.type(screen.getByLabelText("Revenue Growth Rate 2026-01"), "9");
+    const revenueGrowth = (await screen.findByLabelText(
+      "Revenue Growth Rate 2026-01",
+    )) as HTMLInputElement;
+    expect(revenueGrowth.type).toBe("text");
+    expect(revenueGrowth.value).toBe("3.00%");
+    await userEvent.click(revenueGrowth);
+    expect(revenueGrowth.value).toBe("0.03");
+    await userEvent.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(screen.getByLabelText("Revenue Growth Rate 2026-02"));
+
+    await userEvent.click(revenueGrowth);
+    await userEvent.clear(revenueGrowth);
+    await userEvent.type(revenueGrowth, "0.09");
     await userEvent.click(screen.getByRole("button", { name: /save scenario/i }));
 
     expect(
@@ -327,6 +358,126 @@ describe("PlanWell workbench UI", () => {
         return body.varOverrides["Total Company"]?.monthly?.["2026-01"]?.revenueGrowthRate === 0.09;
       }),
     ).toBe(true);
+  });
+
+  it("calculates Forecast Model driver assumptions from actuals for selected actual years", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/settings")) {
+        return json({
+          forecastHorizon: 12,
+          aiModel: null,
+          lastActualsMonth: "2025-12",
+        });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [
+            {
+              name: "Product",
+              parentName: null,
+              referenceCount: 0,
+              children: [
+                {
+                  name: "GPU Cloud",
+                  parentName: "Product",
+                  referenceCount: 8,
+                  children: [],
+                },
+              ],
+            },
+          ],
+          account: [],
+          time: [],
+        });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        return json({
+          scenarios: [
+            {
+              id: "base",
+              name: "Base Case",
+              locked: false,
+              assumptions: {
+                name: "Base Case",
+                varOverrides: {
+                  "GPU Cloud": {
+                    monthly: {
+                      "2025-02": {
+                        revenueGrowthRate: 0.03,
+                        cogsPctOfRevenue: 0.44,
+                        headcountGrowthRate: 0.01,
+                        costPerHead: 19000,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/actuals")) {
+        return json({
+          rows: [
+            { month: "2025-01", department: "GPU Cloud", account: "Revenue", value: 100 },
+            { month: "2025-01", department: "GPU Cloud", account: "COGS", value: 60 },
+            { month: "2025-01", department: "GPU Cloud", account: "Headcount", value: 8 },
+            { month: "2025-01", department: "GPU Cloud", account: "OpEx", value: 160 },
+            { month: "2025-02", department: "GPU Cloud", account: "Revenue", value: 120 },
+            { month: "2025-02", department: "GPU Cloud", account: "COGS", value: 60 },
+            { month: "2025-02", department: "GPU Cloud", account: "Headcount", value: 12 },
+            { month: "2025-02", department: "GPU Cloud", account: "OpEx", value: 240 },
+          ],
+          summary: {
+            ...emptyCube().summary,
+            months: ["2025-01", "2025-02"],
+          },
+        });
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json({
+          rows: [{ month: "2026-01", department: "GPU Cloud", account: "Revenue", value: 130 }],
+          summary: {
+            ...emptyCube().summary,
+            departments: [
+              { department: "GPU Cloud", revenue: 130, cogs: 0, opex: 0, headcount: 0 },
+            ],
+            months: ["2026-01"],
+          },
+        });
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      if (url.includes("/api/custom-variables")) {
+        return json({ customVariables: builtinVars() });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await chooseSelectOption(/year/i, "2025");
+    await chooseSelectOption(/forecast department/i, "GPU Cloud");
+
+    const revenueGrowth = (await screen.findByLabelText(
+      "Revenue Growth Rate 2025-02",
+    )) as HTMLInputElement;
+    expect(revenueGrowth.value).toBe("20.00%");
+    expect(revenueGrowth.disabled).toBe(true);
+    expect(
+      ((await screen.findByLabelText("COGS % of Revenue 2025-02")) as HTMLInputElement).value,
+    ).toBe("50.00%");
+    expect(
+      ((await screen.findByLabelText("Headcount Growth Rate 2025-02")) as HTMLInputElement).value,
+    ).toBe("50.00%");
+    expect(
+      ((await screen.findByLabelText("Cost per Head 2025-02")) as HTMLInputElement).value,
+    ).toBe("20");
   });
 
   it("pastes Excel and CSV blocks into the Forecast Model driver grid", async () => {
@@ -400,7 +551,7 @@ describe("PlanWell workbench UI", () => {
     });
     fireEvent.paste(await screen.findByLabelText("Headcount Growth Rate 2026-01"), {
       clipboardData: {
-        getData: () => "2\t3\n20000\t21000",
+        getData: () => "0.02\t0.03\n20000\t21000",
       },
     });
     await userEvent.click(screen.getByRole("button", { name: /save scenario/i }));
@@ -529,6 +680,79 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByText("Horizon 2026-01 to 2026-02")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /copy grid/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("rowheader", { name: "Engineering" })).toBeNull();
+  });
+
+  it("shows YoY change on Forecast Model metric cards", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/settings")) {
+        return json({ forecastHorizon: 12, aiModel: null, lastActualsMonth: "2025-12" });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [{ name: "GPU Cloud", parentName: null, referenceCount: 4, children: [] }],
+          account: [],
+          time: [],
+        });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        return json({
+          scenarios: [
+            {
+              id: "base",
+              name: "Base Case",
+              assumptions: { name: "Base Case", varOverrides: {} },
+            },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/actuals")) {
+        return json({
+          rows: [
+            { month: "2025-01", department: "GPU Cloud", account: "Revenue", value: 1000 },
+            { month: "2025-01", department: "GPU Cloud", account: "COGS", value: 400 },
+            { month: "2025-01", department: "GPU Cloud", account: "OpEx", value: 250 },
+            { month: "2025-01", department: "GPU Cloud", account: "Headcount", value: 10 },
+          ],
+          summary: emptyCube().summary,
+        });
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json({
+          rows: [
+            { month: "2026-01", department: "GPU Cloud", account: "Revenue", value: 1200 },
+            { month: "2026-01", department: "GPU Cloud", account: "COGS", value: 480 },
+            { month: "2026-01", department: "GPU Cloud", account: "OpEx", value: 360 },
+            { month: "2026-01", department: "GPU Cloud", account: "Headcount", value: 12 },
+          ],
+          summary: emptyCube().summary,
+        });
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      if (url.includes("/api/custom-variables")) {
+        return json({ customVariables: builtinVars() });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await chooseSelectOption(/year/i, "2026");
+
+    const kpiCard = (label: string) =>
+      screen
+        .getAllByText(label)
+        .find((item) => item.closest('[data-slot="card"]'))
+        ?.closest('[data-slot="card"]');
+    expect(kpiCard("Revenue")?.textContent).toContain("+20% YoY");
+    expect(kpiCard("Gross margin")?.textContent).toContain("+20% YoY");
+    expect(kpiCard("OpEx ratio")?.textContent).toContain("+5 pts YoY");
+    expect(kpiCard("Headcount")?.textContent).toContain("+20% YoY");
   });
 
   it("syncs Forecast Model department filters with dimensions hierarchy", async () => {
