@@ -26,7 +26,7 @@ export type Analyst = {
   ): Promise<AnalystAnswer>;
 };
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro";
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro-preview-06-05";
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 
 export function createAnalyst(repo: Repository): Analyst {
@@ -237,11 +237,13 @@ export async function generateNarrative(
       .slice(0, 10),
   };
 
+  const selectedModel = repo.getSettings().aiModel ?? null;
+
   if (process.env.ANTHROPIC_API_KEY) {
-    return generateNarrativeClaude(context, process.env.ANTHROPIC_API_KEY);
+    return generateNarrativeClaude(context, process.env.ANTHROPIC_API_KEY, selectedModel ?? DEFAULT_CLAUDE_MODEL);
   }
   if (process.env.GEMINI_API_KEY) {
-    return generateNarrativeGemini(context, process.env.GEMINI_API_KEY);
+    return generateNarrativeGemini(context, process.env.GEMINI_API_KEY, selectedModel ?? process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL);
   }
   return generateNarrativeLocal(context);
 }
@@ -249,12 +251,13 @@ export async function generateNarrative(
 async function generateNarrativeClaude(
   ctx: ReturnType<typeof buildNarrativeContext>,
   apiKey: string,
+  model: string,
 ): Promise<NarrativeReport> {
   const client = new Anthropic({ apiKey });
   const prompt = buildNarrativePrompt(ctx);
 
   const response = await client.messages.create({
-    model: DEFAULT_CLAUDE_MODEL,
+    model,
     max_tokens: 2048,
     system: [
       {
@@ -273,11 +276,12 @@ async function generateNarrativeClaude(
 async function generateNarrativeGemini(
   ctx: ReturnType<typeof buildNarrativeContext>,
   apiKey: string,
+  model: string,
 ): Promise<NarrativeReport> {
   const genai = new GoogleGenAI({ apiKey });
   const prompt = buildNarrativePrompt(ctx);
   const response = await genai.models.generateContent({
-    model: process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
+    model,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
   return { ...parseNarrativeJson(response.text ?? "{}"), provider: "gemini" };
