@@ -61,6 +61,52 @@ describe("PlanWell API", () => {
     ).toBe(true);
   });
 
+  it("compares a scenario year to prior year actuals", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    repo.replaceActuals([
+      { month: "2025-01", department: "GPU Cloud", account: "Revenue", value: 1000 },
+      { month: "2025-12", department: "GPU Cloud", account: "Revenue", value: 1200 },
+      { month: "2025-12", department: "GPU Cloud", account: "COGS", value: 500 },
+    ]);
+
+    const response = await app.request(
+      "/api/cube/prior-year-variance?scenario=Base%20Case&year=2026",
+      { headers: { cookie } },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ left: "2025 Actuals", right: "Base Case", year: "2026" });
+    const janRevenue = body.rows.find(
+      (row: { month: string; department: string; account: string }) =>
+        row.month === "2026-01" && row.department === "GPU Cloud" && row.account === "Revenue",
+    );
+    expect(janRevenue.leftValue).toBe(1000);
+    expect(janRevenue.rightValue).toBeGreaterThan(1000);
+    expect(
+      body.rows.some(
+        (row: { month: string; account: string }) =>
+          row.month === "2026-01" && row.account === "COGS",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects invalid prior-year variance years", async () => {
+    const repo = createTestRepository();
+    const app = createApp({ repo });
+    const cookie = await loginCookie(app);
+
+    const response = await app.request(
+      "/api/cube/prior-year-variance?scenario=Base%20Case&year=all",
+      { headers: { cookie } },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "Year must use YYYY." });
+  });
+
   it("pruneExpiredSessions removes rows with past expires_at", () => {
     const db = new DatabaseSync(":memory:");
     db.exec(`

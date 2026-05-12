@@ -30,7 +30,7 @@ export type PivotActualRow = {
 export type PivotVarianceRow = {
   department: string;
   account: string;
-  values: Record<string, { variance: number; variancePct: number | null }>;
+  values: Record<string, { variance: number; variancePct: number | null } | undefined>;
   hierarchyLevel: number;
   isParent: boolean;
 };
@@ -350,6 +350,7 @@ export function collapsePivotActualRowsToMonthsWithYearTotal(
 export function collapsePivotVarianceRowsToQuarters(
   rows: PivotVarianceRow[],
   months: string[],
+  options: { preserveMissing?: boolean } = {},
 ): { rows: PivotVarianceRow[]; periods: string[] } {
   const quarters = getQuarters(months);
   const quarterToMonths = new Map<string, string[]>();
@@ -378,6 +379,9 @@ export function collapsePivotVarianceRowsToQuarters(
           const ms = isFYPeriod(p)
             ? (yearToMonths.get(p.slice(0, 4)) ?? [])
             : (quarterToMonths.get(p) ?? []);
+          if (options.preserveMissing && ms.every((m) => row.values[m] === undefined)) {
+            return [p, undefined];
+          }
           const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
           return [p, { variance, variancePct: null }];
         }),
@@ -394,6 +398,7 @@ export function collapsePivotVarianceRowsToQuarters(
 export function collapsePivotVarianceRowsToMonthsWithYearTotal(
   rows: PivotVarianceRow[],
   months: string[],
+  options: { preserveMissing?: boolean } = {},
 ): { rows: PivotVarianceRow[]; periods: string[] } {
   const yearToMonths = new Map<string, string[]>();
   for (const m of months) {
@@ -415,10 +420,17 @@ export function collapsePivotVarianceRowsToMonthsWithYearTotal(
         periods.map((p) => {
           if (isFYPeriod(p)) {
             const ms = yearToMonths.get(p.slice(0, 4)) ?? [];
+            if (options.preserveMissing && ms.every((m) => row.values[m] === undefined)) {
+              return [p, undefined];
+            }
             const variance = ms.reduce((sum, m) => sum + (row.values[m]?.variance ?? 0), 0);
             return [p, { variance, variancePct: null }];
           }
-          return [p, row.values[p] ?? { variance: 0, variancePct: null }];
+          return [
+            p,
+            row.values[p] ??
+              (options.preserveMissing ? undefined : { variance: 0, variancePct: null }),
+          ];
         }),
       ),
     })),

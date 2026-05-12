@@ -81,6 +81,8 @@ const formulaSchema = z.object({
   formulas: z.record(z.string(), z.string().optional()),
 });
 
+const yearSchema = z.string().regex(/^\d{4}$/, "Year must use YYYY.");
+
 const chatMessageSchema = z.object({ role: z.enum(["user", "assistant"]), content: z.string() });
 const analystSchema = z.object({
   question: z.string().min(1),
@@ -313,6 +315,23 @@ export function createApp({
     const left = context.req.query("left") ?? "Base Case";
     const right = context.req.query("right") ?? "Aggressive Growth";
     return context.json({ rows: repo.compare(left, right), left, right });
+  });
+
+  app.get("/api/cube/prior-year-variance", (context) => {
+    const scenario = context.req.query("scenario") ?? "Base Case";
+    const parsedYear = yearSchema.safeParse(context.req.query("year"));
+    if (!parsedYear.success) {
+      return context.json({ error: "Year must use YYYY." }, 400);
+    }
+    const year = parsedYear.data;
+    const priorYear = String(Number(year) - 1);
+    return context.json({
+      rows: repo.comparePriorYearActuals(scenario, year),
+      left: `${priorYear} Actuals`,
+      right: scenario,
+      year,
+      priorYear,
+    });
   });
 
   app.get("/api/scenarios", (context) => {

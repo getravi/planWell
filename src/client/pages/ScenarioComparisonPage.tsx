@@ -36,12 +36,18 @@ export function ScenarioComparisonPage({
   rows,
   left,
   right,
+  mode = "scenario",
+  selectedYear = "__all__",
+  priorYear,
   departmentHierarchy,
   accountHierarchy,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
+  mode?: "scenario" | "prior-year-actuals";
+  selectedYear?: string;
+  priorYear?: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
@@ -67,6 +73,9 @@ export function ScenarioComparisonPage({
         rows={rows}
         left={left}
         right={right}
+        mode={mode}
+        selectedYear={selectedYear}
+        priorYear={priorYear}
         onGenerateNarrative={() => void generateNarrative()}
         narrativeLoading={narrativeLoading}
         narrativeReport={report}
@@ -76,6 +85,9 @@ export function ScenarioComparisonPage({
         rows={rows}
         left={left}
         right={right}
+        mode={mode}
+        selectedYear={selectedYear}
+        priorYear={priorYear}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
       />
@@ -87,6 +99,9 @@ function ScenarioComparison({
   rows,
   left,
   right,
+  mode,
+  selectedYear,
+  priorYear,
   onGenerateNarrative,
   narrativeLoading,
   narrativeReport,
@@ -95,6 +110,9 @@ function ScenarioComparison({
   rows: VarianceRow[];
   left: string;
   right: string;
+  mode: "scenario" | "prior-year-actuals";
+  selectedYear: string;
+  priorYear?: string;
   onGenerateNarrative: () => void;
   narrativeLoading: boolean;
   narrativeReport: NarrativeReport | null;
@@ -112,6 +130,13 @@ function ScenarioComparison({
           {left} vs {right}
         </span>
       </div>
+      {mode === "prior-year-actuals" ? (
+        <p className="muted driver-note">
+          {selectedYear === "__all__"
+            ? "Select a year to compare against prior year actuals."
+            : `${selectedYear} plan compared to ${priorYear ?? Number(selectedYear) - 1} actuals`}
+        </p>
+      ) : null}
       <ResponsiveContainer height={300}>
         <LineChart data={chartRows}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -199,12 +224,18 @@ function VarianceView({
   rows,
   left,
   right,
+  mode,
+  selectedYear,
+  priorYear,
   departmentHierarchy,
   accountHierarchy,
 }: {
   rows: VarianceRow[];
   left: string;
   right: string;
+  mode: "scenario" | "prior-year-actuals";
+  selectedYear: string;
+  priorYear?: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
@@ -223,6 +254,9 @@ function VarianceView({
       </div>
       <VarianceGrid
         rows={rows}
+        mode={mode}
+        selectedYear={selectedYear}
+        priorYear={priorYear}
         departmentHierarchy={departmentHierarchy}
         accountHierarchy={accountHierarchy}
       />
@@ -246,10 +280,16 @@ function VarianceInsightCard({ title, insight }: { title: string; insight?: Vari
 
 function VarianceGrid({
   rows,
+  mode,
+  selectedYear,
+  priorYear,
   departmentHierarchy,
   accountHierarchy,
 }: {
   rows: VarianceRow[];
+  mode: "scenario" | "prior-year-actuals";
+  selectedYear: string;
+  priorYear?: string;
   departmentHierarchy: DimensionMember[];
   accountHierarchy: DimensionMember[];
 }) {
@@ -257,12 +297,26 @@ function VarianceGrid({
   const months = getMonths(rows);
   const rawPivotRows = pivotVarianceRows(rows, departmentHierarchy, accountHierarchy);
   if (rawPivotRows.length === 0) {
-    return <EmptyState title="No variance rows" body="Select scenarios with forecast values." />;
+    return (
+      <EmptyState
+        title={mode === "prior-year-actuals" ? "No prior-year actuals" : "No variance rows"}
+        body={
+          mode === "prior-year-actuals"
+            ? "No matching prior-year actuals were found for the selected year."
+            : "Select scenarios with forecast values."
+        }
+      />
+    );
   }
+  const preserveMissing = mode === "prior-year-actuals";
   const { rows: pivotRows, periods } =
     granularity === "quarter"
-      ? collapsePivotVarianceRowsToQuarters(rawPivotRows, months)
-      : collapsePivotVarianceRowsToMonthsWithYearTotal(rawPivotRows, months);
+      ? collapsePivotVarianceRowsToQuarters(rawPivotRows, months, { preserveMissing })
+      : collapsePivotVarianceRowsToMonthsWithYearTotal(rawPivotRows, months, { preserveMissing });
+  const periodLabel = (period: string) =>
+    mode === "prior-year-actuals"
+      ? pairedPeriodLabel(period, selectedYear, priorYear ?? String(Number(selectedYear) - 1))
+      : period;
   return (
     <>
       <div className="grid-toolbar" style={{ justifyContent: "space-between" }}>
@@ -314,7 +368,7 @@ function VarianceGrid({
               <th>Account</th>
               {periods.map((period) => (
                 <th key={period} className={isFYPeriod(period) ? "fy-total-col" : undefined}>
-                  {period}
+                  {periodLabel(period)}
                 </th>
               ))}
             </tr>
@@ -337,7 +391,7 @@ function VarianceGrid({
                       key={period}
                       className={`numeric-cell${isFY ? " fy-total-col" : ""} ${(cell?.variance ?? 0) >= 0 ? "positive" : "negative"}`}
                     >
-                      {formatCell(row.account, cell?.variance ?? 0)}
+                      {cell ? formatCell(row.account, cell.variance) : ""}
                     </td>
                   );
                 })}
@@ -348,6 +402,19 @@ function VarianceGrid({
       </div>
     </>
   );
+}
+
+function pairedPeriodLabel(period: string, selectedYear: string, priorYear: string): string {
+  if (period.endsWith("-FY")) {
+    return `FY${selectedYear} vs FY${priorYear}`;
+  }
+  if (period.includes("-Q")) {
+    return `${period.slice(5)} ${selectedYear} vs ${period.slice(5)} ${priorYear}`;
+  }
+  const month = new Date(
+    Date.UTC(Number(selectedYear), Number(period.slice(5, 7)) - 1, 1),
+  ).toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+  return `${month} ${selectedYear} vs ${month} ${priorYear}`;
 }
 
 function Md({

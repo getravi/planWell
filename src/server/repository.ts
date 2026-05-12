@@ -113,6 +113,7 @@ export type Repository = {
   recalculateScenario(name: string): void;
   recalculateAllScenarios(): void;
   compare(leftName: string, rightName: string): VarianceRow[];
+  comparePriorYearActuals(scenarioName: string, year: string): VarianceRow[];
   getMetricSummary(scenarioName?: string): MetricSummary;
   validateFormulaExpression(
     formula: string,
@@ -275,6 +276,43 @@ function createRepository(db: DatabaseSync): Repository {
     },
     compare(leftName, rightName) {
       return compareSeries(this.listForecast(leftName), this.listForecast(rightName));
+    },
+    comparePriorYearActuals(scenarioName, year) {
+      const currentRows = this.listForecast(scenarioName).filter((row) =>
+        row.month.startsWith(year),
+      );
+      const priorYear = String(Number(year) - 1);
+      const priorRows = this.listActuals().filter((row) => row.month.startsWith(priorYear));
+      const priorByAlignedKey = new Map(
+        priorRows.map((row) => [
+          JSON.stringify([`${year}-${row.month.slice(5, 7)}`, row.department, row.account]),
+          row.value,
+        ]),
+      );
+      return currentRows
+        .flatMap((row) => {
+          const key = JSON.stringify([row.month, row.department, row.account]);
+          const leftValue = priorByAlignedKey.get(key);
+          if (leftValue === undefined) return [];
+          const variance = Math.round((row.value - leftValue) * 100) / 100;
+          return [
+            {
+              month: row.month,
+              department: row.department,
+              account: row.account,
+              leftValue,
+              rightValue: row.value,
+              variance,
+              variancePct: leftValue === 0 ? null : variance / leftValue,
+            },
+          ];
+        })
+        .sort(
+          (left, right) =>
+            left.month.localeCompare(right.month) ||
+            left.department.localeCompare(right.department) ||
+            left.account.localeCompare(right.account),
+        );
     },
     validateFormulaExpression(formula, account) {
       const extraVars = Object.fromEntries(dbListCustomVariables(db).map((v) => [v.id, 1]));

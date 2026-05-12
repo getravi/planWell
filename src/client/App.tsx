@@ -190,6 +190,9 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [adminOpen, setAdminOpen] = useState(false);
   const [leftScenario, setLeftScenario] = useState("Base Case");
   const [rightScenario, setRightScenario] = useState("Aggressive Growth");
+  const [comparisonBasis, setComparisonBasis] = useState<"scenario" | "prior-year-actuals">(
+    "scenario",
+  );
   const [forecastDepartment, setForecastDepartment] = useState("__all__");
   const [actualsDepartment, setActualsDepartment] = useState("__all__");
   const [selectedYear, setSelectedYear] = useState<string>("__all__");
@@ -227,6 +230,15 @@ function Workbench({ userEmail }: { userEmail: string }) {
     queryFn: () => client.variance(leftScenario, rightScenario),
     enabled: Boolean(leftScenario && rightScenario),
   });
+  const priorYearVariance = useQuery({
+    queryKey: ["prior-year-variance", leftScenario, selectedYear],
+    queryFn: () => client.priorYearVariance(leftScenario, selectedYear),
+    enabled:
+      view === "Scenario Comparison" &&
+      comparisonBasis === "prior-year-actuals" &&
+      selectedYear !== "__all__" &&
+      Boolean(leftScenario),
+  });
   const scenarioNames = scenarios.data?.scenarios.map((scenario) => scenario.name) ?? [];
   const forecastRows = forecast.data?.rows ?? [];
   const actualRows = actuals.data?.rows ?? [];
@@ -255,13 +267,14 @@ function Workbench({ userEmail }: { userEmail: string }) {
         : actualRows.filter((r) => r.month.startsWith(selectedYear)),
     [actualRows, selectedYear],
   );
-  const yearVarianceRows = useMemo(
-    () =>
-      selectedYear === "__all__"
-        ? (variance.data?.rows ?? [])
-        : (variance.data?.rows ?? []).filter((r) => r.month.startsWith(selectedYear)),
-    [variance.data?.rows, selectedYear],
-  );
+  const yearVarianceRows = useMemo(() => {
+    if (comparisonBasis === "prior-year-actuals") {
+      return selectedYear === "__all__" ? [] : (priorYearVariance.data?.rows ?? []);
+    }
+    return selectedYear === "__all__"
+      ? (variance.data?.rows ?? [])
+      : (variance.data?.rows ?? []).filter((r) => r.month.startsWith(selectedYear));
+  }, [comparisonBasis, priorYearVariance.data?.rows, selectedYear, variance.data?.rows]);
   const departmentDescendants = useMemo(
     () => buildDescendantLookup(dimensions.data?.department ?? []),
     [dimensions.data?.department],
@@ -551,18 +564,42 @@ function Workbench({ userEmail }: { userEmail: string }) {
               </label>
             ) : null}
             {view === "Scenario Comparison" ? (
-              <label className="page-selector inline-selector">
-                <span className="page-selector-label">Compare to</span>
-                <Select
-                  aria-label="Compare to"
-                  value={rightScenario}
-                  onChange={(event) => setRightScenario(event.target.value)}
-                >
-                  {scenarioNames.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </Select>
-              </label>
+              <>
+                <label className="page-selector inline-selector">
+                  <span className="page-selector-label">Basis</span>
+                  <Select
+                    aria-label="Comparison basis"
+                    value={comparisonBasis}
+                    onChange={(event) =>
+                      setComparisonBasis(event.target.value as "scenario" | "prior-year-actuals")
+                    }
+                  >
+                    <option value="scenario">Compare against scenario</option>
+                    <option value="prior-year-actuals" disabled={selectedYear === "__all__"}>
+                      Prior year actuals
+                    </option>
+                  </Select>
+                </label>
+                {selectedYear === "__all__" ? (
+                  <span className="muted">
+                    Select a year to compare against prior year actuals.
+                  </span>
+                ) : null}
+                {comparisonBasis === "scenario" ? (
+                  <label className="page-selector inline-selector">
+                    <span className="page-selector-label">Compare to</span>
+                    <Select
+                      aria-label="Compare to"
+                      value={rightScenario}
+                      onChange={(event) => setRightScenario(event.target.value)}
+                    >
+                      {scenarioNames.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
+                    </Select>
+                  </label>
+                ) : null}
+              </>
             ) : null}
           </div>
         </SiteHeader>
@@ -607,8 +644,15 @@ function Workbench({ userEmail }: { userEmail: string }) {
         {view === "Scenario Comparison" ? (
           <ScenarioComparisonPage
             rows={yearVarianceRows}
-            left={leftScenario}
-            right={rightScenario}
+            left={
+              comparisonBasis === "prior-year-actuals"
+                ? (priorYearVariance.data?.left ?? `${Number(selectedYear) - 1} Actuals`)
+                : leftScenario
+            }
+            right={comparisonBasis === "prior-year-actuals" ? leftScenario : rightScenario}
+            mode={comparisonBasis}
+            selectedYear={selectedYear}
+            priorYear={priorYearVariance.data?.priorYear}
             departmentHierarchy={dimensions.data?.department ?? []}
             accountHierarchy={dimensions.data?.account ?? []}
           />

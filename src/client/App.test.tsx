@@ -977,6 +977,93 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByText("OpEx increased by $150")).toBeTruthy();
   });
 
+  it("compares a selected scenario year to prior-year actuals", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/api/auth/me")) {
+        return json({ user: { email: "director@planwell.local" } });
+      }
+      if (url.endsWith("/api/dimensions")) {
+        return json({
+          department: [{ name: "GPU Cloud", parentName: null, referenceCount: 0, children: [] }],
+          account: [{ name: "Revenue", parentName: null, referenceCount: 0, children: [] }],
+          time: [],
+        });
+      }
+      if (url.endsWith("/api/scenarios")) {
+        return json({
+          scenarios: [
+            { id: "base", name: "Base Case", assumptions: { name: "Base Case" } },
+            { id: "upside", name: "Aggressive Growth", assumptions: { name: "Aggressive Growth" } },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/actuals")) {
+        return json({
+          rows: [{ month: "2025-01", department: "GPU Cloud", account: "Revenue", value: 1000 }],
+          summary: emptyCube().summary,
+        });
+      }
+      if (url.includes("/api/cube/forecast")) {
+        return json({
+          rows: [{ month: "2026-01", department: "GPU Cloud", account: "Revenue", value: 1200 }],
+          summary: emptyCube().summary,
+        });
+      }
+      if (url.includes("/api/cube/prior-year-variance")) {
+        return json({
+          left: "2025 Actuals",
+          right: "Base Case",
+          year: "2026",
+          priorYear: "2025",
+          rows: [
+            {
+              month: "2026-01",
+              department: "GPU Cloud",
+              account: "Revenue",
+              leftValue: 1000,
+              rightValue: 1200,
+              variance: 200,
+              variancePct: 0.2,
+            },
+          ],
+        });
+      }
+      if (url.includes("/api/cube/variance")) {
+        return json({ rows: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: /scenario comparison/i }));
+
+    await chooseSelectOption("Comparison basis", "Prior year actuals");
+    expect(screen.getByText("Select a year to compare against prior year actuals.")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        (input instanceof Request ? input.url : input.toString()).includes(
+          "/api/cube/prior-year-variance",
+        ),
+      ),
+    ).toBe(false);
+
+    await chooseSelectOption("Year", "2026");
+    await chooseSelectOption("Comparison basis", "Prior year actuals");
+
+    expect(await screen.findAllByText("2025 Actuals vs Base Case")).not.toHaveLength(0);
+    expect(screen.getByText("2026 plan compared to 2025 actuals")).toBeTruthy();
+    expect(screen.getByText("Jan 2026 vs Jan 2025")).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        (input instanceof Request ? input.url : input.toString()).includes(
+          "/api/cube/prior-year-variance?scenario=Base%20Case&year=2026",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it("hides the compare selector on Forecast Model and shows it on comparison pages", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
@@ -1081,8 +1168,8 @@ describe("PlanWell workbench UI", () => {
     const labels = Array.from(document.querySelectorAll(".topbar .page-selector-label")).map(
       (label) => label.textContent,
     );
-    expect(labels).toEqual(["Primary scenario", "Compare to"]);
-    expect(document.querySelectorAll(".topbar .inline-selector")).toHaveLength(2);
+    expect(labels).toEqual(["Primary scenario", "Basis", "Compare to"]);
+    expect(document.querySelectorAll(".topbar .inline-selector")).toHaveLength(3);
   });
 
   it("sends the comparison scenario to the grounded analyst", async () => {

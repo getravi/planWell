@@ -91,6 +91,10 @@ export const client = {
     api<{ rows: VarianceRow[]; left: string; right: string }>(
       `/api/cube/variance?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
     ),
+  priorYearVariance: (scenario: string, year: string) =>
+    api<{ rows: VarianceRow[]; left: string; right: string; year: string; priorYear: string }>(
+      `/api/cube/prior-year-variance?scenario=${encodeURIComponent(scenario)}&year=${encodeURIComponent(year)}`,
+    ),
   scenarios: () => api<{ scenarios: ScenarioRecord[] }>("/api/scenarios"),
   versions: () => api<{ versions: VersionRecord[] }>("/api/versions"),
   createVersion: (name: string, sourceId: string) =>
