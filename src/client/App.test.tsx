@@ -160,7 +160,7 @@ describe("PlanWell workbench UI", () => {
     expect(screen.getByRole("button", { name: /^dimensions$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^time settings$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^schema$/i })).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /^actuals$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^data integration$/i }));
     expect(screen.getByText("Import actuals")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^scenarios$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^variance$/i })).toBeNull();

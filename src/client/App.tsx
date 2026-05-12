@@ -44,6 +44,7 @@ import { currency, number, percent } from "./format.ts";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
 import { ActualsPage } from "./pages/ActualsPage.tsx";
+import { DataIntegrationPage } from "./pages/DataIntegrationPage.tsx";
 import { AnalystPage } from "./pages/AnalystPage.tsx";
 import { CustomVariablesPage } from "./pages/CustomVariablesPage.tsx";
 import { DimensionsPage } from "./pages/DimensionsPage.tsx";
@@ -93,6 +94,7 @@ const VIEWS = [
   "Custom Variables",
   "Schema",
   "Formula Reference",
+  "Data Integration",
   "Site Settings",
 ];
 
@@ -135,6 +137,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
   const [actualsDepartment, setActualsDepartment] = useState("__all__");
   const [selectedYear, setSelectedYear] = useState<string>("__all__");
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: client.scenarios });
+  const settings = useQuery({ queryKey: ["settings"], queryFn: client.settings });
+  const lastActualsMonth = settings.data?.lastActualsMonth ?? null;
   const actuals = useQuery({ queryKey: ["actuals"], queryFn: client.actuals });
   const customVariables = useQuery({
     queryKey: ["custom-variables"],
@@ -173,9 +177,16 @@ function Workbench({ userEmail }: { userEmail: string }) {
     const months = [...actualRows.map((r) => r.month), ...forecastRows.map((r) => r.month)];
     return [...new Set(months.map((m) => m.slice(0, 4)))].sort();
   }, [actualRows, forecastRows]);
+  const blendedForecastRows = useMemo(() => {
+    if (!lastActualsMonth) return forecastRows;
+    return [
+      ...actualRows.filter((r) => r.month <= lastActualsMonth),
+      ...forecastRows.filter((r) => r.month > lastActualsMonth),
+    ];
+  }, [actualRows, forecastRows, lastActualsMonth]);
   const yearForecastRows = useMemo(
-    () => selectedYear === "__all__" ? forecastRows : forecastRows.filter((r) => r.month.startsWith(selectedYear)),
-    [forecastRows, selectedYear],
+    () => selectedYear === "__all__" ? blendedForecastRows : blendedForecastRows.filter((r) => r.month.startsWith(selectedYear)),
+    [blendedForecastRows, selectedYear],
   );
   const yearActualRows = useMemo(
     () => selectedYear === "__all__" ? actualRows : actualRows.filter((r) => r.month.startsWith(selectedYear)),
@@ -249,6 +260,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
     view === "Custom Variables" ||
     view === "Schema" ||
     view === "Formula Reference" ||
+    view === "Data Integration" ||
     view === "Site Settings";
 
   useEffect(() => {
@@ -340,6 +352,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
               {adminOpen ? (
                 <SidebarMenu className="nav-sublist" id="admin-nav">
                   {[
+                    ["Data Integration", FileUp],
                     ["Dimensions", Network],
                     ["Time Settings", CalendarDays],
                     ["Versions", Copy],
@@ -474,7 +487,8 @@ function Workbench({ userEmail }: { userEmail: string }) {
         view !== "Versions" &&
         view !== "Formulas" &&
         view !== "Custom Variables" &&
-        view !== "Formula Reference" ? (
+        view !== "Formula Reference" &&
+        view !== "Data Integration" ? (
           <KpiStrip
             summary={currentSummary}
             variant={view === "Scenario Comparison" ? "variance" : "standard"}
@@ -542,6 +556,7 @@ function Workbench({ userEmail }: { userEmail: string }) {
         ) : null}
         {view === "Schema" ? <SchemaPage /> : null}
         {view === "Formula Reference" ? <FormulaReferencePage /> : null}
+        {view === "Data Integration" ? <DataIntegrationPage /> : null}
         {view === "Site Settings" ? <AdminPage /> : null}
       </SidebarInset>
     </SidebarProvider>
