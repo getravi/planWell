@@ -5,7 +5,8 @@ import { createApp } from "./app.ts";
 import { createFileRepository } from "./repository.ts";
 import { logger } from "../logger.ts";
 
-const port = Number(process.env.PORT ?? process.env.API_PORT ?? 8787);
+// Default pinned; see ~/Documents/Dev/ports.md.
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 8050);
 const app = createApp({ repo: createFileRepository(process.env.SQLITE_PATH) });
 
 app.get("/architecture", (c) => {
