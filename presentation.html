@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlanWell · EPM Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fafafa;
+  --surface:#fff;
+  --border:#e5e7eb;
+  --text:#111;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --accent-soft:#eff6ff;
+  --accent-line:#93c5fd;
+  --code-bg:#f3f4f6;
+  --green:#059669;
+  --amber:#d97706;
+}
+html{font-size:clamp(14px,1.2vw,18px)}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  overflow:hidden;
+  height:100vh;
+  width:100vw;
+}
+.slides{position:relative;height:100vh;width:100vw}
+.slide{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  justify-content:center;
+  padding:5rem 6rem;
+  opacity:0;visibility:hidden;
+  transition:opacity .35s ease,visibility .35s ease;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.slide.active{opacity:1;visibility:visible;z-index:1}
+
+/* heading hierarchy */
+h1{font-size:3rem;font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-bottom:.5rem}
+h2{font-size:2rem;font-weight:600;letter-spacing:-.02em;line-height:1.2;margin-bottom:.25rem}
+h3{font-size:1.25rem;font-weight:600;margin-bottom:.5rem;color:var(--muted)}
+.slide-subtitle{font-size:1.1rem;color:var(--muted);margin-bottom:1.5rem;max-width:42rem}
+p,li{font-size:1rem;max-width:44rem}
+p{margin-bottom:.75rem}
+
+/* layout helpers */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;margin-top:.75rem}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-top:.75rem}
+.col{min-width:0}
+.col h3{font-size:1rem;font-weight:600;color:var(--text);margin-bottom:.25rem}
+
+/* cards */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1.25rem 1.5rem;
+  margin-bottom:.75rem;
+}
+.card p{font-size:.9rem;margin-bottom:0}
+.card .tag{
+  display:inline-block;
+  font-size:.7rem;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  padding:.15rem .5rem;
+  border-radius:4px;
+  margin-bottom:.35rem;
+}
+.tag-green{background:#d1fae5;color:var(--green)}
+.tag-blue{background:var(--accent-soft);color:var(--accent)}
+.tag-amber{background:#fef3c7;color:var(--amber)}
+
+/* code */
+pre{
+  background:var(--code-bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:1rem 1.25rem;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.8rem;
+  line-height:1.5;
+  overflow-x:auto;
+  margin-bottom:.75rem;
+}
+code{font-family:'JetBrains Mono',monospace;font-size:.85em}
+.inline-code{background:var(--code-bg);padding:.1em .35em;border-radius:4px;font-size:.85em}
+
+/* feature list */
+.feature-list{list-style:none;padding:0}
+.feature-list li{
+  padding:.35rem 0;
+  padding-left:1.5rem;
+  position:relative;
+  font-size:.95rem;
+}
+.feature-list li::before{
+  content:"→";
+  position:absolute;left:0;
+  color:var(--accent);
+  font-weight:600;
+}
+
+/* number stat */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:.5rem}
+.stat{text-align:center}
+.stat-num{font-size:2.2rem;font-weight:700;color:var(--accent);line-height:1}
+.stat-label{font-size:.8rem;color:var(--muted);margin-top:.15rem}
+
+/* nav */
+.nav{
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:1rem;
+  z-index:100;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:100px;
+  padding:.5rem .75rem;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.nav button{
+  background:none;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  width:2rem;height:2rem;border-radius:50%;
+  color:var(--text);
+  font-size:1rem;
+  transition:background .15s;
+}
+.nav button:hover{background:var(--code-bg)}
+.nav button:disabled{opacity:.25;cursor:default}
+.dots{display:flex;gap:4px;margin:0 .25rem}
+.dots button{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--border);
+  border:none;cursor:pointer;
+  padding:0;transition:background .2s;
+}
+.dots button.active{background:var(--accent)}
+
+/* pigmnet callout */
+.callout{
+  background:var(--accent-soft);
+  border-left:3px solid var(--accent);
+  padding:.75rem 1rem;
+  border-radius:0 6px 6px 0;
+  margin-bottom:.75rem;
+  font-size:.9rem;
+}
+.callout strong{color:var(--accent)}
+
+/* responsive */
+@media(max-width:768px){
+  .slide{padding:2.5rem 1.5rem}
+  h1{font-size:2rem}
+  h2{font-size:1.4rem}
+  .two-col,.three-col{grid-template-columns:1fr;gap:1rem}
+  .stat-grid{grid-template-columns:repeat(3,1fr)}
+}
+
+/* fade in for sub-elements */
+.slide.active h1,.slide.active h2,.slide.active .slide-subtitle,
+.slide.active .card,.slide.active .two-col,.slide.active .three-col,
+.slide.active pre,.slide.active p,.slide.active ul,.slide.active .stat-grid,
+.slide.active .callout{
+  animation:fadeUp .45s ease both
+}
+.slide.active h2{animation-delay:.05s}
+.slide.active .slide-subtitle{animation-delay:.1s}
+.slide.active p{animation-delay:.12s}
+.slide.active ul{animation-delay:.14s}
+.slide.active .card{animation-delay:.16s}
+.slide.active .two-col,.slide.active .three-col{animation-delay:.18s}
+.slide.active pre{animation-delay:.2s}
+.slide.active .stat-grid{animation-delay:.22s}
+.slide.active .callout{animation-delay:.24s}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+</style>
+</head>
+<body>
+
+<div class="slides">
+
+<!-- ========== SLIDE 1: TITLE ========== -->
+<section class="slide active" data-slide="0">
+  <div style="max-width:52rem">
+    <h3 style="font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.5rem">EPM · Reference Implementation</h3>
+    <h1>PlanWell</h1>
+    <p class="slide-subtitle" style="font-size:1.35rem;margin-top:.25rem">
+      A sandbox Enterprise Performance Management tool —<br>
+      from data model to AI-powered analysis.
+    </p>
+    <div style="display:flex;gap:1.5rem;margin-top:2rem">
+      <div><span class="stat-num" style="font-size:1.5rem">8</span><span class="stat-label" style="display:block">test files</span></div>
+      <div><span class="stat-num" style="font-size:1.5rem">149</span><span class="stat-label" style="display:block">passing tests</span></div>
+      <div><span class="stat-num" style="font-size:1.5rem">~5K</span><span class="stat-label" style="display:block">lines of code</span></div>
+    </div>
+    <p style="margin-top:2.5rem;font-size:.85rem;color:var(--muted)">
+      ← Use arrow keys or click the dots to navigate →
+    </p>
+  </div>
+</section>
+
+<!-- ========== SLIDE 2: THE PROBLEM ========== -->
+<section class="slide" data-slide="1">
+  <h2>The EPM Problem Space</h2>
+  <p class="slide-subtitle">Why companies build planning tools — and where they break down.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-amber">Pain</span>
+        <p><strong>Spreadsheet sprawl.</strong> Every department runs its own model. Versions proliferate. Nobody knows which file is current.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Pain</span>
+        <p><strong>Stale data.</strong> Actuals live in the ERP, forecasts live in Excel — the reconciliation happens manually once a quarter.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Pain</span>
+        <p><strong>No audit trail.</strong> Who changed what assumption? Was that forecast locked before the board meeting?</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-green">Goal</span>
+        <p><strong>Single source of truth.</strong> One model, one data layer, one version of reality that the entire company trusts.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-green">Goal</span>
+        <p><strong>Continuous planning.</strong> Actuals flow in automatically. Forecasts update immediately. Scenarios are compared in minutes, not days.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-green">Goal</span>
+        <p><strong>Grounded AI.</strong> Ask questions in natural language and get answers from live planning data — with citations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 3: DATA MODEL ========== -->
+<section class="slide" data-slide="2">
+  <h2>Data Model</h2>
+  <p class="slide-subtitle">Star-schema design with versioned scenario data.</p>
+  <div class="two-col">
+    <div class="col">
+      <pre>-- Dimensions (conformed)
+time_month     (id)
+department     (name, parent_name)
+account        (name, parent_name)
+
+-- Facts
+actuals        (month, dept, account, value)
+forecast_values(version_id, month, dept, account, value)
+
+-- Versioning
+versions       (id, name, kind, locked)
+scenarios      (id, name)
+scenario_formulas(scenario_id, account, formula)
+
+-- Variables
+custom_variables(id, label, kind, formula)
+custom_variable_values(scenario_id, var_id, scope, value)</pre>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Design decision</span>
+        <p><strong>Conformed dimensions.</strong> Department, account, and time are shared across actuals and forecast. A department in actuals is the same department in every scenario. No data silos.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Design decision</span>
+        <p><strong>Versioned facts.</strong> <code class="inline-code">forecast_values</code> is keyed by <code class="inline-code">version_id</code>, not scenario name. This means the "Actuals" version stores computed forecast rows too — enabling blended views (actuals → forecast without switching contexts).</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Design decision</span>
+        <p><strong>Overrides, not copies.</strong> Scenarios store only what differs from the base — driver assumption deltas, formula overrides. The forecast engine merges these at compute time. This makes scenario creation instant and storage O(n) instead of O(n×m).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 4: ARCHITECTURE ========== -->
+<section class="slide" data-slide="3">
+  <h2>Architecture</h2>
+  <p class="slide-subtitle">Single-process SPA with async background computation.</p>
+  <div class="two-col">
+    <div class="col">
+      <pre>
+┌─────────────────────────────────┐
+│  React SPA (TanStack Query)     │
+│  pivot table · charts · grids   │
+│  AI chat + citation bars        │
+└──────────────┬──────────────────┘
+               │ REST + SSE
+┌──────────────▼──────────────────┐
+│  Hono HTTP Server               │
+│  Zod validation · session auth  │
+│  SSE: /api/forecast-updates     │
+└──────────────┬──────────────────┘
+               │
+┌──────────────▼──────────────────┐
+│  Domain Layer (pure TS)         │
+│  buildForecast · formulaEngine  │
+│  compare · anomaly · suggest    │
+│  Zero I/O — fully testable      │
+└──────────────┬──────────────────┘
+               │
+┌──────────────▼──────────────────┐
+│  Repository (I/O boundary)       │
+│  SQLite via node:sqlite          │
+│  No ORM — prepared statements    │
+└─────────────────────────────────┘
+</pre>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Why Hono?</span>
+        <p>Lightweight — ~9KB. First-class TypeScript, Zod integration, SSE streaming built-in. No Express baggage.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Why SQLite?</span>
+        <p>Zero infrastructure. Node 22+ ships <code class="inline-code">node:sqlite</code> natively. The entire app (including DB) is a single process — deployable as a Railway service with a <code class="inline-code">Procfile</code>.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">SSE for recalc</span>
+        <p>When driver assumptions change, the server schedules a background recalculation via <code class="inline-code">setImmediate</code> and pushes a <code class="inline-code">recalc-done</code> event. The client invalidates its query cache reactively. Responsive UX even for large models.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Pure domain layer</span>
+        <p>Forecasting logic, formula evaluation, KPIs — all in <code class="inline-code">src/domain/</code> with zero imports from Node or the framework. Tested in isolation. Swappable to any backend.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 5: PLANNING LOGIC ========== -->
+<section class="slide" data-slide="4">
+  <h2>Planning Logic</h2>
+  <p class="slide-subtitle">Driver assumptions → formula engine → topo-sorted evaluation → forecast values.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">1. Driver assumptions</span>
+        <p>Four built-in drivers per department/month: revenue growth rate, COGS % of revenue, headcount growth rate, cost per head. Plus custom input variables. Values inherit down the department hierarchy unless overridden.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">2. Formula resolution</span>
+        <p>Each account has a default formula (<code class="inline-code">Revenue = base × (1 + revenueGrowthRate) ^ month</code>). Scenarios can override any formula. Actuals formulas serve as fallback. The engine resolves: <em>scenario formula → actuals formula → default → literal.</em></p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">3. Topological sort</span>
+        <p>Accounts and custom variables are topologically sorted to respect dependencies. If <code class="inline-code">Net Profit = Revenue - COGS - OpEx</code>, the engine evaluates Revenue, COGS, and OpEx first. Cycles are detected and rejected at validation time.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">4. Forecast build</span>
+        <p><code class="inline-code">buildForecast</code> iterates forecast months × departments × accounts, evaluates each formula in a context containing driver values, custom variables, and sibling account results. Output: flat forecast row per (month, dept, account).</p>
+      </div>
+    </div>
+    <div class="col">
+      <pre>// Simplified forecast pipeline
+function buildForecast(
+  actuals: ActualRow[],
+  assumptions: ScenarioAssumptions,
+  departments: DimensionMember[],
+  months: string[],
+  customVars: CustomVariableDef[],
+  accounts: DimensionMember[],
+  actualsFormulas?: ScenarioFormulas
+): ForecastRow[] {
+  // 1. Resolve driver values per dept/month
+  const drivers = resolveDrivers(assumptions, departments)
+
+  // 2. Topo-sort accounts + custom vars
+  const ordered = topoSortAccounts(accounts, resolvedFormulas)
+
+  // 3. For each month × department:
+  //    - Evaluate each account in topo order
+  //    - Context includes driver values,
+  //      previously computed accounts,
+  //      custom variables
+  // 4. Return flat rows for DB insert
+}
+
+// Formula: "Revenue = base × (1 + revGrowthRate) ^ month"
+//           "COGS = Revenue × cogsPctOfRevenue"
+//           "OpEx = Headcount × costPerHead"</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 6: SCENARIO COMPARISON ========== -->
+<section class="slide" data-slide="5">
+  <h2>Scenario Comparison</h2>
+  <p class="slide-subtitle">Side-by-side variance analysis — scenario-to-scenario, or scenario-to-prior-year-actuals.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Variance engine</span>
+        <p><code class="inline-code">compareSeries(left, right)</code> aligns two forecast sets on (month, department, account) and computes dollar variance + variance percent. Zero-dependency pure function, tested at row level.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Prior-year comparison</span>
+        <p>Users can compare any scenario against prior-year actuals. The engine aligns the scenario's forecast months (e.g., 2026-01) with the same calendar month from prior-year actuals (2025-01). Only accounts present in both are shown — no phantom comparisons.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Visual hierarchy</span>
+        <p>Revenue line chart, variance insight cards (largest favorable/unfavorable), and a pivot grid with green/negative color coding. Monthly or quarterly granularity. Export to CSV/XLSX/PDF.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-green">UX detail</span>
+        <p>The comparison page has a "Basis" toggle — switch between scenario-to-scenario and prior-year actuals without navigating away. The scenario picker, chart, variance cards, and grid all update reactively.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-green">Narrative generation</span>
+        <p>One click generates an executive summary via AI: "Revenue is projected at $12.4M in the Upside scenario, 23% above the base case, driven by GPU Cloud growth of 35% and a 200bps gross margin improvement."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 7: AI FEATURES ========== -->
+<section class="slide" data-slide="6">
+  <h2>AI Features</h2>
+  <p class="slide-subtitle">Grounded FP&A analyst with tool-calling — Claude or Gemini.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Tool-calling architecture</span>
+        <p>Four tools are declared as JSON function definitions to the model:</p>
+        <ul class="feature-list" style="margin-top:.35rem">
+          <li><code>getMetricSummary</code> — KPI totals for revenue, gross margin, OpEx, headcount</li>
+          <li><code>listActuals</code> — query actuals by month/department/account range</li>
+          <li><code>compareScenarios</code> — variance between two scenarios</li>
+          <li><code>detectAnomalies</code> — find statistical outliers in actuals</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Multi-provider</span>
+        <p>Supports Anthropic Claude (tool_use) and Google Gemini (function calling) with automatic fallback. The model iterates up to 5 rounds of tool calls, accumulating context before answering.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-green">Citation bars</span>
+        <p>Every AI response includes citation bars showing which tool was called and what value was returned. No black-box answers: the user sees the data provenance.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Local fallback</span>
+        <p>If no API key is configured, the system falls back to a local heuristic analyst. Answers are less nuanced, but the UI doesn't break — the tool works offline or in demo mode.</p>
+      </div>
+      <pre style="font-size:.75rem;max-height:8rem;overflow-y:auto">
+// Tool declaration (simplified)
+{
+  name: "compareScenarios",
+  description: "Compare forecast between two scenarios",
+  input_schema: {
+    type: "object",
+    properties: {
+      left: { type: "string" },
+      right: { type: "string" }
+    }
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 8: ADDITIONAL FEATURES ========== -->
+<section class="slide" data-slide="7">
+  <h2>Additional Capabilities</h2>
+  <p class="slide-subtitle">Beyond the core — dimensions, formulas, exports, and governance.</p>
+  <div class="three-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Dimension hierarchies</span>
+        <p>Department and account dimensions support arbitrary parent-child trees. Driver values inherit down the tree — set a growth rate on "Engineering" and all sub-departments pick it up unless they set their own.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Custom variables</span>
+        <p>Input variables (per dept/month numeric values) and calculated variables (mathjs formulas referencing other variables). Topo-sorted with cycle detection at save time.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Spreadsheet-grade UX</span>
+        <p>Multi-cell paste from Excel. Arrow-key navigation. Copy grid as tab-separated. Monthly/quarterly toggles. CSV, XLSX (styled), and PDF export on every grid.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Anomaly detection</span>
+        <p>Statistical outlier detection per (department, account) series — Z-score outliers and month-over-month spikes. Flagged in the actuals grid with yellow indicators and hover tooltips.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Version governance</span>
+        <p>Versions can be locked, preventing edits to formulas and driver assumptions. Audit-friendly: locked versions preserve a point-in-time forecast. Scenario creation copies assumptions from any source version.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Live ERD</span>
+        <p>The schema page renders the full database schema as an interactive SVG entity-relationship diagram — generated from the actual table definitions, not a static image.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 9: DESIGN DECISIONS ========== -->
+<section class="slide" data-slide="8">
+  <h2>Design Decisions</h2>
+  <p class="slide-subtitle">Trade-offs made deliberately, not by accident.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">SQLite over Postgres</span>
+        <p>Zero ops. No connection pooling, no migrations, no Docker. For a sandbox tool, SQLite removes every friction point. The star-schema design is identical to what you'd deploy on a warehouse — it's just backed by a file.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Synchronous recalc for actuals</span>
+        <p>When saving actuals formulas, recalculation runs synchronously before the response. This means the user never sees stale data. For scenario saves, recalc is async (SSE-driven) because scenarios trigger recomputation of all future months.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">TanStack Query over Redux</span>
+        <p>Server state, not client state. Everything is a cache of server data. Mutations invalidate, SSE pushes updates, and the UI just reacts. No actions, reducers, or normalized stores to maintain.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">No ORM</span>
+        <p>Prepared SQL statements are explicit, debuggable, and database-portable. The SQLite schema (in <code class="inline-code">migrations.ts</code>) is 70 lines. No migration tool, no schema sync, no hidden N+1 queries.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Domain/repository separation</span>
+        <p>The domain layer (forecast logic, formula engine, anomaly detection, baseline suggestions) imports nothing from Node or Hono. Every function accepts plain objects and returns plain objects. This means the entire planning engine can be tested without a database.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Blended actuals + forecast</span>
+        <p>The "last actuals month" setting creates a unified view: months ≤ cutoff show actuals, months > cutoff show forecast. This matches how FP&A teams actually present — one table, complete picture.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 10: TRANSLATION TO PIGMENT ========== -->
+<section class="slide" data-slide="9">
+  <h2>Translating to Pigment: Data Model at Scale</h2>
+  <p class="slide-subtitle">How the sandbox concepts map to enterprise-grade Pigment primitives.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-amber">Sandbox → Pigment</span>
+        <p><strong>Star-schema SQLite → Pigment Lists &amp; Metrics.</strong> Dimensions (department, account, time) become Pigment Dimension Lists with hierarchy Properties. Facts become Metrics — one Metric per measure (actuals, forecast, variance), sharing the same dimension structure. No separate "cube" concept; Pigment unifies dimensions and formulas in a single calculation engine.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Sandbox → Pigment</span>
+        <p><strong>scenario_formulas → Pigment Metrics with conditional expressions.</strong> Formula overrides per version become Pigment Metrics using <code class="inline-code">IF Version = "x" THEN ... ELSE ...</code> patterns. Pigment's engine handles dependency resolution natively. The key modeling decision is which dimension the Metric is stored against — not OLAP cube placement.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Sandbox → Pigment</span>
+        <p><strong>Version locking → Pigment Access Rights + Snapshots.</strong> The <code class="inline-code">versions.locked</code> flag maps to a <code class="inline-code">Lock Version</code> Boolean property on the Version Dimension. Access Rights rules use this property to set <code class="inline-code">Read / No Write</code> per Role. For permanent freeze, Pigment uses <strong>Snapshots</strong> — a point-in-time capture of up to five Applications, fully immutable and queryable.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-amber">Sandbox → Pigment</span>
+        <p><strong>custom_variable_values → Pigment driver Metrics.</strong> Per-department, per-month overrides become data entry Metrics on Boards. Hierarchy inheritance is handled through Pigment's formula engine natively — descendant dimensions inherit ancestor values via the dimension hierarchy, no custom code.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Sandbox → Pigment</span>
+        <p><strong>prior-year-variance → Pigment time-intelligence Metrics.</strong> Prior-year comparison becomes a Metric using time-series formula offsets. Pigment's Time Handling framework supports YoY, QoQ, period-to-date, and trailing twelve months natively — without application-level queries.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Key insight</span>
+        <p>The sandbox's star-schema IS the Pigment dimensional model. The same design (conformed dimensions, versioned data, override-based scenario deltas) scales directly. The difference is infrastructure: Pigment provides the live calculation engine, Access Rights, data connectors, and Boards — you bring the model design.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 11: INTEGRATION LAYER ========== -->
+<section class="slide" data-slide="10">
+  <h2>Integration Layer at Scale</h2>
+  <p class="slide-subtitle">From CSV import to enterprise connector architecture.</p>
+  <div class="two-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-amber">Sandbox pattern</span>
+        <p><code class="inline-code">POST /api/imports/csv</code> — parse, upsert dimensions, replace actuals, recalculate. Simple, synchronous, single-threaded. Works for a demo dataset (hundreds of rows).</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Enterprise pattern</span>
+        <p><strong>Pigment connectors.</strong> Pre-built native connectors for NetSuite, SAP S/4HANA, Workday, Salesforce, Google BigQuery, Snowflake, Amazon Redshift — each with scheduled incremental imports. Data lands directly into Pigment Blocks (Lists and Metrics) via the Import API or connector query. No staging tier required.</p>
+      </div>
+      <div class="card">
+        <span class="tag tag-blue">Key components</span>
+        <ul class="feature-list" style="margin-top:.35rem">
+          <li><strong>Source mapping:</strong> map source GL accounts → planning Dimension List items. Handle chart-of-account changes via dimension property updates.</li>
+          <li><strong>Validation:</strong> import-time data type checks, plus post-import validation Metrics that flag anomalies. Access Rights control promotion to "certified" status, not a separate staging tier.</li>
+          <li><strong>Reconciliation:</strong> automated tie-out reports comparing source totals (via connector queries) to loaded totals in Pigment. Alert on variance beyond threshold.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Pigment data flow</span>
+        <pre style="font-size:.75rem">
+Source System (ERP / HRIS / CRM)
+    │
+    ▼
+Pigment Native Connector (scheduled import)
+    │
+    ▼
+Pigment Block (List or Metric)
+  ─ live, immediately available
+  ─ validation Metrics flag issues
+  ─ Access Rights control editability
+    │
+    ▼
+Snapshots (point-in-time freeze)
+  ─ taken at period close
+  ─ fully immutable &amp; queryable
+  ─ used for audit &amp; prior-period reporting
+        </pre>
+      </div>
+      <div class="card">
+        <span class="tag tag-amber">Important nuance</span>
+        <p>In Pigment, data integration isn't just about loading data — it's about <em>dimension master management</em>. When the ERP adds a new cost center, that change must propagate through the planning model without breaking existing formulas, allocations, or reports. A robust integration layer includes dimension change management as a first-class concern.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 12: GOVERNANCE FRAMEWORK ========== -->
+<section class="slide" data-slide="11">
+  <h2>Governance Framework</h2>
+  <p class="slide-subtitle">From a <code class="inline-code">locked</code> flag to enterprise-grade process control.</p>
+  <div class="two-col">
+    <div class="col">
+      <p><strong>Sandbox governance</strong> is binary — a version is either locked or unlocked. This works for a demo but breaks down at scale:</p>
+      <ul class="feature-list" style="margin-bottom:.75rem">
+        <li>Who can unlock? No role-based access control.</li>
+        <li>What changed between versions? No diff/history view.</li>
+        <li>Can we restore a previous certified version? No point-in-time recovery.</li>
+      </ul>
+      <p><strong>Pigment's governance model</strong> uses layered controls — not a single lifecycle state machine:</p>
+    </div>
+    <div class="col">
+      <pre>
+1. Version Dimension Properties
+   - Lock Version (Boolean, per version)
+   - Active Version (Boolean)
+   - Switchover Month
+
+2. Access Rights (per Role)
+   - Read / Write on data
+   - Controlled per Dimension List item
+   - Controlled per Scenario
+
+3. Audit Trail
+   - Application History (all block changes)
+   - Audit Logs API (SIEM integration)
+   - Who changed what, when
+
+4. Snapshots
+   - Point-in-time freeze (up to 5 apps)
+   - Fully immutable, queryable
+   - Used for audit, board pack, restore</pre>
+    </div>
+  </div>
+  <div class="two-col" style="margin-top:.5rem">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Role-based security</span>
+        <p>Pigment supports Workspace-level (Account Types) and Application-level (Roles) security. Access Rights rules use dimension-based Metrics with <code class="inline-code">Read / Write / No Read / No Write</code> granularity. A "Budget Owner" can edit their department's driver assumptions but not view executive compensation — controlled via a User Dimension and Access Rights Metric filtering by department hierarchy.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Process automation</span>
+        <p>Validation workflows can be built directly in Pigment using Status dimensions and Access Rights rules. When data is flagged as "Ready for Review", Access Rights lock further edits and notify the reviewer role. Pigment's API enables integration with Jira, Slack, Teams for operational routing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 13: ADDITIONAL ENTERPRISE CONCERNS ========== -->
+<section class="slide" data-slide="12">
+  <h2>Additional Enterprise Considerations</h2>
+  <p class="slide-subtitle">Multi-currency, allocations, and model performance.</p>
+  <div class="three-col">
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Multi-currency</span>
+        <p>The sandbox uses a single-currency assumption (USD). In Pigment, Metrics can be dimensioned by a Currency List to store amounts in transaction, parent, and consolidated currencies. Rate types (average, closing, budget) are separate Metrics with their own data entry. Forward rate curves are driver data entered for future periods and applied via formula references in the reporting Metric.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Allocations</span>
+        <p>The sandbox has no allocation engine. Pigment supports driver-based allocation (shared costs by headcount, revenue, square footage), step-down allocations (IT → departments → products), and custom allocation rules via Metrics. Allocation results are stored in separate Metrics with full audit trail — source amount, driver value, and calculated result are all traceable.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <span class="tag tag-blue">Model performance</span>
+        <p>At enterprise scale (100+ departments, 500+ accounts, 60-month horizon, 20+ scenarios), the naive iterative evaluation in the sandbox won't perform. Pigment uses a <strong>live calculation engine</strong> — any change to inputs or formulas recalculates affected Metrics immediately, not row-by-row. Scenario comparisons, version cloning, and bulk imports are all engine-level operations, not application code. Model sparsity is managed automatically.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SLIDE 14: SUMMARY ========== -->
+<section class="slide" data-slide="13">
+  <h2>Key Takeaways</h2>
+  <p class="slide-subtitle">What the sandbox proves — and what Pigment delivers at scale.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem;max-width:48rem">
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <p><strong>Same dimensional model.</strong> Star-schema with conformed dimensions, versioned facts, and override-based scenario deltas — the same design works from SQLite to Pigment Lists &amp; Metrics.</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <p><strong>Formula engine is a modeling problem.</strong> Topo-sorted formula evaluation with dependency resolution is what every EPM engine does natively. The sandbox proves the logic; Pigment provides the infrastructure.</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <p><strong>Grounded AI is production-ready.</strong> The tool-calling pattern with citation bars works today. At scale, the same pattern connects to Pigment's API — not just 4 tools, but any Metric query, Board drill, or workflow action.</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <p><strong>Governance is the differentiator.</strong> A <code class="inline-code">locked</code> flag works for a sandbox. Pigment's Access Rights + Snapshots + Audit Logs — Role-based security, point-in-time freeze, complete audit trail — is what makes an EPM platform enterprise-ready.</p>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:2rem;max-width:48rem">
+    <strong>Bottom line:</strong> The sandbox validates the <em>model design</em>. Pigment provides the <em>enterprise runtime</em> — live calculation engine, native connectors, Access Rights, Snapshots, multi-currency, and audit. The hardest problems in an EPM implementation are not technical (which platform features to use) but design-oriented: how to model the business, what dimensions matter, how to handle change over time, and how to build trust in the numbers. Those skills transfer directly.
+  </div>
+</section>
+
+<!-- ========== SLIDE 15: THANK YOU ========== -->
+<section class="slide" data-slide="14">
+  <div style="text-align:center;max-width:36rem;margin:0 auto">
+    <h2>Thank You</h2>
+    <p class="slide-subtitle" style="text-align:center;margin-bottom:2.5rem">
+      PlanWell — a sandbox EPM tool demonstrating data modeling,<br>
+      planning logic, scenario analysis, and grounded AI.
+    </p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem 2rem;text-align:left">
+      <p style="margin-bottom:.35rem;font-weight:600">Ravi — EPM Architect</p>
+      <p style="font-size:.9rem;color:var(--muted);margin-bottom:.25rem">
+        Built with React 19 · Hono · SQLite · TanStack Query · mathjs · Recharts
+      </p>
+      <p style="font-size:.85rem;color:var(--muted)">
+        149 tests · 8 test files · Pure domain logic · AI tool-calling
+      </p>
+    </div>
+    <p style="margin-top:3rem;font-size:.85rem;color:var(--muted)">
+      github.com/getravi/planwell
+    </p>
+  </div>
+</section>
+
+</div><!-- /slides -->
+
+<!-- ========== NAV ========== -->
+<nav class="nav" aria-label="Slide navigation">
+  <button id="prevBtn" aria-label="Previous slide" disabled>←</button>
+  <div class="dots" id="dots"></div>
+  <button id="nextBtn" aria-label="Next slide">→</button>
+</nav>
+
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const dotsContainer = document.getElementById('dots');
+
+  // Build dots
+  for(let i=0;i<total;i++){
+    const btn=document.createElement('button');
+    btn.setAttribute('aria-label','Go to slide '+(i+1));
+    if(i===0) btn.classList.add('active');
+    btn.addEventListener('click',()=>goTo(i));
+    dotsContainer.appendChild(btn);
+  }
+
+  function goTo(index){
+    if(index<0||index>=total) return;
+    slides[current].classList.remove('active');
+    dotsContainer.children[current].classList.remove('active');
+    current=index;
+    slides[current].classList.add('active');
+    dotsContainer.children[current].classList.add('active');
+    prevBtn.disabled=current===0;
+    nextBtn.disabled=current===total-1;
+  }
+
+  prevBtn.addEventListener('click',()=>goTo(current-1));
+  nextBtn.addEventListener('click',()=>goTo(current+1));
+
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();goTo(current+1)}
+    if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();goTo(current-1)}
+  });
+
+  // Initial state
+  prevBtn.disabled=true;
+})();
+</script>
+
+</body>
+</html>
